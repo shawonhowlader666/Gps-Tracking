@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "427598289167",
+    "project_id": "gps-mobile-app-8d942",
+    "storage_bucket": "gps-mobile-app-8d942.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:427598289167:android:9eae80a06f608875aac67a",
+        "android_client_info": {
+          "package_name": "com.sptrackgps.mobileapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDRXLaDS-KjMpVYby50qJDRkGiSbiC7M9g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:427598289167:android:405a658ebca957a1aac67a",
+        "android_client_info": {
+          "package_name": "com.spytrack.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDRXLaDS-KjMpVYby50qJDRkGiSbiC7M9g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
