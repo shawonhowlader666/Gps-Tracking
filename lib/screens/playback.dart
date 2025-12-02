@@ -947,107 +947,112 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         height: MediaQuery.of(context).size.height / 7.5,
         color: Colors.white,
         padding: const EdgeInsets.all(10),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-          Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(padding: EdgeInsets.only(top: 5)),
-              Row(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            SingleChildScrollView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const Padding(padding: EdgeInsets.only(top: 5)),
+                  Row(
                     children: [
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          InkWell(
+                              onTap: () {
+                                _selectFromDateTime(context);
+                              },
+                              child: Container(
+                                  width: MediaQuery.of(context).size.width / 1.2,
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Colors.grey, // Border color
+                                      width: 1.0, // Border width
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Padding(
+                                          padding: EdgeInsets.only(left: 10)),
+                                      Image.asset(
+                                          "assets/icons/hourglass-start.png",
+                                          width: 25,
+                                          height: 25),
+                                      const Padding(
+                                          padding: EdgeInsets.only(left: 20)),
+                                      Text(
+                                          "${Util.formatReportDate(dateTimeFrom)} ${Util.formatReportTime(dateTimeFrom)}"),
+                                    ],
+                                  ))),
+                        ],
+                      ),
+                      const Padding(padding: EdgeInsets.only(left: 10)),
                       InkWell(
                           onTap: () {
-                            _selectFromDateTime(context);
+                            showReportDialog(context);
                           },
-                          child: Container(
-                              width: MediaQuery.of(context).size.width / 1.2,
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: Colors.grey, // Border color
-                                  width: 1.0, // Border width
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 10)),
-                                  Image.asset(
-                                      "assets/icons/hourglass-start.png",
-                                      width: 25,
-                                      height: 25),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 20)),
-                                  Text(
-                                      "${Util.formatReportDate(dateTimeFrom)} ${Util.formatReportTime(dateTimeFrom)}"),
-                                ],
-                              ))),
+                          child: Image.asset("assets/icons/funnel.png")),
                     ],
                   ),
-                  const Padding(padding: EdgeInsets.only(left: 10)),
-                  InkWell(
-                      onTap: () {
-                        showReportDialog(context);
-                      },
-                      child: Image.asset("assets/icons/funnel.png")),
+                  const Padding(padding: EdgeInsets.only(top: 10)),
+                  Row(
+                    children: [
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          InkWell(
+                              onTap: () {
+                                _selectToDateTime(context);
+                              },
+                              child: Container(
+                                  width: MediaQuery.of(context).size.width / 1.2,
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Colors.grey, // Border color
+                                      width: 1.0, // Border width
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Padding(
+                                          padding: EdgeInsets.only(left: 10)),
+                                      Image.asset(
+                                          "assets/icons/hourglass-start.png",
+                                          width: 25,
+                                          height: 25),
+                                      const Padding(
+                                          padding: EdgeInsets.only(left: 20)),
+                                      Text(
+                                          "${Util.formatReportDate(dateTimeTo)} ${Util.formatReportTime(dateTimeTo)}"),
+                                    ],
+                                  ))),
+                        ],
+                      ),
+                      const Padding(padding: EdgeInsets.only(left: 10)),
+                      InkWell(
+                          onTap: () {
+                            getReport();
+                          },
+                          child: Image.asset(
+                            "assets/icons/send.png",
+                            width: 30,
+                          ))
+                    ],
+                  )
                 ],
               ),
-              const Padding(padding: EdgeInsets.only(top: 10)),
-              Row(
-                children: [
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      InkWell(
-                          onTap: () {
-                            _selectToDateTime(context);
-                          },
-                          child: Container(
-                              width: MediaQuery.of(context).size.width / 1.2,
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: Colors.grey, // Border color
-                                  width: 1.0, // Border width
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 10)),
-                                  Image.asset(
-                                      "assets/icons/hourglass-start.png",
-                                      width: 25,
-                                      height: 25),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 20)),
-                                  Text(
-                                      "${Util.formatReportDate(dateTimeTo)} ${Util.formatReportTime(dateTimeTo)}"),
-                                ],
-                              ))),
-                    ],
-                  ),
-                  const Padding(padding: EdgeInsets.only(left: 10)),
-                  InkWell(
-                      onTap: () {
-                        getReport();
-                      },
-                      child: Image.asset(
-                        "assets/icons/send.png",
-                        width: 30,
-                      ))
-                ],
-              )
-            ],
-          ),
-        ]));
+            ),
+          ]),
+        ));
   }
 
   Widget topDataView() {
@@ -1199,178 +1204,181 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                       style: FlutterFlowTheme.of(context).headlineSmall)),
               SizedBox(
                   height: MediaQuery.of(context).size.height / 8,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          routePoints.length - 1 > rating.toInt()
-                              ? Row(
-                                  children: [
-                                    Text(
-                                        routeList[rating.toInt()]
-                                            .speed
-                                            .toString(),
-                                        style: const TextStyle(
-                                            fontSize: 40,
-                                            fontWeight: FontWeight.bold)),
-                                    const Text(
-                                      "kph",
-                                      style: TextStyle(fontSize: 15),
-                                    ),
-                                  ],
-                                )
-                              : Container(),
-                          routePoints.length - 1 > rating.toInt()
-                              ? Column(
-                                  children: [
-                                    const Padding(
-                                        padding: EdgeInsets.only(top: 7)),
-                                    Text(
-                                      Util.formatReportTime(DateTime.parse(
-                                          routeList[rating.toInt()].raw_time!)),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12),
-                                    ),
-                                    Text(
-                                      Util.formatReportDate(DateTime.parse(
-                                          routeList[rating.toInt()].raw_time!)),
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ],
-                                )
-                              : Container()
-                        ],
-                      ),
-                      const IntrinsicHeight(
-                        child: Row(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            VerticalDivider(
-                              color: Colors.black,
-                              thickness: 2,
-                            ),
+                            routePoints.length - 1 > rating.toInt()
+                                ? Row(
+                                    children: [
+                                      Text(
+                                          routeList[rating.toInt()]
+                                              .speed
+                                              .toString(),
+                                          style: const TextStyle(
+                                              fontSize: 40,
+                                              fontWeight: FontWeight.bold)),
+                                      const Text(
+                                        "kph",
+                                        style: TextStyle(fontSize: 15),
+                                      ),
+                                    ],
+                                  )
+                                : Container(),
+                            routePoints.length - 1 > rating.toInt()
+                                ? Column(
+                                    children: [
+                                      const Padding(
+                                          padding: EdgeInsets.only(top: 7)),
+                                      Text(
+                                        Util.formatReportTime(DateTime.parse(
+                                            routeList[rating.toInt()].raw_time!)),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12),
+                                      ),
+                                      Text(
+                                        Util.formatReportDate(DateTime.parse(
+                                            routeList[rating.toInt()].raw_time!)),
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ],
+                                  )
+                                : Container()
                           ],
                         ),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          InkWell(
-                              onTap: () {
-                                setState(() {
-                                  isPlay = !isPlay;
-                                  playButtonAnimationController!.forward();
-                                });
-                                if (animationController!.isAnimating) {
-                                  pauseAnimation();
-                                  return;
-                                }
-                                animationController!.forward();
-                              },
-                              child: ScaleTransition(
-                                  scale: Tween(begin: 1.0, end: .8).animate(
-                                      CurvedAnimation(
-                                          parent:
-                                              playButtonAnimationController!,
-                                          curve: Curves.bounceIn))
-                                    ..addStatusListener((status) {
-                                      if (status == AnimationStatus.completed) {
-                                        playButtonAnimationController!
-                                            .reverse();
-                                      }
-                                    }),
-                                  child: Icon(
-                                    !isPlay
-                                        ? Icons.play_circle
-                                        : Icons.pause_circle,
-                                    size: 50,
-                                  ))),
-                          Container(
-                            width: MediaQuery.of(context).size.width / 2,
-                            padding: const EdgeInsets.only(top: 3.0),
-                            child: SliderTheme(
-                              data: const SliderThemeData(
-                                  trackHeight: 1,
-                                  thumbShape: RoundSliderThumbShape(
-                                      enabledThumbRadius: 6,
-                                      disabledThumbRadius: 6)),
-                              child: Slider(
-                                value: rating,
-                                onChanged: (newRating) {
-                                  if (routePoints.length - 1 > newRating) {
-                                    setState(() {
-                                      rating = newRating;
-                                      lowerAnimatingPointsIndex =
-                                          rating.toInt();
-                                      upperAnimatingPointsIndex =
-                                          rating.toInt() + speedStep;
-                                    });
+                        const IntrinsicHeight(
+                          child: Row(
+                            children: [
+                              VerticalDivider(
+                                color: Colors.black,
+                                thickness: 2,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    isPlay = !isPlay;
+                                    playButtonAnimationController!.forward();
+                                  });
+                                  if (animationController!.isAnimating) {
+                                    pauseAnimation();
+                                    return;
                                   }
+                                  animationController!.forward();
                                 },
-                                activeColor: CustomColor.primaryColor,
-                                inactiveColor: const Color(0xFFF1F1F1),
-                                min: 0,
-                                max: routePoints.length.toDouble(),
+                                child: ScaleTransition(
+                                    scale: Tween(begin: 1.0, end: .8).animate(
+                                        CurvedAnimation(
+                                            parent:
+                                                playButtonAnimationController!,
+                                            curve: Curves.bounceIn))
+                                      ..addStatusListener((status) {
+                                        if (status == AnimationStatus.completed) {
+                                          playButtonAnimationController!
+                                              .reverse();
+                                        }
+                                      }),
+                                    child: Icon(
+                                      !isPlay
+                                          ? Icons.play_circle
+                                          : Icons.pause_circle,
+                                      size: 50,
+                                    ))),
+                            Container(
+                              width: MediaQuery.of(context).size.width / 2,
+                              padding: const EdgeInsets.only(top: 3.0),
+                              child: SliderTheme(
+                                data: const SliderThemeData(
+                                    trackHeight: 1,
+                                    thumbShape: RoundSliderThumbShape(
+                                        enabledThumbRadius: 6,
+                                        disabledThumbRadius: 6)),
+                                child: Slider(
+                                  value: rating,
+                                  onChanged: (newRating) {
+                                    if (routePoints.length - 1 > newRating) {
+                                      setState(() {
+                                        rating = newRating;
+                                        lowerAnimatingPointsIndex =
+                                            rating.toInt();
+                                        upperAnimatingPointsIndex =
+                                            rating.toInt() + speedStep;
+                                      });
+                                    }
+                                  },
+                                  activeColor: CustomColor.primaryColor,
+                                  inactiveColor: const Color(0xFFF1F1F1),
+                                  min: 0,
+                                  max: routePoints.length.toDouble(),
+                                ),
                               ),
                             ),
-                          ),
-                          InkWell(
-                              onTap: () {
-                                setState(() {
-                                  fastButtonAnimationController!.forward();
-                                  if (speedStep == 1) {
-                                    speedStep = 3;
-                                    speedText = "Medium";
-                                    animationSpeed = 700;
-                                  } else if (speedStep == 3) {
-                                    speedStep = 5;
-                                    speedText = "Fast";
-                                    animationSpeed = 200;
-                                  } else if (speedStep == 5) {
-                                    speedStep = 1;
-                                    speedText = "Slow";
-                                    animationSpeed = 1000;
-                                  }
-                                });
-                                animationController!.duration =
-                                    Duration(milliseconds: this.animationSpeed);
-                              },
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  ScaleTransition(
-                                      scale: Tween(begin: 1.0, end: .8).animate(
-                                          CurvedAnimation(
-                                              parent:
-                                                  fastButtonAnimationController!,
-                                              curve: Curves.bounceIn))
-                                        ..addStatusListener((status) {
-                                          if (status ==
-                                              AnimationStatus.completed) {
-                                            fastButtonAnimationController!
-                                                .reverse();
-                                          }
-                                        }),
-                                      child: Image.asset(
-                                        'assets/images/double-right-arrow.png',
-                                        height: 30.0,
-                                      )),
-                                  Text(
-                                    speedText,
-                                    style: const TextStyle(
-                                        color: Color(0xFF0060A4), fontSize: 11),
-                                  )
-                                ],
-                              )),
-                        ],
-                      ),
-                    ],
+                            InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    fastButtonAnimationController!.forward();
+                                    if (speedStep == 1) {
+                                      speedStep = 3;
+                                      speedText = "Medium";
+                                      animationSpeed = 700;
+                                    } else if (speedStep == 3) {
+                                      speedStep = 5;
+                                      speedText = "Fast";
+                                      animationSpeed = 200;
+                                    } else if (speedStep == 5) {
+                                      speedStep = 1;
+                                      speedText = "Slow";
+                                      animationSpeed = 1000;
+                                    }
+                                  });
+                                  animationController!.duration =
+                                      Duration(milliseconds: this.animationSpeed);
+                                },
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    ScaleTransition(
+                                        scale: Tween(begin: 1.0, end: .8).animate(
+                                            CurvedAnimation(
+                                                parent:
+                                                    fastButtonAnimationController!,
+                                                curve: Curves.bounceIn))
+                                          ..addStatusListener((status) {
+                                            if (status ==
+                                                AnimationStatus.completed) {
+                                              fastButtonAnimationController!
+                                                  .reverse();
+                                            }
+                                          }),
+                                        child: Image.asset(
+                                          'assets/images/double-right-arrow.png',
+                                          height: 30.0,
+                                        )),
+                                    Text(
+                                      speedText,
+                                      style: const TextStyle(
+                                          color: Color(0xFF0060A4), fontSize: 11),
+                                    )
+                                  ],
+                                )),
+                          ],
+                        ),
+                      ],
+                    ),
                   )),
               Container(
                 height: MediaQuery.of(context).size.height / 1.5,

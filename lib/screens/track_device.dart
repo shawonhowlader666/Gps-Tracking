@@ -45,7 +45,7 @@ class TrackDevicePage extends StatefulWidget {
   final String? name;
   final DeviceItem? device;
 
-  const TrackDevicePage(this.id, this.name, this.device);
+  const TrackDevicePage(this.id, this.name, this.device, {super.key});
 
   @override
   State<StatefulWidget> createState() => _TrackDeviceState();
@@ -63,7 +63,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   double _dragStartPosition = 0;
   bool _isDragging = false;
   String? fuelConsumption;
-  double _dialogHeight = 300.0;
+  final double _dialogHeight = 300.0;
 
   Widget _buildSpeedometer() {
     // Convert device speed to double (handle null/string cases)
@@ -89,10 +89,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
         ));
   }
 
-  DateTime _selectedFromDate = DateTime.now();
-  DateTime _selectedToDate = DateTime.now();
-  TimeOfDay _selectedFromTime = TimeOfDay.now();
-  TimeOfDay _selectedToTime = TimeOfDay.now();
+  final DateTime _selectedFromDate = DateTime.now();
+  final DateTime _selectedToDate = DateTime.now();
+  final TimeOfDay _selectedFromTime = TimeOfDay.now();
+  final TimeOfDay _selectedToTime = TimeOfDay.now();
   Color _mapTypeBackgroundColor = CustomColor.primaryColor;
   Color _mapTypeForegroundColor = CustomColor.secondaryColor;
 
@@ -114,6 +114,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   Stream<List<Marker>> get mapMarkerStream => _mapMarkerSC.stream;
 
   DeviceItem? device;
+
 // Add these to your state class
   Timer? _todayKmTimer;
   Timer? _todayDetailsTimer;
@@ -199,6 +200,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   bool showAddress = false;
+
   @override
   initState() {
     rootBundle.loadString('assets/map_style.txt').then((string) {
