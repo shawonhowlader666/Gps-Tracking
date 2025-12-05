@@ -1,15 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer';
 import 'dart:io';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/arguments/report_args.dart';
 import 'package:gpspro/config.dart';
-import 'package:gpspro/flutter_flow/flutter_flow_theme.dart';
 import 'package:gpspro/flutter_flow/flutter_flow_util.dart';
 import 'package:gpspro/screens/common_method.dart';
 import 'package:gpspro/screens/lock_unlock_screen.dart';
@@ -17,14 +14,11 @@ import 'package:gpspro/screens/track_device.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/admob_service.dart';
 import 'package:gpspro/services/api_service.dart';
-import 'package:gpspro/services/model/device.dart';
-import 'package:gpspro/services/model/device_item.dart';
+import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/services/model/share_perm.dart';
 import 'package:gpspro/services/model/single_device.dart';
 import 'package:gpspro/storage/user_repository.dart';
-import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/widgets/address.dart';
-import 'package:flutter/material.dart' as m;
 import 'package:gpspro/widgets/banner_ad_widget.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -77,7 +71,7 @@ class _DevicePageState extends State<DevicePage> {
     return AnimatedCrossFade(
       duration: Duration(milliseconds: 300),
       crossFadeState:
-          shouldShow ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+      shouldShow ? CrossFadeState.showSecond : CrossFadeState.showFirst,
       firstChild: SizedBox.shrink(),
       secondChild: Padding(
         padding: const EdgeInsets.only(left: 0, right: 20, bottom: 10),
@@ -85,9 +79,9 @@ class _DevicePageState extends State<DevicePage> {
           width: MediaQuery.of(context).size.width / 1.2,
           child: shouldShow
               ? addressLoadMarque(
-                  double.parse(device.lat.toString()).toString(),
-                  double.parse(device.lng.toString()).toString(),
-                )
+            double.parse(device.lat.toString()).toString(),
+            double.parse(device.lng.toString()).toString(),
+          )
               : SizedBox.shrink(),
         ),
       ),
@@ -105,7 +99,6 @@ class _DevicePageState extends State<DevicePage> {
   @override
   void dispose() {
     _hideAddress();
-
     _searchFocusNode.dispose();
     _searchController.dispose();
     _name.dispose();
@@ -138,7 +131,7 @@ class _DevicePageState extends State<DevicePage> {
                       TextField(
                         controller: _name,
                         decoration:
-                            InputDecoration(labelText: ('sharedName').tr),
+                        InputDecoration(labelText: ('sharedName').tr),
                       ),
                       const SizedBox(height: 10),
                       Text(
@@ -153,11 +146,10 @@ class _DevicePageState extends State<DevicePage> {
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           itemCount: sd?.device_icons?.length ?? 0,
                           separatorBuilder: (_, __) =>
-                              const SizedBox(width: 10),
+                          const SizedBox(width: 10),
                           itemBuilder: (context, index) {
                             final icon = sd!.device_icons![index];
                             final isSelected = selectedIconId == icon["id"];
-                            // log("${APIService.serverURL??''}/${icon["path"]}");
                             return GestureDetector(
                               onTap: () {
                                 setState(() {
@@ -168,7 +160,7 @@ class _DevicePageState extends State<DevicePage> {
                                 decoration: BoxDecoration(
                                   border: Border.all(
                                     color:
-                                        isSelected ? Colors.blue : Colors.grey,
+                                    isSelected ? Colors.blue : Colors.grey,
                                     width: isSelected ? 2 : 1,
                                   ),
                                   borderRadius: BorderRadius.circular(6),
@@ -237,12 +229,12 @@ class _DevicePageState extends State<DevicePage> {
       'device_id': deviceId.toString()
     };
     APIService.editDeviceData(requestBody).then((value) => {
-          showProgress(false, context),
-          sd = SingleDevice.fromJson(
-              json.decode(value.body.replaceAll("ï»¿", ""))),
-          _name.text = sd!.item!["name"],
-          editDeviceDialog(context, sd!.item)
-        });
+      showProgress(false, context),
+      sd = SingleDevice.fromJson(
+          json.decode(value.body.replaceAll("ï»¿", ""))),
+      _name.text = sd!.item!["name"],
+      editDeviceDialog(context, sd!.item)
+    });
   }
 
   void updateDevice(deviceId) {
@@ -255,12 +247,11 @@ class _DevicePageState extends State<DevicePage> {
     };
 
     APIService.editDevice(requestBody).then((value) => {
-          showProgress(false, context),
-          sd = SingleDevice.fromJson(
-              json.decode(value.body.replaceAll("ï»¿", ""))),
-          Navigator.pop(context),
-          // editDeviceDialog(context, value),
-        });
+      showProgress(false, context),
+      sd = SingleDevice.fromJson(
+          json.decode(value.body.replaceAll("ï»¿", ""))),
+      Navigator.pop(context),
+    });
   }
 
   void showReport(String heading, int id, String name, DeviceItem device) {
@@ -277,9 +268,6 @@ class _DevicePageState extends State<DevicePage> {
     } else {
       month = current.month.toString();
     }
-
-    if (current.day < 10) {
-    } else {}
 
     String today;
 
@@ -307,29 +295,114 @@ class _DevicePageState extends State<DevicePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        automaticallyImplyLeading: false,
-        title: Text(
-          'vehicles'.tr,
-          style: const TextStyle(
-            color: Colors.orange,
-            fontSize: 32,
-            fontWeight: FontWeight.w600,
+      backgroundColor: const Color(0xFFF5F6FA),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF3E6FB8),
+                const Color(0xFF5C8ACF),
+              ],
+            ),
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(24),
+              bottomRight: Radius.circular(24),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: IconButton(
-              icon: const m.Icon(Icons.search, color: Colors.grey, size: 30),
-              onPressed: () => controller.toggleSearchVisibility(),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.directions_car_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'vehicles'.tr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Obx(() => Text(
+                          '${controller.allCount.value} ${'devices'.tr}',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontSize: 12,
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => controller.toggleSearchVisibility(),
+                    child: Obx(() => Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: controller.isSearchVisible.value
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.search_rounded,
+                        color: controller.isSearchVisible.value
+                            ? const Color(0xFF898BEA)
+                            : Colors.white,
+                        size: 22,
+                      ),
+                    )),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () {
+                      controller.filterDevicesByStatus("all");
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.refresh_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
-        centerTitle: false,
-        elevation: 0,
+        ),
       ),
       body: Obx(() {
         if (controller.isLoading.value) {
@@ -338,45 +411,56 @@ class _DevicePageState extends State<DevicePage> {
 
         return Column(
           children: [
+            const Gap(6),
+
             // Search Field
             if (controller.isSearchVisible.value)
               Padding(
-                padding: const EdgeInsets.only(left: 10, top: 10, right: 10),
-                child: SizedBox(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
                   height: 50,
-                  child: TextFormField(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Color(0xFF5C8ACF)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
                     focusNode: _searchFocusNode,
                     controller: _searchController,
-                    obscureText: false,
                     decoration: InputDecoration(
-                      labelText: 'search'.tr,
-                      labelStyle: FlutterFlowTheme.of(context).bodySmall,
-                      hintStyle: FlutterFlowTheme.of(context).bodySmall,
-                      enabledBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(
-                          color: Color(0xFFDBE2E7),
-                          width: 2.0,
-                        ),
-                        borderRadius: BorderRadius.circular(0),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsetsDirectional.fromSTEB(
-                          16.0, 24.0, 0.0, 24.0),
-                    ),
-                    style: TextStyle(
-                      color: FlutterFlowTheme.of(context).tertiary,
+                      hintText: 'search'.tr,
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                      prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                        icon: Icon(Icons.close, color: Colors.grey[400]),
+                        onPressed: () {
+                          _searchController.clear();
+                          controller.searchDevices('');
+                        },
+                      )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                     ),
                     onChanged: (text) => controller.searchDevices(text),
                   ),
                 ),
               ),
 
-            const Gap(15),
+            if (controller.isSearchVisible.value) const Gap(6),
 
-            // Replace the SizedBox with ListView of ChoiceChips with:
+            // Status Filter
             _buildStatusFilter(),
-            const Gap(10),
+            const Gap(6),
 
             // Device List
             Expanded(
@@ -386,18 +470,41 @@ class _DevicePageState extends State<DevicePage> {
                     : controller.filteredDevices;
 
                 if (displayList.isEmpty) {
-                  return Center(child: Text(("noDeviceFound").tr));
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.directions_car_outlined,
+                          size: 60,
+                          color: Colors.grey[300],
+                        ),
+                        const Gap(16),
+                        Text(
+                          ("noDeviceFound").tr,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
                 return ListView.separated(
                   separatorBuilder: (context, index) => const Gap(10),
                   itemCount: displayList.length,
+                  padding: const EdgeInsets.only(bottom: 20),
                   itemBuilder: (context, index) {
                     final device = displayList[index];
                     return deviceCard(
                         device, context, index, displayList.length);
+
                   },
+
                 );
+
               }),
             )
           ],
@@ -409,303 +516,358 @@ class _DevicePageState extends State<DevicePage> {
   Widget _buildStatusFilter() {
     return Obx(() {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.fromLTRB(2, 2, 2, 0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildFilterChip(
-                      title: 'allVehicles'.tr,
-                      isSelected: controller.selectedFilterIndex.value == 0,
-                      onTap: () => controller.filterDevicesByStatus("all"),
-                    ),
-                    _buildFilterChip(
-                      title: 'running'.tr,
-                      isSelected: controller.selectedFilterIndex.value == 1,
-                      onTap: () => controller.filterDevicesByStatus("green"),
-                    ),
-                    _buildFilterChip(
-                      title: 'idle'.tr,
-                      isSelected: controller.selectedFilterIndex.value == 2,
-                      onTap: () => controller.filterDevicesByStatus("yellow"),
-                    ),
-                    _buildFilterChip(
-                      title: 'offline'.tr,
-                      isSelected: controller.selectedFilterIndex.value == 3,
-                      onTap: () => controller.filterDevicesByStatus("red"),
-                    ),
-                  ],
-                ),
-              ),
+            _buildFilterCard(
+              index: 0,
+              icon: Icons.apps_rounded,
+              label: 'all'.tr,
+              count: controller.allCount.value,
+              primaryColor: const Color(0xFF5C8ACF),
+              isSelected: controller.selectedFilterIndex.value == 0,
+              onTap: () => controller.filterDevicesByStatus("all"),
             ),
-            const Gap(10),
-            Obx(() {
-              String title = '';
-              int count = 0;
-              switch (controller.selectedFilterIndex.value) {
-                case 0:
-                  title = 'allVehicles'.tr;
-                  count = controller.allCount.value ?? 0;
-                  break;
-                case 1:
-                  title = 'running'.tr;
-                  count = controller.movingCount.value ?? 0;
-                  break;
-                case 2:
-                  title = 'idle'.tr;
-                  count = controller.idleCount.value ?? 0;
-                  break;
-                case 3:
-                  title = 'offline'.tr;
-                  count = controller.offlineCount.value ?? 0;
-                  break;
-              }
-              return Text(
-                '$title: $count',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              );
-            }),
+            _buildFilterCard(
+              index: 1,
+              icon: Icons.directions_car_filled_rounded,
+              label: 'running'.tr,
+              count: controller.movingCount.value,
+              primaryColor: const Color(0xFF22C55E),
+              isSelected: controller.selectedFilterIndex.value == 1,
+              onTap: () => controller.filterDevicesByStatus("green"),
+            ),
+            _buildFilterCard(
+              index: 2,
+              icon: Icons.pause_circle_filled_rounded,
+              label: 'idle'.tr,
+              count: controller.idleCount.value,
+              primaryColor: const Color(0xFFF59E0B),
+              isSelected: controller.selectedFilterIndex.value == 2,
+              onTap: () => controller.filterDevicesByStatus("yellow"),
+            ),
+            _buildFilterCard(
+              index: 3,
+              icon: Icons.power_off_rounded,
+              label: 'offline'.tr,
+              count: controller.offlineCount.value,
+              primaryColor: const Color(0xFFEF4444),
+              isSelected: controller.selectedFilterIndex.value == 3,
+              onTap: () => controller.filterDevicesByStatus("red"),
+            ),
           ],
         ),
       );
     });
   }
 
-  Widget _buildFilterChip({
-    required String title,
+  Widget _buildFilterCard({
+    required int index,
+    required IconData icon,
+    required String label,
+    required int count,
+    required Color primaryColor,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? CustomColor.primaryColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          title,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.black,
-            fontWeight: FontWeight.w500,
-          ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        width: 65,
+        height: 80,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.topCenter,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 20),
+              width: 65,
+              height: 60,
+              padding: const EdgeInsets.fromLTRB(4, 16, 4, 0),
+              decoration: BoxDecoration(
+                color: isSelected ? primaryColor : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected
+                      ? primaryColor
+                      : primaryColor.withValues(alpha: 0.2),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 2,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    count.toString(),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : primaryColor,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? Colors.white.withValues(alpha: 0.95)
+                          : Colors.grey[600],
+                      height: 1,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 0,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isSelected
+                        ? [primaryColor, primaryColor.withValues(alpha: 0.8)]
+                        : [primaryColor.withValues(alpha: 0.9), primaryColor],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 2.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withValues(alpha: 0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  icon,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   void showShareDialog(BuildContext context, dynamic device) {
-    Dialog simpleDialog = Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
-      ),
-      child: StatefulBuilder(
-        builder: (BuildContext context, StateSetter setState) {
-          return SizedBox(
-            height: 400,
-            width: 300.0,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: <Widget>[
-                Column(
-                  children: <Widget>[
-                    Padding(
-                      padding:
-                          const EdgeInsets.only(left: 10, right: 10, top: 20),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: <Widget>[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: <Widget>[
-                              Radio(
-                                value: 0,
-                                groupValue: _selectedperiod,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedperiod =
-                                        int.parse(value.toString());
-                                    expiryTime = 10;
-                                  });
-                                },
-                              ),
-                              const Text(
-                                "10 min",
-                                style: TextStyle(fontSize: 16.0),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: <Widget>[
-                              Radio(
-                                value: 1,
-                                groupValue: _selectedperiod,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedperiod =
-                                        int.parse(value.toString());
-                                    expiryTime = 15;
-                                  });
-                                },
-                              ),
-                              const Text(
-                                "15 min",
-                                style: TextStyle(fontSize: 16.0),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: <Widget>[
-                              Radio(
-                                value: 2,
-                                groupValue: _selectedperiod,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedperiod =
-                                        int.parse(value.toString());
-                                    expiryTime = 30;
-                                  });
-                                },
-                              ),
-                              const Text(
-                                "30 min",
-                                style: TextStyle(fontSize: 16.0),
-                              ),
-                            ],
-                          ),
+    final List<Map<String, dynamic>> options = [
+      {'value': 0, 'label': '10 min', 'time': 10},
+      {'value': 1, 'label': '15 min', 'time': 15},
+      {'value': 2, 'label': '30 min', 'time': 30},
+      {'value': 3, 'label': '60 min', 'time': 60},
+      {'value': 4, 'label': '120 min', 'time': 120},
+      {'value': 5, 'label': '180 min', 'time': 180},
+    ];
 
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: <Widget>[
-                              Radio(
-                                value: 3,
-                                groupValue: _selectedperiod,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedperiod =
-                                        int.parse(value.toString());
-                                    expiryTime = 60;
-                                  });
-                                },
-                              ),
-                              const Text(
-                                "60 min",
-                                style: TextStyle(fontSize: 16.0),
-                              ),
-                            ],
+    int selectedIndex = 0;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: <Widget>[
-                              Radio(
-                                value: 4,
-                                groupValue: _selectedperiod,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedperiod =
-                                        int.parse(value.toString());
-                                    expiryTime = 120;
-                                  });
-                                },
-                              ),
-                              const Text(
-                                "120 min",
-                                style: TextStyle(fontSize: 16.0),
-                              ),
-                            ],
+                          child: const Icon(
+                            Icons.share_rounded,
+                            color: Color(0xFF6366F1),
+                            size: 24,
                           ),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: <Widget>[
-                              Radio(
-                                value: 5,
-                                groupValue: _selectedperiod,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedperiod =
-                                        int.parse(value.toString());
-                                    expiryTime = 180;
-                                  });
-                                },
-                              ),
-                              const Text(
-                                "180 min",
-                                style: TextStyle(fontSize: 16.0),
-                              ),
-                            ],
-                          ),
-
-                          // new Container(
-                          //   child: new TextField(
-                          //     controller: _shareEmail,
-                          //     decoration: new InputDecoration(labelText: "Email"),
-                          //   ),
-                          // ),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: <Widget>[
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  foregroundColor: Colors.white,
-                                  backgroundColor: Colors.red, // foreground
-                                ),
-                                onPressed: () {
-                                  Navigator.of(context).pop();
-                                },
-                                child: Text(
-                                  ('cancel').tr,
-                                  style: const TextStyle(
-                                      fontSize: 18.0, color: Colors.white),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'shareLocation'.tr,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(
-                                width: 20,
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  shareLink(device);
-                                },
-                                child: Text(
-                                  ('ok').tr,
-                                  style: const TextStyle(
-                                      fontSize: 18.0, color: Colors.white),
+                              Text(
+                                'selectDuration'.tr,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
                                 ),
                               ),
                             ],
-                          )
-                        ],
-                      ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    ...options.map((option) {
+                      final isSelected = selectedIndex == option['value'];
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            selectedIndex = option['value'];
+                          });
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF6366F1).withValues(alpha: 0.1)
+                                : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF6366F1)
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? const Color(0xFF6366F1)
+                                        : Colors.grey[400]!,
+                                    width: 2,
+                                  ),
+                                  color: isSelected
+                                      ? const Color(0xFF6366F1)
+                                      : Colors.transparent,
+                                ),
+                                child: isSelected
+                                    ? const Icon(
+                                  Icons.check,
+                                  size: 16,
+                                  color: Colors.white,
+                                )
+                                    : null,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                option['label'],
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: isSelected
+                                      ? const Color(0xFF6366F1)
+                                      : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: Text(
+                              ('cancel').tr,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6366F1),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () {
+                              expiryTime = options[selectedIndex]['time'];
+                              shareLink(device);
+                            },
+                            child: Text(
+                              ('share').tr,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          );
-        },
-      ),
+              ),
+            );
+          },
+        );
+      },
     );
-    showDialog(
-        context: context, builder: (BuildContext context) => simpleDialog);
   }
 
   void shareLink(DeviceItem device) {
@@ -713,330 +875,921 @@ class _DevicePageState extends State<DevicePage> {
     Duration durationToAdd = Duration(minutes: expiryTime);
     DateTime newDateTime = currentDateTime.add(durationToAdd);
     APIService.generateShare(
-            device.id.toString(),
-            DateFormat('yyyy-MM-dd HH:mm:ss').format(newDateTime).toString(),
-            device.name)
+        device.id.toString(),
+        DateFormat('yyyy-MM-dd HH:mm:ss').format(newDateTime).toString(),
+        device.name)
         .then((value) => {
-              if (value is SharePerm)
-                {
-                  Navigator.pop(context),
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Check Permission")),
-                  )
-                }
-              else
-                {
-                  Share.share(
-                      "Device : ${value.name} \n ${UserRepository.getServerUrl()}/sharing/${value.hash}",
-                      subject: "Device : ${value.name}")
-                }
-            });
+      if (value is SharePerm)
+        {
+          Navigator.pop(context),
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Check Permission")),
+          )
+        }
+      else
+        {
+          Share.share(
+              "Device : ${value.name} \n ${UserRepository.getServerUrl()}/sharing/${value.hash}",
+              subject: "Device : ${value.name}")
+        }
+    });
+  }
+
+  _StatusColors _getStatusColors(String? iconColor) {
+    switch (iconColor) {
+      case "green":
+        return _StatusColors(
+          primary: const Color(0xFF22C55E),
+          bgGradientStart: const Color(0xFFDCFCE7),
+          bgGradientEnd: const Color(0xFFF0FDF4),
+          borderColor: const Color(0xFF86EFAC),
+          iconBgColor: const Color(0xFF22C55E).withValues(alpha: 0.15),
+          actionBarColor: const Color(0xFFF0FDF4),
+          statusText: 'Running',
+          statusIcon: Icons.directions_car,
+        );
+      case "yellow":
+        return _StatusColors(
+          primary: const Color(0xFFF59E0B),
+          bgGradientStart: const Color(0xFFFEF3C7),
+          bgGradientEnd: const Color(0xFFFFFBEB),
+          borderColor: const Color(0xFFFCD34D),
+          iconBgColor: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+          actionBarColor: const Color(0xFFFFFBEB),
+          statusText: 'Idle',
+          statusIcon: Icons.pause_circle_outline,
+        );
+      case "red":
+        return _StatusColors(
+          primary: const Color(0xFFEF4444),
+          bgGradientStart: const Color(0xFFFEE2E2),
+          bgGradientEnd: const Color(0xFFFEF2F2),
+          borderColor: const Color(0xFFFCA5A5),
+          iconBgColor: const Color(0xFFEF4444).withValues(alpha: 0.15),
+          actionBarColor: const Color(0xFFFEF2F2),
+          statusText: 'Offline',
+          statusIcon: Icons.power_off,
+        );
+      default:
+        return _StatusColors(
+          primary: const Color(0xFF6B7280),
+          bgGradientStart: const Color(0xFFF3F4F6),
+          bgGradientEnd: const Color(0xFFF9FAFB),
+          borderColor: const Color(0xFFD1D5DB),
+          iconBgColor: const Color(0xFF6B7280).withValues(alpha: 0.15),
+          actionBarColor: const Color(0xFFF9FAFB),
+          statusText: 'Unknown',
+          statusIcon: Icons.help_outline,
+        );
+    }
   }
 
   Widget deviceCard(
       DeviceItem device, BuildContext context, int index, int totalLength) {
-    final color = _getStatusColor(device.iconColor);
+    final statusColors = _getStatusColors(device.iconColor);
     final sensors = _buildSensorWidgets(device);
     final isLocked = false;
 
     return Padding(
-      padding:
-          const EdgeInsets.only(top: 5.0, left: 5.0, right: 7.0, bottom: 0),
-      child: InkWell(
-        onTap: () {
-          AdMobService().showInterstitialAd();
-          Get.to(() => TrackDevicePage(device.id, device.name, device));
-        },
-        child: Column(
-          children: [
-            if (index.isEven) BannerAdWidget(),
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.all(Radius.circular(5.0)),
-                color: Colors.white,
-                border: Border.all(width: 1.5, color: Colors.grey[350]!),
-                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 3.0)],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 🔹 Top: icon + name + quick actions
-                  Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // vehicle icon
-                        Container(
-                          height: 60,
-                          width: 60,
-                          padding: const EdgeInsets.all(13),
-                          decoration: BoxDecoration(
-                            borderRadius:
-                                const BorderRadius.all(Radius.circular(7)),
-                            color: color.withOpacity(0.2),
-                          ),
-                          child: Image(
-                            image: CachedNetworkImageProvider(
-                              "${UserRepository.getServerUrl()}/${device.icon!.path!}",
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        // name + status + actions
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      device.name ?? '',
-                                      style: TextStyle(
-                                          color: CustomColor.cssBlack,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 18),
-                                    ),
-                                  ),
-                                  InkWell(
-                                    child: m.Icon(Icons.directions_outlined,
-                                        color: CustomColor.primaryColor,
-                                        size: 22),
-                                    onTap: () async {
-                                      String origin =
-                                          "${device.lat},${device.lng}";
-                                      var url = '';
-                                      var urlAppleMaps = '';
-                                      if (Platform.isAndroid) {
-                                        String query =
-                                            Uri.encodeComponent(origin);
-                                        url =
-                                            "https://www.google.com/maps/search/?api=1&query=$query";
-                                        await launchUrl(Uri.parse(url));
-                                      } else {
-                                        urlAppleMaps =
-                                            'https://maps.apple.com/?q=$origin';
-                                        url =
-                                            "comgooglemaps://?saddr=&daddr=$origin&directionsmode=driving";
-                                        if (await canLaunchUrl(
-                                            Uri.parse(url))) {
-                                          await launchUrl(Uri.parse(url));
-                                        } else if (await canLaunchUrl(
-                                            Uri.parse(urlAppleMaps))) {
-                                          await launchUrl(
-                                              Uri.parse(urlAppleMaps));
-                                        } else {
-                                          throw 'Could not launch $url';
-                                        }
-                                      }
-                                    },
-                                  ),
-                                  const SizedBox(width: 8),
-                                  InkWell(
-                                    child: m.Icon(Icons.share,
-                                        color: CustomColor.primaryColor,
-                                        size: 22),
-                                    onTap: () {
-                                      showShareDialog(context, device);
-                                    },
-                                  ),
-                                  const SizedBox(width: 8),
-                                  InkWell(
-                                    onTap: () {
-                                      getEditDeviceData(device.id);
-                                    },
-                                    child: m.Icon(Icons.settings,
-                                        color: CustomColor.primaryColor),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "${device.iconColor == 'green' ? "Moving since:" : "Stopped since:"} ${device.stopDuration!}",
-                                style: TextStyle(
-                                  color: device.iconColor == 'green'
-                                      ? Colors.green[600]
-                                      : Colors.red[300],
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      ],
-                    ),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            AdMobService().showInterstitialAd();
+            Get.to(() => TrackDevicePage(device.id, device.name, device));
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            children: [
+              if (index.isEven) BannerAdWidget(),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      statusColors.bgGradientStart,
+                      statusColors.bgGradientEnd,
+                    ],
                   ),
-
-                  // Divider(thickness: 1.5, color: Colors.grey[350]),
-
-                  // 🔹 Middle: speed + address
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Speed: ${convertSpeed(device.speed, device.distanceUnitHour!)}",
-                          style: TextStyle(
-                            color: color,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _buildAddressWidget(device),
-                      ],
-                    ),
-                  ),
-
-                  // 🔹 Sensors
-                  if (sensors.isNotEmpty) ...[
-                    // Divider(thickness: 1.5, color: Colors.grey[350]),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            ...sensors,
-                            const SizedBox(width: 12),
-                          ],
-                        ),
-                      ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 4,
+                      offset: const Offset(0, 4),
                     ),
                   ],
-
-                  // 🔹 Action buttons
-                  // Divider(thickness: 1.5, color: Colors.grey[350]),
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            statusColors.primary,
+                            statusColors.primary.withValues(alpha: 0),
+                          ],
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(28),
+                          topRight: Radius.circular(16),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
                         children: [
-                          _buildActionButton(
-                            icon: Icons.insert_drive_file,
-                            label: 'report'.tr,
-                            onTap: () {
-                              AdMobService()
-                                  .showInterstitialAd(ignoreFrequency: true);
-                              showReport(('report').tr, device.id ?? 1,
-                                  device.name ?? '', device);
-                            },
+                          Row(
+                            children: [
+                              _buildVehicleIcon(device, statusColors),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildVehicleInfo(device, statusColors),
+                              ),
+                              _buildQuickActions(device, statusColors),
+                            ],
                           ),
-                          _buildActionButton(
-                            icon: Icons.play_arrow,
-                            label: 'playback'.tr,
-                            onTap: () {
-                              AdMobService()
-                                  .showInterstitialAd(ignoreFrequency: true);
-                              Navigator.pushNamed(
-                                context,
-                                "/playback",
-                                arguments: ReportArguments(device.id!, "", "", "",
-                                    "", device.name!, 0, device),
-                              );
-                            },
-                          ),
-                          _buildActionButton(
-                            icon: Icons.call,
-                            label: 'call'.tr,
-                            onTap: () {
-                              if (device.driverData?.phone != null &&
-                                  device.driverData!.phone.isNotEmpty) {
-                                launchUrl(
-                                    Uri.parse('tel:${device.driverData?.phone}'));
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('phoneNumberNotFound'.tr),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                            },
-                          ),
-                          _buildActionButton(
-                            icon: isLocked ? Icons.lock_open : Icons.lock,
-                            label: isLocked ? 'unlock'.tr : 'lock'.tr,
-                            onTap: () {
-                              AdMobService()
-                                  .showInterstitialAd(ignoreFrequency: true);
-                              Get.to(() => LockUnlockScreen(device: device));
-                            },
-                          ),
-                          _buildActionButton(
-                            icon: Icons.location_on,
-                            label: 'address'.tr,
-                            onTap: () {
-                              _showAddress(device.id ?? 0);
-                            },
-                          ),
+                          _buildAddressWidget(device),
+                          if (sensors.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(children: sensors),
+                            ),
+                          ],
                         ],
                       ),
+                    ),
+                    _buildBottomActionBar(device, statusColors, isLocked),
+                  ],
+                ),
+              ),
+              if (ALWAYS_SHOW_BANNER_ADS && totalLength == 0 && index == 0)
+                BannerAdWidget(forceShow: ALWAYS_SHOW_BANNER_ADS),
+              if (ALWAYS_SHOW_BANNER_ADS && totalLength >= 1 && index == 1)
+                BannerAdWidget(forceShow: ALWAYS_SHOW_BANNER_ADS),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVehicleIcon(DeviceItem device, _StatusColors statusColors) {
+    return Stack(
+      children: [
+        Container(
+          height: 68,
+          width: 68,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                statusColors.primary.withValues(alpha: 0.6),
+                statusColors.primary.withValues(alpha: 0.2),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: statusColors.primary.withValues(alpha: 0.4),
+                blurRadius: 4,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: CachedNetworkImage(
+              imageUrl:
+              "${UserRepository.getServerUrl()}/${device.icon!.path!}",
+              fit: BoxFit.contain,
+              placeholder: (context, url) => Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              errorWidget: (context, url, error) => Icon(
+                Icons.directions_car,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 0,
+          top: 0,
+          child: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: statusColors.bgGradientStart, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 2,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: statusColors.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVehicleInfo(DeviceItem device, _StatusColors statusColors) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          device.name ?? '',
+          style: TextStyle(
+            color: Colors.grey[800],
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            letterSpacing: -0.5,
+            height: 1.2,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColors.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: statusColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    statusColors.statusIcon,
+                    size: 12,
+                    color: statusColors.primary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    statusColors.statusText,
+                    style: TextStyle(
+                      color: statusColors.primary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
             ),
-            if (ALWAYS_SHOW_BANNER_ADS && totalLength == 0 && index == 0)
-              BannerAdWidget(forceShow: ALWAYS_SHOW_BANNER_ADS),
-            if (ALWAYS_SHOW_BANNER_ADS && totalLength >= 1 && index == 1)
-              BannerAdWidget(forceShow: ALWAYS_SHOW_BANNER_ADS),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                device.stopDuration ?? '',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: statusColors.primary.withValues(alpha: 0.2),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.speed, size: 16, color: statusColors.primary),
+              const SizedBox(width: 6),
+              Text(
+                convertSpeed(device.speed, device.distanceUnitHour!),
+                style: TextStyle(
+                  color: statusColors.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickActions(DeviceItem device, _StatusColors statusColors) {
+    return Column(
+      children: [
+        _buildActionButton(
+          icon: Icons.near_me,
+          statusColors: statusColors,
+          onTap: () async {
+            String origin = "${device.lat},${device.lng}";
+            if (Platform.isAndroid) {
+              String query = Uri.encodeComponent(origin);
+              String url =
+                  "https://www.google.com/maps/search/?api=1&query=$query";
+              await launchUrl(Uri.parse(url));
+            } else {
+              String urlAppleMaps = 'https://maps.apple.com/?q=$origin';
+              String url =
+                  "comgooglemaps://?saddr=&daddr=$origin&directionsmode=driving";
+              if (await canLaunchUrl(Uri.parse(url))) {
+                await launchUrl(Uri.parse(url));
+              } else if (await canLaunchUrl(Uri.parse(urlAppleMaps))) {
+                await launchUrl(Uri.parse(urlAppleMaps));
+              }
+            }
+          },
+        ),
+        const SizedBox(height: 2),
+        _buildActionButton(
+          icon: Icons.location_on_outlined,
+          statusColors: statusColors,
+          onTap: () => _showAddress(device.id ?? 0)
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required _StatusColors statusColors,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: statusColors.primary.withValues(alpha: 0.2),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 2,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(
+          icon,
+          color: statusColors.primary,
+          size: 20,
+        ),
+      ),
+    );
+  }
+
+  // UPDATED: Removed Playback, Added Settings and More
+  Widget _buildBottomActionBar(
+      DeviceItem device, _StatusColors statusColors, bool isLocked) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(16),
+          bottomRight: Radius.circular(16),
+        ),
+        border: Border(
+          top: BorderSide(
+            color: Colors.black.withValues(alpha: 0.1),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.5),
+            blurRadius: 2,
+            offset: const Offset(2, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          // Report
+          _buildBottomActionItem(
+            icon: Icons.description_outlined,
+            label: 'report'.tr,
+            statusColors: statusColors,
+            onTap: () {
+              AdMobService().showInterstitialAd(ignoreFrequency: true);
+              showReport(
+                  ('report').tr, device.id ?? 1, device.name ?? '', device);
+            },
+          ),
+          // Call
+          _buildBottomActionItem(
+            icon: Icons.phone_outlined,
+            label: 'call'.tr,
+            statusColors: statusColors,
+            onTap: () {
+              if (device.driverData?.phone != null &&
+                  device.driverData!.phone.isNotEmpty) {
+                launchUrl(Uri.parse('tel:${device.driverData?.phone}'));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('phoneNumberNotFound'.tr),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+          ),
+          // Lock/Unlock
+          _buildBottomActionItem(
+            icon: isLocked ? Icons.lock_open_outlined : Icons.lock_outlined,
+            label: isLocked ? 'unlock'.tr : 'lock'.tr,
+            statusColors: statusColors,
+            onTap: () {
+              AdMobService().showInterstitialAd(ignoreFrequency: true);
+              Get.to(() => LockUnlockScreen(device: device));
+            },
+          ),
+          // Settings (NEW)
+          _buildBottomActionItem(
+            icon: Icons.settings_outlined,
+            label: 'settings'.tr,
+            statusColors: statusColors,
+            onTap: () {
+              getEditDeviceData(device.id);
+            },
+          ),
+          // More (NEW)
+          _buildBottomActionItem(
+            icon: Icons.more_horiz,
+            label: 'more'.tr,
+            statusColors: statusColors,
+            onTap: () {
+              _showMoreOptions(context, device);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomActionItem({
+    required IconData icon,
+    required String label,
+    required _StatusColors statusColors,
+    required VoidCallback onTap,
+    bool isAddressButton = false,
+  }) {
+    final bool isAddressShowing =
+        isAddressButton && _showingAddressForDeviceId != null;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      splashColor: statusColors.primary.withValues(alpha: 0.15),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: isAddressShowing
+              ? statusColors.primary.withValues(alpha: 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: statusColors.primary.withValues(alpha: 0.2),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: statusColors.primary.withValues(alpha: 0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(
+                icon,
+                color: statusColors.primary,
+                size: 20,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: statusColors.primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 10.5,
+                letterSpacing: 0.2,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool isLock = false,
-  }) {
-    return SizedBox(
-      height: 48,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24), // fully rounded
-          onTap: onTap,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.orange,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                m.Icon(
-                  icon,
-                  size: 20,
-                  color: Colors.white,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                  ),
-                ),
+  // UPDATED: Enhanced Bottom Sheet with All Actions and Sensors
+  void _showMoreOptions(BuildContext context, DeviceItem device) {
+    final statusColors = _getStatusColors(device.iconColor);
+    final isLocked = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                statusColors.bgGradientStart,
+                statusColors.bgGradientEnd,
               ],
+            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Handle Bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: statusColors.primary.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Device Header
+                  Row(
+                    children: [
+                      Container(
+                        height: 60,
+                        width: 60,
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: statusColors.primary,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: statusColors.primary.withValues(alpha: 0.4),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: device.icon?.path != null
+                            ? CachedNetworkImage(
+                          imageUrl:
+                          "${UserRepository.getServerUrl()}/${device.icon!.path!}",
+                          fit: BoxFit.contain,
+                          errorWidget: (context, url, error) => Icon(
+                            Icons.directions_car,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        )
+                            : Icon(
+                          Icons.directions_car,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              device.name ?? '',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: statusColors.primary,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        statusColors.statusIcon,
+                                        size: 12,
+                                        color: Colors.white,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        statusColors.statusText,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  convertSpeed(
+                                      device.speed, device.distanceUnitHour!),
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Quick Actions Title
+                  Text(
+                    'quickActions'.tr,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Action Buttons Grid
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        // First Row
+                        Row(
+                          children: [
+                            _buildGridActionItem(
+                              icon: Icons.description_outlined,
+                              label: 'report'.tr,
+                              color: const Color(0xFF6366F1),
+                              onTap: () {
+                                Navigator.pop(context);
+                                AdMobService()
+                                    .showInterstitialAd(ignoreFrequency: true);
+                                showReport(('report').tr, device.id ?? 1,
+                                    device.name ?? '', device);
+                              },
+                            ),
+                            _buildGridActionItem(
+                              icon: Icons.play_circle_outline,
+                              label: 'playback'.tr,
+                              color: const Color(0xFF8B5CF6),
+                              onTap: () {
+                                Navigator.pop(context);
+                                AdMobService()
+                                    .showInterstitialAd(ignoreFrequency: true);
+                                Navigator.pushNamed(
+                                  context,
+                                  "/playback",
+                                  arguments: ReportArguments(
+                                    device.id!,
+                                    "",
+                                    "",
+                                    "",
+                                    "",
+                                    device.name!,
+                                    0,
+                                    device,
+                                  ),
+                                );
+                              },
+                            ),
+                            _buildGridActionItem(
+                              icon: Icons.phone_outlined,
+                              label: 'call'.tr,
+                              color: const Color(0xFF22C55E),
+                              onTap: () {
+                                Navigator.pop(context);
+                                if (device.driverData?.phone != null &&
+                                    device.driverData!.phone.isNotEmpty) {
+                                  launchUrl(Uri.parse(
+                                      'tel:${device.driverData?.phone}'));
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('phoneNumberNotFound'.tr),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
+                            _buildGridActionItem(
+                              icon: isLocked
+                                  ? Icons.lock_open_outlined
+                                  : Icons.lock_outlined,
+                              label: isLocked ? 'unlock'.tr : 'lock'.tr,
+                              color: const Color(0xFFF59E0B),
+                              onTap: () {
+                                Navigator.pop(context);
+                                AdMobService()
+                                    .showInterstitialAd(ignoreFrequency: true);
+                                Get.to(() => LockUnlockScreen(device: device));
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        // Second Row
+                        Row(
+                          children: [
+                            _buildGridActionItem(
+                              icon: Icons.location_on_outlined,
+                              label: 'address'.tr,
+                              color: const Color(0xFFEF4444),
+                              onTap: () {
+                                Navigator.pop(context);
+                                _showAddress(device.id ?? 0);
+                              },
+                            ),
+                            _buildGridActionItem(
+                              icon: Icons.share_outlined,
+                              label: 'share'.tr,
+                              color: const Color(0xFF0EA5E9),
+                              onTap: () {
+                                Navigator.pop(context);
+                                showShareDialog(context, device);
+                              },
+                            ),
+                            _buildGridActionItem(
+                              icon: Icons.near_me_outlined,
+                              label: 'navigate'.tr,
+                              color: const Color(0xFF14B8A6),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                String origin = "${device.lat},${device.lng}";
+                                if (Platform.isAndroid) {
+                                  String query = Uri.encodeComponent(origin);
+                                  String url =
+                                      "https://www.google.com/maps/search/?api=1&query=$query";
+                                  await launchUrl(Uri.parse(url));
+                                } else {
+                                  String urlAppleMaps =
+                                      'https://maps.apple.com/?q=$origin';
+                                  String url =
+                                      "comgooglemaps://?saddr=&daddr=$origin&directionsmode=driving";
+                                  if (await canLaunchUrl(Uri.parse(url))) {
+                                    await launchUrl(Uri.parse(url));
+                                  } else if (await canLaunchUrl(
+                                      Uri.parse(urlAppleMaps))) {
+                                    await launchUrl(Uri.parse(urlAppleMaps));
+                                  }
+                                }
+                              },
+                            ),
+                            _buildGridActionItem(
+                              icon: Icons.settings_outlined,
+                              label: 'settings'.tr,
+                              color: const Color(0xFF64748B),
+                              onTap: () {
+                                Navigator.pop(context);
+                                getEditDeviceData(device.id);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Sensors Section
+                  if (device.sensors != null && device.sensors!.isNotEmpty) ...[
+                    Text(
+                      'sensors'.tr,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: _buildSensorList(device, statusColors),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
         ),
@@ -1044,32 +1797,211 @@ class _DevicePageState extends State<DevicePage> {
     );
   }
 
-  Color _getButtonColor(IconData icon) {
-    switch (icon) {
-      case Icons.play_arrow:
-        return Colors.purple;
-      case Icons.call:
-        return Colors.green;
-      case Icons.lock:
-      case Icons.lock_open:
-        return Colors.orange;
-      case Icons.settings:
-        return Colors.blue;
-      default:
-        return Colors.blue;
-    }
+  // Grid Action Item for Bottom Sheet
+  Widget _buildGridActionItem({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: color.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  Color _getStatusColor(String? iconColor) {
-    if (iconColor == "green") return Colors.green[600]!;
-    if (iconColor == "yellow") return Colors.yellow.shade800;
-    if (iconColor == "red") return Colors.red[400]!;
-    return Colors.yellow.shade700;
+  // Build Sensor List for Bottom Sheet
+  List<Widget> _buildSensorList(DeviceItem device, _StatusColors statusColors) {
+    List<Widget> sensorWidgets = [];
+
+    try {
+      for (int i = 0; i < device.sensors!.length; i++) {
+        final sensor = device.sensors![i];
+        if (sensor['value'] != null) {
+          sensorWidgets.add(
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+              decoration: BoxDecoration(
+                border: i < device.sensors!.length - 1
+                    ? Border(
+                  bottom: BorderSide(
+                    color: Colors.grey[200]!,
+                    width: 1,
+                  ),
+                )
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  // Sensor Icon
+                  Container(
+                    width: 44,
+                    height: 44,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: statusColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Image.asset(
+                      "assets/images/sensors/${sensor['type']}.png",
+                      width: 24,
+                      height: 24,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.sensors,
+                        color: statusColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Sensor Name & Type
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _getSensorName(sensor['type'] ?? sensor['name'] ?? ''),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          sensor['type'] ?? '',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Sensor Value
+                  Container(
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: statusColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: statusColors.primary.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Text(
+                      _gsmCodeConvert(sensor['value']),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: statusColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Error building sensor list: $e");
+    }
+
+    if (sensorWidgets.isEmpty) {
+      sensorWidgets.add(
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Icon(
+                Icons.sensors_off,
+                size: 48,
+                color: Colors.grey[300],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'noSensorsFound'.tr,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return sensorWidgets;
+  }
+
+  // Get Sensor Display Name
+  String _getSensorName(String type) {
+    final Map<String, String> sensorNames = {
+      'fuel': 'Fuel Level',
+      'temperature': 'Temperature',
+      'battery': 'Battery',
+      'gsm': 'GSM Signal',
+      'ignition': 'Ignition',
+      'door': 'Door',
+      'acc': 'ACC',
+      'speed': 'Speed',
+      'odometer': 'Odometer',
+      'engine': 'Engine',
+      'alarm': 'Alarm',
+      'power': 'Power',
+      'voltage': 'Voltage',
+      'rpm': 'RPM',
+      'coolant': 'Coolant Temp',
+      'oil': 'Oil Level',
+      'seatbelt': 'Seatbelt',
+      'harsh_acceleration': 'Harsh Acceleration',
+      'harsh_braking': 'Harsh Braking',
+      'harsh_cornering': 'Harsh Cornering',
+    };
+
+    return sensorNames[type.toLowerCase()] ?? type.toUpperCase();
   }
 
   List<Widget> _buildSensorWidgets(DeviceItem device) {
     final sensors = <Widget>[];
-    final color = _getStatusColor(device.iconColor);
+    final statusColors = _getStatusColors(device.iconColor);
 
     try {
       for (var sensor in device.sensors!) {
@@ -1079,46 +2011,48 @@ class _DevicePageState extends State<DevicePage> {
               padding: const EdgeInsets.only(right: 8.0),
               child: Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: color.withOpacity(0.3), width: 1),
-                  borderRadius: BorderRadius.circular(4),
+                  color: Colors.white,
+                  border: Border.all(
+                    color: statusColors.primary.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Image.asset(
                       "assets/images/sensors/${sensor['type']}.png",
-                      width: 20,
-                      height: 20,
+                      width: 18,
+                      height: 18,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.sensors,
+                        size: 18,
+                        color: statusColors.primary,
+                      ),
                     ),
-                    const SizedBox(width: 4),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          sensor["name"],
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Text(
-                          _gsmCodeConvert(sensor['value']),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: color,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(width: 6),
+                    Text(
+                      _gsmCodeConvert(sensor['value']),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: statusColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
           );
-          sensors.add(const SizedBox(width: 4));
         }
       }
     } catch (e) {
@@ -1139,9 +2073,31 @@ class _DevicePageState extends State<DevicePage> {
       case "71615":
         return "Bitel";
       default:
-        return value;
+        return value.toString();
     }
   }
+}
+
+class _StatusColors {
+  final Color primary;
+  final Color bgGradientStart;
+  final Color bgGradientEnd;
+  final Color borderColor;
+  final Color iconBgColor;
+  final Color actionBarColor;
+  final String statusText;
+  final IconData statusIcon;
+
+  _StatusColors({
+    required this.primary,
+    required this.bgGradientStart,
+    required this.bgGradientEnd,
+    required this.borderColor,
+    required this.iconBgColor,
+    required this.actionBarColor,
+    required this.statusText,
+    required this.statusIcon,
+  });
 }
 
 class Choice {

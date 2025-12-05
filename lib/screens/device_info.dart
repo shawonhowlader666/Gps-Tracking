@@ -229,7 +229,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
             padding: const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
             iconPadding:
                 const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
-            color: CustomColor.cssBlack.withOpacity(0.1),
+            color: CustomColor.cssBlack.withValues(alpha: 0.1),
             textStyle: FlutterFlowTheme.of(context).titleSmall.override(
                   fontFamily: 'Outfit',
                   color: CustomColor.cssBlack,
@@ -530,10 +530,10 @@ class _DeviceInfoState extends State<DeviceInfo> {
                                         hint: new Text(('select_command').tr),
                                         value: _commands[_selectedCommand],
                                         items: _commands.map((String value) {
-                                          return new DropdownMenuItem<String>(
+                                          return DropdownMenuItem<String>(
                                             value: value,
-                                            child: new Text(
-                                              (value) != null ? (value) : value,
+                                            child: Text(
+                                              (value),
                                               style: TextStyle(),
                                               overflow: TextOverflow.ellipsis,
                                             ),
