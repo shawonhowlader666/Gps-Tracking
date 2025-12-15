@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:line_icons/line_icons.dart';
-
 import 'package:gpspro/screens/home_screen.dart';
 import 'package:gpspro/screens/devices.dart';
 import 'package:gpspro/screens/map_home.dart';
@@ -240,7 +239,7 @@ class CurvedBackgroundPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Color(0xFFE4B34E),
+          Color(0xFFF4A607),
           const Color(0xFFF8F9FC),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
@@ -292,8 +291,8 @@ class CurvedBackgroundPainter extends CustomPainter {
     path.quadraticBezierTo(
       centerX,
       -5,
-      centerX + bumpWidth / 3,
-      baseY - bumpHeight * 0.7,
+      centerX + bumpWidth / 6,
+      baseY - bumpHeight * 0.9,
     );
 
     // Smooth curve out of bump

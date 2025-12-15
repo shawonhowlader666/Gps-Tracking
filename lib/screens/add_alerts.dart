@@ -12,6 +12,8 @@ import 'package:gpspro/theme/custom_color.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AddAlertsPage extends StatefulWidget {
+  const AddAlertsPage({super.key});
+
   @override
   State<StatefulWidget> createState() => _AddAlertsPageState();
 }
@@ -26,12 +28,12 @@ class _AddAlertsPageState extends State<AddAlertsPage> {
   List<String> selectedDevices = [];
   List<String> types = [];
   String selectedType = "Types";
-  TextEditingController _nameCtl = TextEditingController();
-  TextEditingController _typeCtl = TextEditingController();
+  final TextEditingController _nameCtl = TextEditingController();
+  final TextEditingController _typeCtl = TextEditingController();
 
   void typeList() {
     types = <String>[
-      "Overspeed",
+      "Over Speed",
       "Stop Duration",
       "Offline Duration",
       "Ignition Duration",

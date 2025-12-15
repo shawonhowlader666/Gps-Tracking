@@ -1,13 +1,9 @@
-// ignore_for_file: use_build_context_synchronously, unnecessary_null_comparison
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
-import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:math' as m;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
@@ -38,9 +34,7 @@ import 'package:gpspro/widgets/bloc/custom_info_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'package:speedometer_chart/speedometer_chart.dart';
-import 'package:timelines/timelines.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vector_math/vector_math.dart' as v;
 import 'package:flutter/material.dart' as m;
@@ -60,26 +54,18 @@ class TrackDevicePage extends StatefulWidget {
 
 class _TrackDeviceState extends State<TrackDevicePage>
     with TickerProviderStateMixin {
-  // MAP CONTROLLER - Fixed Implementation
-
+  // MAP CONTROLLER
   GoogleMapController? _mapController;
   bool _isMapCreated = false;
 
-  // EXISTING TRACKING VARIABLES
-
+  // TRACKING VARIABLES
   final List<Marker> _markers = <Marker>[];
   bool isLoading = false;
   MapType _currentMapType = MapType.normal;
   double currentZoom = 16.0;
   bool _trafficEnabled = false;
-  double _dragStartPosition = 0;
-  bool _isDragging = false;
   String? fuelConsumption;
 
-  final DateTime _selectedFromDate = DateTime.now();
-  final DateTime _selectedToDate = DateTime.now();
-  final TimeOfDay _selectedFromTime = TimeOfDay.now();
-  final TimeOfDay _selectedToTime = TimeOfDay.now();
   Color _mapTypeBackgroundColor = CustomColor.primaryColor;
   Color _mapTypeForegroundColor = CustomColor.secondaryColor;
   Color _trafficBackgroundButtonColor = CustomColor.secondaryColor;
@@ -91,28 +77,23 @@ class _TrackDeviceState extends State<TrackDevicePage>
   Animation<double>? _animation;
 
   final _mapMarkerSC = StreamController<List<Marker>>.broadcast();
-
   StreamSink<List<Marker>> get _mapMarkerSink => _mapMarkerSC.sink;
-
   Stream<List<Marker>> get mapMarkerStream => _mapMarkerSC.stream;
 
   DeviceItem? device;
   Timer? _todayKmTimer;
   Timer? _todayDetailsTimer;
-  int _selectedperiod = 0;
   String address = "Show Address";
   List<LatLng> polylineCoordinates = [];
   Map<PolylineId, Polyline> polylines = {};
   TodayReportData? todayData;
   List<LatLng> newPolylinesData = [];
 
-  bool _isPanelVisible = true;
   bool _isDisposed = false;
   String todaytotalDistance = "loading".tr;
   bool showAddress = false;
 
   // PLAYBACK MODE VARIABLES
-
   bool _isPlaybackMode = false;
   bool _isPlaybackLoading = false;
 
@@ -157,13 +138,15 @@ class _TrackDeviceState extends State<TrackDevicePage>
   LatLng previousLatLng = const LatLng(0.0, 0.0);
   LatLng currentLatLng = const LatLng(0.0, 0.0);
 
-  // SAFE MAP CONTROLLER ACCESS - Key Fix
+  // Draggable sheet controller
+  final DraggableScrollableController _sheetController =
+  DraggableScrollableController();
 
+  // SAFE MAP CONTROLLER ACCESS
   Future<void> _safeAnimateCamera(CameraUpdate cameraUpdate) async {
     if (!mounted || _isDisposed || _mapController == null || !_isMapCreated) {
       return;
     }
-
     try {
       await _mapController!.animateCamera(cameraUpdate);
     } catch (e) {
@@ -175,47 +158,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
     if (!mounted || _isDisposed || _mapController == null || !_isMapCreated) {
       return;
     }
-
     try {
       await _mapController!.moveCamera(cameraUpdate);
     } catch (e) {
       debugPrint('Error moving camera: $e');
     }
   }
-
-  // SPEEDOMETER WIDGET
-
-  Widget _buildSpeedometer() {
-    double speed = 0.0;
-
-    if (_isPlaybackMode &&
-        playbackRoutePoints.isNotEmpty &&
-        playbackRating.toInt() < routeList.length) {
-      speed =
-          double.tryParse(routeList[playbackRating.toInt()].speed.toString()) ??
-              0.0;
-    } else if (device?.speed != null) {
-      speed = double.tryParse(device!.speed.toString()) ?? 0.0;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: SpeedometerChart(
-        dimension: 100,
-        minValue: 0,
-        maxValue: 150,
-        value: speed,
-        graphColor: [
-          Colors.green,
-          Colors.yellow,
-          Colors.red,
-        ],
-        pointerColor: Colors.black,
-      ),
-    );
-  }
-
-  // INIT STATE
 
   @override
   void initState() {
@@ -273,14 +221,14 @@ class _TrackDeviceState extends State<TrackDevicePage>
     if (baseTimeForMapAnimation <= 1) {
       if (start.latitude != end.latitude && start.longitude != end.longitude) {
         double intermediateLat = (end.latitude - start.latitude) *
-                (baseTimeForMapAnimation *
-                    baseTimeForMapAnimation *
-                    (3.0 - 2.0 * baseTimeForMapAnimation)) +
+            (baseTimeForMapAnimation *
+                baseTimeForMapAnimation *
+                (3.0 - 2.0 * baseTimeForMapAnimation)) +
             start.latitude;
         double intermediateLon = (end.longitude - start.longitude) *
-                (baseTimeForMapAnimation *
-                    baseTimeForMapAnimation *
-                    (3.0 - 2.0 * baseTimeForMapAnimation)) +
+            (baseTimeForMapAnimation *
+                baseTimeForMapAnimation *
+                (3.0 - 2.0 * baseTimeForMapAnimation)) +
             start.longitude;
 
         MarkerId markerId = const MarkerId('playbackAnimatingMarker');
@@ -294,7 +242,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
         try {
           await Util.fetchAndCacheImages(
-            UserRepository.getServerUrl()! + "/" + widget.device!.icon!.path!,
+            "${UserRepository.getServerUrl()!}/${widget.device!.icon!.path!}",
           );
 
           BitmapDescriptor markerIcon = await Util.getMarkerIcon(
@@ -366,22 +314,18 @@ class _TrackDeviceState extends State<TrackDevicePage>
     }
   }
 
-  // DISPOSE
-
   @override
   void dispose() {
     _isDisposed = true;
     _todayKmTimer?.cancel();
     _todayDetailsTimer?.cancel();
 
-    // Close stream controller safely
     if (!_mapMarkerSC.isClosed) {
       _mapMarkerSC.close();
     }
 
     _playbackAnimationController?.dispose();
-
-    // Don't dispose _mapController here - it's managed by GoogleMap widget
+    _sheetController.dispose();
     _isMapCreated = false;
     _mapController = null;
 
@@ -389,7 +333,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   // TRACKING DATA METHODS
-
   void getTodayKm() {
     if (!mounted || _isDisposed || _isPlaybackMode) return;
 
@@ -407,10 +350,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     APIService.getHistory(
       widget.device!.id.toString(),
-      fromDate!,
-      fromTime!,
-      toDate!,
-      toTime!,
+      fromDate,
+      fromTime,
+      toDate,
+      toTime,
     ).then((value) {
       if (value != null && mounted && !_isDisposed && !_isPlaybackMode) {
         setState(() {
@@ -557,14 +500,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   // PLAYBACK METHODS
-
   void _enterPlaybackMode() {
     _todayKmTimer?.cancel();
     _todayDetailsTimer?.cancel();
 
     setState(() {
       _isPlaybackMode = true;
-      _isPanelVisible = true;
     });
 
     _showPlaybackDateDialog();
@@ -627,7 +568,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -649,10 +589,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
                   ),
                 ],
               ),
-
               const SizedBox(height: 20),
-
-              // Quick Selection
               Text(
                 'quickSelect'.tr,
                 style: TextStyle(
@@ -662,76 +599,60 @@ class _TrackDeviceState extends State<TrackDevicePage>
                 ),
               ),
               const SizedBox(height: 10),
-
               Row(
                 children: [
-                  _buildQuickSelectButton(
-                    'today'.tr,
-                    Icons.today,
-                    Colors.blue,
-                    () {
-                      setModalState(() {
-                        playbackDateTimeFrom = DateTime.now().subtract(Duration(
-                          hours: DateTime.now().hour,
-                          minutes: DateTime.now().minute,
-                          seconds: DateTime.now().second,
-                        ));
-                        playbackDateTimeTo = DateTime.now();
-                      });
-                      Navigator.pop(context);
-                      _fetchPlaybackData();
-                    },
-                  ),
+                  _buildQuickSelectButton('today'.tr, Icons.today, Colors.blue,
+                          () {
+                        setModalState(() {
+                          playbackDateTimeFrom = DateTime.now().subtract(Duration(
+                            hours: DateTime.now().hour,
+                            minutes: DateTime.now().minute,
+                            seconds: DateTime.now().second,
+                          ));
+                          playbackDateTimeTo = DateTime.now();
+                        });
+                        Navigator.pop(context);
+                        _fetchPlaybackData();
+                      }),
                   const SizedBox(width: 10),
                   _buildQuickSelectButton(
-                    'yesterday'.tr,
-                    Icons.history,
-                    Colors.orange,
-                    () {
-                      setModalState(() {
-                        playbackDateTimeFrom = DateTime.now().subtract(Duration(
-                          days: 1,
-                          hours: DateTime.now().hour,
-                          minutes: DateTime.now().minute,
-                          seconds: DateTime.now().second,
-                        ));
-                        playbackDateTimeTo = DateTime.now().subtract(Duration(
-                          hours: DateTime.now().hour,
-                          minutes: DateTime.now().minute,
-                          seconds: DateTime.now().second,
-                        ));
-                      });
-                      Navigator.pop(context);
-                      _fetchPlaybackData();
-                    },
-                  ),
+                      'yesterday'.tr, Icons.history, Colors.orange, () {
+                    setModalState(() {
+                      playbackDateTimeFrom = DateTime.now().subtract(Duration(
+                        days: 1,
+                        hours: DateTime.now().hour,
+                        minutes: DateTime.now().minute,
+                        seconds: DateTime.now().second,
+                      ));
+                      playbackDateTimeTo = DateTime.now().subtract(Duration(
+                        hours: DateTime.now().hour,
+                        minutes: DateTime.now().minute,
+                        seconds: DateTime.now().second,
+                      ));
+                    });
+                    Navigator.pop(context);
+                    _fetchPlaybackData();
+                  }),
                   const SizedBox(width: 10),
                   _buildQuickSelectButton(
-                    'thisWeek'.tr,
-                    Icons.date_range,
-                    Colors.green,
-                    () {
-                      setModalState(() {
-                        playbackDateTimeFrom = DateTime.now().subtract(Duration(
-                          days: 7,
-                          hours: DateTime.now().hour,
-                          minutes: DateTime.now().minute,
-                          seconds: DateTime.now().second,
-                        ));
-                        playbackDateTimeTo = DateTime.now();
-                      });
-                      Navigator.pop(context);
-                      _fetchPlaybackData();
-                    },
-                  ),
+                      'thisWeek'.tr, Icons.date_range, Colors.green, () {
+                    setModalState(() {
+                      playbackDateTimeFrom = DateTime.now().subtract(Duration(
+                        days: 7,
+                        hours: DateTime.now().hour,
+                        minutes: DateTime.now().minute,
+                        seconds: DateTime.now().second,
+                      ));
+                      playbackDateTimeTo = DateTime.now();
+                    });
+                    Navigator.pop(context);
+                    _fetchPlaybackData();
+                  }),
                 ],
               ),
-
               const SizedBox(height: 20),
               const Divider(),
               const SizedBox(height: 10),
-
-              // Custom Date Range
               Text(
                 'customRange'.tr,
                 style: TextStyle(
@@ -741,78 +662,62 @@ class _TrackDeviceState extends State<TrackDevicePage>
                 ),
               ),
               const SizedBox(height: 15),
-
-              // From Date
               _buildDateTimeSelector(
-                'from'.tr,
-                playbackDateTimeFrom,
-                Icons.play_arrow,
-                Colors.green,
-                () async {
-                  final date = await showDatePicker(
+                  'from'.tr, playbackDateTimeFrom, Icons.play_arrow,
+                  Colors.green, () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: playbackDateTimeFrom,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now(),
+                );
+                if (date != null) {
+                  final time = await showTimePicker(
                     context: context,
-                    initialDate: playbackDateTimeFrom,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now(),
+                    initialTime: TimeOfDay.fromDateTime(playbackDateTimeFrom),
                   );
-                  if (date != null) {
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: TimeOfDay.fromDateTime(playbackDateTimeFrom),
-                    );
-                    if (time != null) {
-                      setModalState(() {
-                        playbackDateTimeFrom = DateTime(
-                          date.year,
-                          date.month,
-                          date.day,
-                          time.hour,
-                          time.minute,
-                        );
-                      });
-                    }
+                  if (time != null) {
+                    setModalState(() {
+                      playbackDateTimeFrom = DateTime(
+                        date.year,
+                        date.month,
+                        date.day,
+                        time.hour,
+                        time.minute,
+                      );
+                    });
                   }
-                },
-              ),
-
+                }
+              }),
               const SizedBox(height: 15),
-
-              // To Date
               _buildDateTimeSelector(
-                'to'.tr,
-                playbackDateTimeTo,
-                Icons.stop,
-                Colors.red,
-                () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: playbackDateTimeTo,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now(),
-                  );
-                  if (date != null) {
-                    final time = await showTimePicker(
+                  'to'.tr, playbackDateTimeTo, Icons.stop, Colors.red,
+                      () async {
+                    final date = await showDatePicker(
                       context: context,
-                      initialTime: TimeOfDay.fromDateTime(playbackDateTimeTo),
+                      initialDate: playbackDateTimeTo,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
                     );
-                    if (time != null) {
-                      setModalState(() {
-                        playbackDateTimeTo = DateTime(
-                          date.year,
-                          date.month,
-                          date.day,
-                          time.hour,
-                          time.minute,
-                        );
-                      });
+                    if (date != null) {
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.fromDateTime(playbackDateTimeTo),
+                      );
+                      if (time != null) {
+                        setModalState(() {
+                          playbackDateTimeTo = DateTime(
+                            date.year,
+                            date.month,
+                            date.day,
+                            time.hour,
+                            time.minute,
+                          );
+                        });
+                      }
                     }
-                  }
-                },
-              ),
-
+                  }),
               const SizedBox(height: 25),
-
-              // Submit Button
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -830,8 +735,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.play_circle_outline,
-                          color: Colors.white),
+                      const Icon(Icons.play_circle_outline, color: Colors.white),
                       const SizedBox(width: 10),
                       Text(
                         'loadPlayback'.tr,
@@ -845,7 +749,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
             ],
           ),
@@ -855,11 +758,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   Widget _buildQuickSelectButton(
-    String label,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
+      String label, IconData icon, Color color, VoidCallback onTap) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
@@ -889,13 +788,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 
-  Widget _buildDateTimeSelector(
-    String label,
-    DateTime dateTime,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
+  Widget _buildDateTimeSelector(String label, DateTime dateTime, IconData icon,
+      Color color, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -920,20 +814,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
+                  Text(label,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                   const SizedBox(height: 4),
                   Text(
                     DateFormat('dd MMM yyyy, HH:mm').format(dateTime),
                     style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
+                        fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -1149,10 +1036,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   Future<void> _setPlaybackStartEndMarkers(
-    LatLng start,
-    LatLng end,
-    LatLngBounds bounds,
-  ) async {
+      LatLng start, LatLng end, LatLngBounds bounds) async {
     if (!mounted || _isDisposed) return;
 
     try {
@@ -1212,7 +1096,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
           Map<String, String> data = {};
           data["Object"] = widget.name ?? "";
           data["Position"] =
-              "${element[0]["latitude"]}, ${element[0]["longitude"]}";
+          "${element[0]["latitude"]}, ${element[0]["longitude"]}";
           data["Duration"] = element[0]["time"] ?? "";
 
           Marker marker = Marker(
@@ -1390,11 +1274,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   // MAP CONTROLS
-
   void _onMapTypeButtonPressed() {
     setState(() {
       _currentMapType =
-          _currentMapType == MapType.normal ? MapType.hybrid : MapType.normal;
+      _currentMapType == MapType.normal ? MapType.hybrid : MapType.normal;
       _mapTypeBackgroundColor = _currentMapType == MapType.normal
           ? CustomColor.secondaryColor
           : CustomColor.primaryColor;
@@ -1416,11 +1299,251 @@ class _TrackDeviceState extends State<TrackDevicePage>
     });
   }
 
-  void currentMapStatus(CameraPosition position) {
-    currentZoom = position.zoom;
+  // Show tracking info bottom sheet
+  void _showTrackingInfoBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildTrackingInfoSheet(),
+    );
   }
 
-  // BUILD METHOD
+  Widget _buildTrackingInfoSheet() {
+    Color? color;
+    if (device?.iconColor == "green") {
+      color = Colors.green;
+    } else if (device?.iconColor == "yellow") {
+      color = Colors.yellow.shade700;
+    } else {
+      color = Colors.red;
+    }
+
+    double fontWidth = MediaQuery.of(context).size.aspectRatio;
+    double iconWidth = 30;
+    List<Widget> sensors = [];
+
+    try {
+      for (var sensor in device!.sensors!) {
+        if (sensor['value'] != null) {
+          sensors.add(Card(
+            elevation: 1,
+            shadowColor: color,
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    "assets/images/sensors/${sensor['type']}.png",
+                    width: iconWidth,
+                    height: iconWidth,
+                  ),
+                  const SizedBox(width: 4),
+                  Column(
+                    children: [
+                      Text(sensor["name"],
+                          style: TextStyle(fontSize: fontWidth * 19)),
+                      const SizedBox(height: 2),
+                      Text(
+                        gsmCodeConvert(sensor['value']),
+                        style: TextStyle(fontSize: fontWidth * 19),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ));
+        }
+      }
+    } catch (e) {}
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.5,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 10),
+            width: 40,
+            height: 5,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(15, 15, 15, 5),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: color,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              device?.name ?? "",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 15),
+                    child: FutureBuilder<String>(
+                      future: APIService.getGeocoderAddress(
+                        device?.lat?.toString() ?? "0",
+                        device?.lng?.toString() ?? "0",
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData) {
+                          return Row(
+                            children: [
+                              const Icon(Icons.location_on,
+                                  color: Colors.blue, size: 16),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  snapshot.data!.replaceAll('"', ''),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                        return Text(
+                          'loading'.tr,
+                          style:
+                          TextStyle(fontSize: 12, color: Colors.grey[400]),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 15, top: 10),
+                    child: Text(
+                      "statistics".tr,
+                      style: TextStyle(
+                        color: CustomColor.cssBlack,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      children: [
+                        _buildStatCard(
+                          "assets/images/sensors/total-distance.png",
+                          "totalDistance".tr,
+                          device?.totalDistance?.toString() ?? "0",
+                          color!,
+                          iconWidth,
+                          fontWidth,
+                        ),
+                        _buildStatCard(
+                          "assets/icons/route-length.png",
+                          "todayKM".tr,
+                          todaytotalDistance,
+                          color,
+                          25,
+                          fontWidth,
+                        ),
+                        _buildStatCard(
+                          "assets/images/sensors/engine_hours.png",
+                          "engineHours".tr,
+                          todayData?.engineHours ?? 'loading'.tr,
+                          color,
+                          iconWidth,
+                          fontWidth,
+                        ),
+                        _buildStatCard(
+                          "assets/images/sensors/satellites.png",
+                          "moveDuration".tr,
+                          todayData?.moveDuration ?? 'loading'.tr,
+                          color,
+                          iconWidth,
+                          fontWidth,
+                        ),
+                        _buildStatCard(
+                          "assets/images/sensors/door.png",
+                          "stopDuration".tr,
+                          todayData?.stopDuration ?? 'loading'.tr,
+                          color,
+                          iconWidth,
+                          fontWidth,
+                        ),
+                        _buildStatCard(
+                          "assets/images/sensors/speed.png",
+                          "topSpeed".tr,
+                          todayData?.topSpeed ?? 'loading'.tr,
+                          color,
+                          iconWidth,
+                          fontWidth,
+                        ),
+                        _buildStatCard(
+                          "assets/images/sensors/fuel_tank.png",
+                          "fuelConsumption".tr,
+                          fuelConsumption ?? 'loading'.tr,
+                          color,
+                          22,
+                          fontWidth,
+                        ),
+                        ...sensors,
+                      ],
+                    ),
+                  ),
+                  const Divider(),
+                  Center(
+                    child: BannerAdWidget(forceShow: ALWAYS_SHOW_BANNER_ADS),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1464,7 +1587,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     return AppBar(
       backgroundColor: Colors.white,
       automaticallyImplyLeading: false,
-      // Disable auto leading
       iconTheme: IconThemeData(color: CustomColor.cssBlack),
       leading: IconButton(
         icon: Icon(
@@ -1505,9 +1627,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
               ),
             )
           else
-            Text(
-              'trackDevice'.tr,
-              style: FlutterFlowTheme.of(context).headlineMedium,
+            Expanded(
+              child: Text(
+                widget.name ?? 'trackDevice'.tr,
+                style: FlutterFlowTheme.of(context).headlineMedium,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
         ],
       ),
@@ -1532,84 +1657,213 @@ class _TrackDeviceState extends State<TrackDevicePage>
             ? _buildMap()
             : const Center(child: CircularProgressIndicator()),
 
+        // Map Controls on Right Side
+        _buildMapControls(),
+
+        // Speed indicator (left side) - Only in tracking mode
+        if (!_isPlaybackMode) _buildSpeedIndicator(),
+
         // Playback info window
         if (_isPlaybackMode && showPlaybackWindow && playbackWindow != null)
           playbackWindow!,
 
-        // Sliding panel
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 300),
-          bottom: _isPanelVisible
-              ? -MediaQuery.of(context).size.height * 0.095
-              : -MediaQuery.of(context).size.height * 0.35,
-          left: 0,
-          right: 0,
-          child: GestureDetector(
-            onVerticalDragStart: (details) {
-              _dragStartPosition = details.globalPosition.dy;
-              _isDragging = true;
-            },
-            onVerticalDragUpdate: (details) {},
-            onVerticalDragEnd: (details) {
-              if (!_isDragging) return;
-              _isDragging = false;
-
-              final endPosition = details.globalPosition.dy;
-              final dragDistance = endPosition - _dragStartPosition;
-
-              if (dragDistance.abs() < 20) return;
-
-              setState(() {
-                _isPanelVisible = dragDistance <= 0;
-              });
-            },
-            child: Container(
-              height: _isPlaybackMode
-                  ? MediaQuery.of(context).size.height * 0.42
-                  : MediaQuery.of(context).size.height * 0.35,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: _isPlaybackMode
-                  ? _buildPlaybackPanel()
-                  : _buildTrackingPanel(),
-            ),
-          ),
-        ),
-
-        // Speedometer
-        Positioned(
-          bottom: _isPanelVisible
-              ? (_isPlaybackMode
-                  ? MediaQuery.of(context).size.height * 0.30
-                  : MediaQuery.of(context).size.height * 0.225)
-              : MediaQuery.of(context).size.height * 0.04,
-          left: 0,
-          right: 0,
-          child: _buildSpeedometer(),
-        ),
-
         // Playback markers toggle
         if (_isPlaybackMode && playbackRoutePoints.isNotEmpty)
           Positioned(
-            bottom: _isPanelVisible
-                ? MediaQuery.of(context).size.height * 0.44
-                : MediaQuery.of(context).size.height * 0.12,
+            bottom: 120,
             left: 10,
             child: _buildMarkerToggleButtons(),
           ),
+
+        // Playback Draggable Bottom Sheet
+        if (_isPlaybackMode) _buildPlaybackDraggableSheet(),
       ],
+    );
+  }
+
+  Widget _buildSpeedIndicator() {
+    Color? color;
+    if (device?.iconColor == "green") {
+      color = Colors.green;
+    } else if (device?.iconColor == "yellow") {
+      color = Colors.yellow.shade700;
+    } else {
+      color = Colors.red;
+    }
+
+    return Positioned(
+      top: MediaQuery.of(context).size.aspectRatio > 0.55 ? 70 : 100,
+      left: 10,
+      child: Container(
+        width: 60,
+        height: 60,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+          border: Border.all(color: color ?? Colors.grey, width: 5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              device?.speed?.toString() ?? "0",
+              style: TextStyle(
+                color: CustomColor.cssBlack,
+                fontWeight: FontWeight.bold,
+                fontSize: 17,
+              ),
+            ),
+            const Text(
+              "Km/hr",
+              style: TextStyle(color: Colors.black, fontSize: 11),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapControls() {
+    // Use unique key based on mode to prevent hero tag conflicts
+    String prefix = _isPlaybackMode ? 'pb_${widget.id}' : 'tr_${widget.id}';
+
+    return Positioned(
+      top: 10,
+      right: 5,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Map Type Button
+          _buildControlButton(
+            key: '${prefix}_mapType',
+            icon: Icons.map,
+            backgroundColor: _mapTypeBackgroundColor,
+            foregroundColor: _mapTypeForegroundColor,
+            onPressed: _onMapTypeButtonPressed,
+          ),
+          const SizedBox(height: 8),
+
+          // Traffic Button (only in tracking mode)
+          if (!_isPlaybackMode) ...[
+            _buildControlButton(
+              key: '${prefix}_traffic',
+              icon: Icons.traffic,
+              backgroundColor: _trafficBackgroundButtonColor,
+              foregroundColor: _trafficForegroundButtonColor,
+              onPressed: _trafficEnabledPressed,
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          // Zoom In
+          _buildControlButton(
+            key: '${prefix}_zoomIn',
+            icon: Icons.add,
+            backgroundColor: Colors.white,
+            foregroundColor: CustomColor.primaryColor,
+            onPressed: () => _safeAnimateCamera(CameraUpdate.zoomIn()),
+          ),
+          const SizedBox(height: 4),
+
+          // Zoom Out
+          _buildControlButton(
+            key: '${prefix}_zoomOut',
+            icon: Icons.remove,
+            backgroundColor: Colors.white,
+            foregroundColor: CustomColor.primaryColor,
+            onPressed: () => _safeAnimateCamera(CameraUpdate.zoomOut()),
+          ),
+
+          // Tracking mode specific controls
+          if (!_isPlaybackMode) ...[
+            const SizedBox(height: 8),
+            _buildControlButton(
+              key: '${prefix}_lock',
+              icon: Icons.lock,
+              backgroundColor: Colors.white,
+              foregroundColor: CustomColor.primaryColor,
+              onPressed: () {
+                AdMobService().showInterstitialAd(ignoreFrequency: true);
+                Get.to(() => LockUnlockScreen(device: device!));
+              },
+            ),
+            const SizedBox(height: 4),
+            _buildControlButton(
+              key: '${prefix}_playback',
+              icon: Icons.play_arrow_sharp,
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              onPressed: () {
+                AdMobService().showInterstitialAd(ignoreFrequency: true);
+                _enterPlaybackMode();
+              },
+            ),
+            const SizedBox(height: 4),
+            _buildControlButton(
+              key: '${prefix}_info',
+              icon: Icons.info_outline,
+              backgroundColor: Colors.white,
+              foregroundColor: CustomColor.primaryColor,
+              onPressed: _showTrackingInfoBottomSheet,
+            ),
+            const SizedBox(height: 4),
+            _buildControlButton(
+              key: '${prefix}_report',
+              icon: Icons.insert_drive_file,
+              backgroundColor: Colors.white,
+              foregroundColor: CustomColor.primaryColor,
+              onPressed: () {
+                AdMobService().showInterstitialAd(ignoreFrequency: true);
+                // Show report dialog
+              },
+            ),
+            const SizedBox(height: 4),
+            _buildControlButton(
+              key: '${prefix}_streetView',
+              icon: Icons.share_location_rounded,
+              backgroundColor: Colors.white,
+              foregroundColor: CustomColor.primaryColor,
+              onPressed: () {
+                Get.to(() => StreetViewScreen(
+                  latitude: device?.lat ?? 0.0,
+                  longitude: device?.lng ?? 0.0,
+                ));
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControlButton({
+    required String key,
+    required IconData icon,
+    required Color backgroundColor,
+    required Color foregroundColor,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Material(
+        color: backgroundColor,
+        elevation: 2,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: const CircleBorder(),
+          child: Icon(icon, color: foregroundColor, size: 22),
+        ),
+      ),
     );
   }
 
@@ -1718,455 +1972,103 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 
-  // MAP CONTROLS - Fixed Hero Tags
-
-  Widget _buildMapControlsOverlay() {
-    if (_isPlaybackMode) return const SizedBox.shrink();
-
-    Color? color;
-    if (device?.iconColor == "green") {
-      color = Colors.green;
-    } else if (device?.iconColor == "yellow") {
-      color = Colors.yellow.shade700;
-    } else {
-      color = Colors.red;
-    }
-
-    // Generate unique prefix based on widget key or device id
-    String heroPrefix = 'track_${widget.id}_';
-
-    return Stack(
-      children: [
-        // Right side controls
-        Align(
-          alignment: Alignment.topRight,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(0, 10, 5, 0),
-            child: Column(
-              children: [
-                FloatingActionButton(
-                  heroTag: '${heroPrefix}mapTypeBtn',
-                  // Unique hero tag
-                  onPressed: _onMapTypeButtonPressed,
-                  mini: true,
-                  backgroundColor: _mapTypeBackgroundColor,
-                  foregroundColor: _mapTypeForegroundColor,
-                  child: const Icon(Icons.map, size: 24),
-                ),
-                const SizedBox(height: 8),
-                FloatingActionButton(
-                  heroTag: '${heroPrefix}trafficBtn',
-                  // Unique hero tag
-                  mini: true,
-                  onPressed: _trafficEnabledPressed,
-                  backgroundColor: _trafficBackgroundButtonColor,
-                  foregroundColor: _trafficForegroundButtonColor,
-                  child: const Icon(Icons.traffic, size: 24),
-                ),
-                const SizedBox(height: 8),
-                FloatingActionButton(
-                  heroTag: '${heroPrefix}zoom_in',
-                  // Unique hero tag
-                  mini: true,
-                  onPressed: () {
-                    _safeAnimateCamera(CameraUpdate.zoomIn());
-                  },
-                  backgroundColor: Colors.white,
-                  foregroundColor: CustomColor.primaryColor,
-                  child: const Icon(Icons.add, size: 24),
-                ),
-                const SizedBox(height: 4),
-                FloatingActionButton(
-                  heroTag: '${heroPrefix}zoom_out',
-                  // Unique hero tag
-                  mini: true,
-                  onPressed: () {
-                    _safeAnimateCamera(CameraUpdate.zoomOut());
-                  },
-                  backgroundColor: Colors.white,
-                  foregroundColor: CustomColor.primaryColor,
-                  child: const Icon(Icons.remove, size: 24),
-                ),
-                const SizedBox(height: 8),
-                FloatingActionButton(
-                  heroTag: '${heroPrefix}lock_device',
-                  // Unique hero tag
-                  mini: true,
-                  backgroundColor: Colors.white,
-                  foregroundColor: CustomColor.primaryColor,
-                  child: const Icon(Icons.lock, size: 24),
-                  onPressed: () {
-                    AdMobService().showInterstitialAd(ignoreFrequency: true);
-                    Get.to(() => LockUnlockScreen(device: device!));
-                  },
-                ),
-                const SizedBox(height: 4),
-                FloatingActionButton(
-                  heroTag: '${heroPrefix}playback_btn',
-                  // Unique hero tag
-                  mini: true,
-                  backgroundColor: Colors.white,
-                  foregroundColor: CustomColor.primaryColor,
-                  child: const Icon(Icons.play_arrow_sharp, size: 24),
-                  onPressed: () {
-                    AdMobService().showInterstitialAd(ignoreFrequency: true);
-                    _enterPlaybackMode();
-                  },
-                ),
-                const SizedBox(height: 4),
-                FloatingActionButton(
-                  heroTag: '${heroPrefix}report_btn',
-                  // Unique hero tag
-                  mini: true,
-                  backgroundColor: Colors.white,
-                  foregroundColor: CustomColor.primaryColor,
-                  child: const Icon(Icons.insert_drive_file, size: 22),
-                  onPressed: () {
-                    AdMobService().showInterstitialAd(ignoreFrequency: true);
-                    // Show report dialog
-                  },
-                ),
-                const SizedBox(height: 4),
-                FloatingActionButton(
-                  heroTag: '${heroPrefix}street_view',
-                  // Unique hero tag
-                  mini: true,
-                  onPressed: () {
-                    Get.to(() => StreetViewScreen(
-                          latitude: device?.lat ?? 0.0,
-                          longitude: device?.lng ?? 0.0,
-                        ));
-                  },
-                  backgroundColor: Colors.white,
-                  foregroundColor: CustomColor.primaryColor,
-                  child: const Icon(Icons.share_location_rounded, size: 24),
-                ),
-              ],
+  // Draggable Scrollable Sheet for Playback
+  Widget _buildPlaybackDraggableSheet() {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.15,
+      minChildSize: 0.08,
+      maxChildSize: 0.65,
+      controller: _sheetController,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
             ),
-          ),
-        ),
-
-        // Speed indicator (left side)
-        Positioned(
-          top: MediaQuery.of(context).size.aspectRatio > 0.55 ? 70 : 160,
-          left: 10,
-          child: Container(
-            width: 60,
-            height: 60,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-              border: Border.all(color: color ?? Colors.grey, width: 5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  device?.speed?.toString() ?? "0",
-                  style: TextStyle(
-                    color: CustomColor.cssBlack,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 17,
-                  ),
-                ),
-                const Text(
-                  "Km/hr",
-                  style: TextStyle(color: Colors.black, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // TRACKING PANEL
-
-  Widget _buildTrackingPanel() {
-    Color? color;
-    if (device?.iconColor == "green") {
-      color = Colors.green;
-    } else if (device?.iconColor == "yellow") {
-      color = Colors.yellow.shade700;
-    } else {
-      color = Colors.red;
-    }
-
-    double fontWidth = MediaQuery.of(context).size.aspectRatio;
-    double iconWidth = 30;
-    List<Widget> sensors = [];
-
-    try {
-      for (var sensor in device!.sensors!) {
-        if (sensor['value'] != null) {
-          sensors.add(Card(
-            elevation: 1,
-            shadowColor: color,
-            child: Container(
-              padding: const EdgeInsets.all(5),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    "assets/images/sensors/${sensor['type']}.png",
-                    width: iconWidth,
-                    height: iconWidth,
-                  ),
-                  const SizedBox(width: 4),
-                  Column(
-                    children: [
-                      Text(sensor["name"],
-                          style: TextStyle(fontSize: fontWidth * 19)),
-                      const SizedBox(height: 2),
-                      Text(
-                        gsmCodeConvert(sensor['value']),
-                        style: TextStyle(fontSize: fontWidth * 19),
-                      ),
-                    ],
-                  ),
-                ],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 15,
+                spreadRadius: 2,
               ),
-            ),
-          ));
-        }
-      }
-    } catch (e) {}
-
-    return Column(
-      children: [
-        // Drag handle
-        Container(
-          margin: const EdgeInsets.only(top: 10),
-          width: 40,
-          height: 5,
-          decoration: BoxDecoration(
-            color: Colors.grey[300],
-            borderRadius: BorderRadius.circular(10),
+            ],
           ),
-        ),
-
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.fromLTRB(15, 10, 15, 5),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() => showAddress = true);
-                          Future.delayed(const Duration(seconds: 20), () {
-                            if (mounted && !_isDisposed)
-                              setState(() => showAddress = false);
-                          });
-                        },
-                        child: Row(
-                          children: [
-                            const Icon(Icons.location_on, color: Colors.blue),
-                            const SizedBox(width: 4),
-                            Text(
-                              "showLocation".tr,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(
-                        width: MediaQuery.of(context).size.width / 2.5,
-                        child: Text(
-                          device?.name ?? "",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 18,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
-                        ),
-                      ),
-                    ],
+          child: ListView(
+            controller: scrollController,
+            padding: EdgeInsets.zero,
+            children: [
+              // Drag Handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 10),
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
+              ),
 
-                if (showAddress)
-                  Container(
-                    width: MediaQuery.of(context).size.width / 1.1,
-                    padding: const EdgeInsets.only(left: 15),
-                    child: addressLoadMarque(
-                      double.parse(device!.lat.toString()).toString(),
-                      double.parse(device!.lng.toString()).toString(),
-                    ),
-                  ),
+              // Playback Controls (Always Visible)
+              _buildPlaybackControls(),
 
-                const Divider(),
+              const Divider(),
 
-                // Map controls overlay (moved here for tracking mode)
-                _buildMapControlsOverlay(),
-
-                // Statistics header
-                Padding(
-                  padding: const EdgeInsets.only(left: 15),
-                  child: Text(
-                    "statistics".tr,
-                    style: TextStyle(
-                      color: CustomColor.cssBlack,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                // Statistics cards
+              // Statistics Row
+              if (playbackRoutePoints.isNotEmpty) ...[
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: Row(
                     children: [
-                      _buildStatCard(
-                        "assets/images/sensors/total-distance.png",
-                        "totalDistance".tr,
-                        device?.totalDistance?.toString() ?? "0",
-                        color!,
-                        iconWidth,
-                        fontWidth,
-                      ),
-                      _buildStatCard(
-                        "assets/icons/route-length.png",
-                        "todayKM".tr,
-                        todaytotalDistance,
-                        color,
-                        25,
-                        fontWidth,
-                      ),
-                      _buildStatCard(
-                        "assets/images/sensors/engine_hours.png",
-                        "engineHours".tr,
-                        todayData?.engineHours ?? 'loading'.tr,
-                        color,
-                        iconWidth,
-                        fontWidth,
-                      ),
-                      _buildStatCard(
-                        "assets/images/sensors/satellites.png",
-                        "moveDuration".tr,
-                        todayData?.moveDuration ?? 'loading'.tr,
-                        color,
-                        iconWidth,
-                        fontWidth,
-                      ),
-                      _buildStatCard(
-                        "assets/images/sensors/door.png",
-                        "stopDuration".tr,
-                        todayData?.stopDuration ?? 'loading'.tr,
-                        color,
-                        iconWidth,
-                        fontWidth,
-                      ),
-                      _buildStatCard(
-                        "assets/images/sensors/speed.png",
-                        "topSpeed".tr,
-                        todayData?.topSpeed ?? 'loading'.tr,
-                        color,
-                        iconWidth,
-                        fontWidth,
-                      ),
-                      _buildStatCard(
-                        "assets/images/sensors/fuel_tank.png",
-                        "fuelConsumption".tr,
-                        fuelConsumption ?? 'loading'.tr,
-                        color,
-                        22,
-                        fontWidth,
-                      ),
-                      ...sensors,
+                      _buildPlaybackStatChip(
+                          Icons.route, playbackTotalDistance, Colors.blue),
+                      _buildPlaybackStatChip(
+                          Icons.timer, playbackMoveDuration, Colors.green),
+                      _buildPlaybackStatChip(Icons.pause_circle,
+                          playbackStopDuration, Colors.orange),
+                      _buildPlaybackStatChip(
+                          Icons.speed, playbackMaxSpeed, Colors.red),
                     ],
                   ),
                 ),
+                const SizedBox(height: 10),
+              ],
 
-                const Divider(),
-
-                // Banner Ad
-                Center(
-                  child: BannerAdWidget(forceShow: ALWAYS_SHOW_BANNER_ADS),
+              // Timeline
+              if (bottomRouteList.isNotEmpty)
+                ...bottomRouteList.asMap().entries.map((entry) {
+                  return _buildTimelineItem(entry.value, entry.key);
+                }).toList()
+              else
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Center(
+                    child: Text(
+                      _isPlaybackLoading
+                          ? 'loading'.tr
+                          : 'selectDateToLoad'.tr,
+                      style: TextStyle(color: Colors.grey[500]),
+                    ),
+                  ),
                 ),
-              ],
-            ),
+            ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
-  Widget _buildStatCard(
-    String iconPath,
-    String label,
-    String value,
-    Color shadowColor,
-    double iconWidth,
-    double fontWidth,
-  ) {
-    return Card(
-      elevation: 1,
-      shadowColor: shadowColor,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Image.asset(iconPath, width: iconWidth, height: iconWidth),
-            const SizedBox(width: 6),
-            Column(
-              children: [
-                Text(label, style: TextStyle(fontSize: fontWidth * 19)),
-                const SizedBox(height: 2),
-                Text(value, style: TextStyle(fontSize: fontWidth * 19)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // PLAYBACK PANEL
-
-  Widget _buildPlaybackPanel() {
-    return Column(
-      children: [
-        // Drag handle
-        Container(
-          margin: const EdgeInsets.only(top: 10),
-          width: 40,
-          height: 5,
-          decoration: BoxDecoration(
-            color: Colors.grey[300],
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-
-        const SizedBox(height: 10),
-
-        // Device name and date range
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 15),
-          child: Row(
+  Widget _buildPlaybackControls() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      child: Column(
+        children: [
+          // Header Row
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Column(
@@ -2175,221 +2077,140 @@ class _TrackDeviceState extends State<TrackDevicePage>
                   Text(
                     widget.name ?? "",
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 4),
                   Text(
                     "${DateFormat('dd/MM HH:mm').format(playbackDateTimeFrom)} - ${DateFormat('dd/MM HH:mm').format(playbackDateTimeTo)}",
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                   ),
                 ],
               ),
               if (playbackRoutePoints.isNotEmpty &&
                   playbackRating.toInt() < routeList.length)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      "${routeList[playbackRating.toInt()].speed} kph",
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (routeList[playbackRating.toInt()].raw_time != null)
-                      Text(
-                        Util.formatReportTime(
-                          DateTime.parse(
-                              routeList[playbackRating.toInt()].raw_time!),
-                        ),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                  ],
+                Text(
+                  "${routeList[playbackRating.toInt()].speed ?? 0} kph",
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.bold),
                 ),
             ],
           ),
-        ),
 
-        const SizedBox(height: 10),
+          const SizedBox(height: 10),
 
-        // Statistics row
-        if (playbackRoutePoints.isNotEmpty)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Row(
-              children: [
-                _buildPlaybackStatChip(
-                    Icons.route, playbackTotalDistance, Colors.blue),
-                _buildPlaybackStatChip(
-                    Icons.timer, playbackMoveDuration, Colors.green),
-                _buildPlaybackStatChip(
-                    Icons.pause_circle, playbackStopDuration, Colors.orange),
-                _buildPlaybackStatChip(
-                    Icons.speed, playbackMaxSpeed, Colors.red),
-              ],
+          // Slider and Controls
+          if (playbackRoutePoints.isNotEmpty) ...[
+            SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 4,
+                thumbShape:
+                const RoundSliderThumbShape(enabledThumbRadius: 8),
+                overlayShape:
+                const RoundSliderOverlayShape(overlayRadius: 16),
+                activeTrackColor: CustomColor.primaryColor,
+                inactiveTrackColor: Colors.grey[300],
+                thumbColor: CustomColor.primaryColor,
+              ),
+              child: Slider(
+                value: playbackRating.clamp(
+                    0, (playbackRoutePoints.length - 1).toDouble()),
+                onChanged: (newRating) {
+                  if (newRating < playbackRoutePoints.length) {
+                    setState(() {
+                      playbackRating = newRating;
+                      lowerAnimatingPointsIndex = playbackRating.toInt();
+                      upperAnimatingPointsIndex =
+                          (playbackRating.toInt() + speedStep)
+                              .clamp(0, playbackRoutePoints.length - 1);
+                    });
+                  }
+                },
+                min: 0,
+                max: (playbackRoutePoints.length - 1)
+                    .toDouble()
+                    .clamp(0, double.infinity),
+              ),
             ),
-          ),
 
-        const SizedBox(height: 15),
-
-        // Playback controls
-        if (playbackRoutePoints.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 15),
-            child: Column(
+            // Control Buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Progress slider
-                SliderTheme(
-                  data: SliderThemeData(
-                    trackHeight: 4,
-                    thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 8),
-                    overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 16),
-                    activeTrackColor: CustomColor.primaryColor,
-                    inactiveTrackColor: Colors.grey[300],
-                    thumbColor: CustomColor.primaryColor,
-                  ),
-                  child: Slider(
-                    value: playbackRating.clamp(
-                        0, playbackRoutePoints.length.toDouble() - 1),
-                    onChanged: (newRating) {
-                      if (newRating < playbackRoutePoints.length) {
-                        setState(() {
-                          playbackRating = newRating;
-                          lowerAnimatingPointsIndex = playbackRating.toInt();
-                          upperAnimatingPointsIndex =
-                              (playbackRating.toInt() + speedStep)
-                                  .clamp(0, playbackRoutePoints.length - 1);
-                        });
-                      }
-                    },
-                    min: 0,
-                    max: (playbackRoutePoints.length - 1)
-                        .toDouble()
-                        .clamp(0, double.infinity),
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      playbackRating = (playbackRating - 10).clamp(
+                          0, (playbackRoutePoints.length - 1).toDouble());
+                      lowerAnimatingPointsIndex = playbackRating.toInt();
+                      upperAnimatingPointsIndex =
+                          (playbackRating.toInt() + speedStep)
+                              .clamp(0, playbackRoutePoints.length - 1);
+                    });
+                  },
+                  icon: const Icon(Icons.replay_10),
+                  iconSize: 28,
+                  color: Colors.grey[700],
+                ),
+                const SizedBox(width: 15),
+                GestureDetector(
+                  onTap: _playPausePlayback,
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: CustomColor.primaryColor,
+                    ),
+                    child: Icon(
+                      isPlay ? Icons.pause : Icons.play_arrow,
+                      color: Colors.white,
+                      size: 30,
+                    ),
                   ),
                 ),
-
-                // Control buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Skip backward
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          playbackRating = (playbackRating - 10).clamp(
-                              0, playbackRoutePoints.length.toDouble() - 1);
-                          lowerAnimatingPointsIndex = playbackRating.toInt();
-                          upperAnimatingPointsIndex =
-                              (playbackRating.toInt() + speedStep)
-                                  .clamp(0, playbackRoutePoints.length - 1);
-                        });
-                      },
-                      icon: const Icon(Icons.replay_10),
-                      iconSize: 32,
-                      color: Colors.grey[700],
+                const SizedBox(width: 15),
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      playbackRating = (playbackRating + 10).clamp(
+                          0, (playbackRoutePoints.length - 1).toDouble());
+                      lowerAnimatingPointsIndex = playbackRating.toInt();
+                      upperAnimatingPointsIndex =
+                          (playbackRating.toInt() + speedStep)
+                              .clamp(0, playbackRoutePoints.length - 1);
+                    });
+                  },
+                  icon: const Icon(Icons.forward_10),
+                  iconSize: 28,
+                  color: Colors.grey[700],
+                ),
+                const SizedBox(width: 15),
+                GestureDetector(
+                  onTap: _changePlaybackSpeed,
+                  child: Container(
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.orange),
                     ),
-
-                    const SizedBox(width: 20),
-
-                    // Play/Pause button
-                    GestureDetector(
-                      onTap: _playPausePlayback,
-                      child: Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: CustomColor.primaryColor,
-                          boxShadow: [
-                            BoxShadow(
-                              color: CustomColor.primaryColor.withValues(alpha: 0.3),
-                              blurRadius: 10,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          isPlay ? Icons.pause : Icons.play_arrow,
-                          color: Colors.white,
-                          size: 36,
-                        ),
+                    child: Text(
+                      speedText,
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
                       ),
                     ),
-
-                    const SizedBox(width: 20),
-
-                    // Skip forward
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          playbackRating = (playbackRating + 10).clamp(
-                              0, playbackRoutePoints.length.toDouble() - 1);
-                          lowerAnimatingPointsIndex = playbackRating.toInt();
-                          upperAnimatingPointsIndex =
-                              (playbackRating.toInt() + speedStep)
-                                  .clamp(0, playbackRoutePoints.length - 1);
-                        });
-                      },
-                      icon: const Icon(Icons.forward_10),
-                      iconSize: 32,
-                      color: Colors.grey[700],
-                    ),
-
-                    const SizedBox(width: 20),
-
-                    // Speed button
-                    GestureDetector(
-                      onTap: _changePlaybackSpeed,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.orange),
-                        ),
-                        child: Text(
-                          speedText,
-                          style: const TextStyle(
-                            color: Colors.orange,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
-          ),
-
-        const Divider(),
-
-        // Route timeline
-        Expanded(
-          child: bottomRouteList.isNotEmpty
-              ? _buildPlaybackTimeline()
-              : Center(
-                  child: Text(
-                    _isPlaybackLoading ? 'loading'.tr : 'selectDateToLoad'.tr,
-                    style: TextStyle(color: Colors.grey[500]),
-                  ),
-                ),
-        ),
-      ],
+          ],
+        ],
+      ),
     );
   }
 
@@ -2420,19 +2241,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 
-  Widget _buildPlaybackTimeline() {
-    return ListView.builder(
-      itemCount: bottomRouteList.length,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      itemBuilder: (context, index) {
-        final trip = bottomRouteList[index];
-        return _buildTimelineItem(trip, index);
-      },
-    );
-  }
-
   Widget _buildTimelineItem(PlayBackRoute trip, int index) {
-    bool isMoving = trip.status == 1;
+    // Fix: status == 1 means STOPPED (parking), not moving
+    bool isStopped = trip.status == 1;
 
     return InkWell(
       onTap: () {
@@ -2450,26 +2261,25 @@ class _TrackDeviceState extends State<TrackDevicePage>
         }
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Timeline indicator
             SizedBox(
               width: 50,
               child: Column(
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isMoving ? Colors.blue : Colors.grey,
+                      color: isStopped ? Colors.red : Colors.blue,
                     ),
                     child: Icon(
-                      isMoving ? Icons.directions_car : Icons.local_parking,
+                      isStopped ? Icons.local_parking : Icons.directions_car,
                       color: Colors.white,
-                      size: 18,
+                      size: 16,
                     ),
                   ),
                   if (index < bottomRouteList.length - 1)
@@ -2481,20 +2291,18 @@ class _TrackDeviceState extends State<TrackDevicePage>
                 ],
               ),
             ),
-
-            // Content
             Expanded(
               child: Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: isMoving
-                      ? Colors.blue.withValues(alpha: 0.05)
-                      : Colors.grey.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(10),
+                  color: isStopped
+                      ? Colors.red.withValues(alpha: 0.05)
+                      : Colors.blue.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: isMoving
-                        ? Colors.blue.withValues(alpha: 0.2)
-                        : Colors.grey.withValues(alpha: 0.2),
+                    color: isStopped
+                        ? Colors.red.withValues(alpha: 0.2)
+                        : Colors.blue.withValues(alpha: 0.2),
                   ),
                 ),
                 child: Column(
@@ -2504,58 +2312,89 @@ class _TrackDeviceState extends State<TrackDevicePage>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          isMoving ? 'moving'.tr : 'stopped'.tr,
+                          isStopped ? 'stopped'.tr : 'moving'.tr,
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: isMoving ? Colors.blue : Colors.grey[700],
+                            fontSize: 13,
+                            color: isStopped ? Colors.red : Colors.blue,
                           ),
                         ),
                         Text(
                           Util.formatOnlyTime(trip.show ?? ""),
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
-                            fontSize: 13,
+                            fontSize: 12,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Row(
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         _buildTimelineChip(Icons.timer, trip.time ?? "0"),
-                        if (isMoving) ...[
-                          const SizedBox(width: 10),
+                        if (!isStopped) ...[
                           _buildTimelineChip(
                               Icons.route, "${trip.distance ?? 0} km"),
-                          const SizedBox(width: 10),
                           _buildTimelineChip(
                               Icons.speed, "${trip.top_speed ?? 0} km/h"),
                         ],
                       ],
                     ),
-                    if (!isMoving && trip.latitude != null) ...[
+
+                    // Show address for STOPPED locations
+                    if (isStopped && trip.latitude != null && trip.longitude != null) ...[
                       const SizedBox(height: 8),
                       FutureBuilder<String>(
                         future: APIService.getGeocoderAddress(
-                            trip.latitude!, trip.longitude!),
+                          trip.latitude!,
+                          trip.longitude!,
+                        ),
                         builder: (context, snapshot) {
                           if (snapshot.hasData) {
-                            return Text(
-                              snapshot.data!.replaceAll('"', ''),
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey[600],
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  size: 14,
+                                  color: Colors.red[400],
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    snapshot.data!.replaceAll('"', ''),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[600],
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             );
                           }
-                          return Text(
-                            'loading'.tr,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey[400],
-                            ),
+                          return Row(
+                            children: [
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'loading'.tr,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                            ],
                           );
                         },
                       ),
@@ -2574,21 +2413,49 @@ class _TrackDeviceState extends State<TrackDevicePage>
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: Colors.grey[600]),
-        const SizedBox(width: 4),
+        Icon(icon, size: 12, color: Colors.grey[600]),
+        const SizedBox(width: 3),
         Text(
           value,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[700],
-          ),
+          style: TextStyle(fontSize: 11, color: Colors.grey[700]),
         ),
       ],
     );
   }
 
-  // HELPER METHODS
+  Widget _buildStatCard(
+      String iconPath,
+      String label,
+      String value,
+      Color shadowColor,
+      double iconWidth,
+      double fontWidth,
+      ) {
+    return Card(
+      elevation: 1,
+      shadowColor: shadowColor,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Image.asset(iconPath, width: iconWidth, height: iconWidth),
+            const SizedBox(width: 6),
+            Column(
+              children: [
+                Text(label, style: TextStyle(fontSize: fontWidth * 19)),
+                const SizedBox(height: 2),
+                Text(value, style: TextStyle(fontSize: fontWidth * 19)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
+  // HELPER METHODS
   String gsmCodeConvert(value) {
     if (value == "71606") return "Movistar";
     if (value == "71610") return "Claro";
@@ -2610,14 +2477,14 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   void animateCar(
-    double fromLat,
-    double fromLong,
-    double toLat,
-    double toLong,
-    StreamSink<List<Marker>> mapMarkerSink,
-    TickerProvider provider,
-    BitmapDescriptor markerIcon,
-  ) async {
+      double fromLat,
+      double fromLong,
+      double toLat,
+      double toLong,
+      StreamSink<List<Marker>> mapMarkerSink,
+      TickerProvider provider,
+      BitmapDescriptor markerIcon,
+      ) async {
     if (!mounted || _isDisposed || _mapMarkerSC.isClosed) return;
 
     final double bearing = getBearing(

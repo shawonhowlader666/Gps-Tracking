@@ -691,42 +691,46 @@ class _MapPageState extends State<MapPage> {
                       Container(
                           width: MediaQuery.of(context).size.width / 2.15,
                           padding: const EdgeInsets.only(right: 10),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              SizedBox(
-                                  width:
-                                      MediaQuery.of(context).size.width / 3.5,
-                                  child: Text(d.name!,
-                                      style: const TextStyle(
-                                          overflow: TextOverflow.ellipsis,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700))),
-                              Container(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(8, 2, 8, 2),
-                                  decoration: BoxDecoration(
-                                      color: color,
-                                      borderRadius: const BorderRadius.all(
-                                          Radius.circular(4))),
-                                  child: d.speed > 0
-                                      ? Text(
-                                          convertSpeed(
-                                              double.parse(d.speed!.toString()),
-                                              d.distanceUnitHour!),
-                                          style: TextStyle(
-                                              color: CustomColor.secondaryColor,
-                                              fontSize: 13),
-                                        )
-                                      : Text(
-                                          convertSpeed(
-                                              double.parse(d.speed!.toString()),
-                                              d.distanceUnitHour!),
-                                          style: TextStyle(
-                                              color: CustomColor.secondaryColor,
-                                              fontSize: 13),
-                                        ))
-                            ],
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                SizedBox(
+                                    width:
+                                        MediaQuery.of(context).size.width / 3.5,
+                                    child: Text(d.name!,
+                                        style: const TextStyle(
+                                            overflow: TextOverflow.ellipsis,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700))),
+                                Container(
+                                    padding:
+                                        const EdgeInsets.fromLTRB(8, 2, 8, 2),
+                                    decoration: BoxDecoration(
+                                        color: color,
+                                        borderRadius: const BorderRadius.all(
+                                            Radius.circular(4))),
+                                    child: d.speed > 0
+                                        ? Text(
+                                            convertSpeed(
+                                                double.parse(d.speed!.toString()),
+                                                d.distanceUnitHour!),
+                                            style: TextStyle(
+                                                color: CustomColor.secondaryColor,
+                                                fontSize: 13),
+                                          )
+                                        : Text(
+                                            convertSpeed(
+                                                double.parse(d.speed!.toString()),
+                                                d.distanceUnitHour!),
+                                            style: TextStyle(
+                                                color: CustomColor.secondaryColor,
+                                                fontSize: 13),
+                                          ))
+                              ],
+                            ),
                           )),
                     ],
                   ),

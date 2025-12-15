@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:gpspro/screens/payment_list.dart';
 
 class SettingsPage extends StatefulWidget {
   @override
@@ -80,7 +81,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF3E6FB8).withOpacity(0.3),
+                color: const Color(0xFF3E6FB8).withValues(alpha: 0.3),
                 blurRadius: 15,
                 offset: const Offset(0, 5),
               ),
@@ -160,7 +161,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 iconBgColor: const Color(0xFFFEF3C7),
                 title: 'Payment',
                 subtitle: 'View invoices',
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PaymentListScreen(),
+                    ),
+                  );
+                },
               ),
               _buildDivider(),
               _buildSettingItem(
@@ -232,7 +240,7 @@ class _SettingsPageState extends State<SettingsPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -317,7 +325,7 @@ class _SettingsPageState extends State<SettingsPage> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF3E6FB8).withOpacity(0.1),
+              color: const Color(0xFF3E6FB8).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
@@ -353,7 +361,7 @@ class _SettingsPageState extends State<SettingsPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -438,10 +446,10 @@ class _SettingsPageState extends State<SettingsPage> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.withOpacity(0.2)),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -452,7 +460,7 @@ class _SettingsPageState extends State<SettingsPage> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(
@@ -580,7 +588,7 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF3E6FB8).withOpacity(0.1)
+              ? const Color(0xFF3E6FB8).withValues(alpha: 0.1)
               : Colors.grey[100],
           borderRadius: BorderRadius.circular(12),
           border: Border.all(

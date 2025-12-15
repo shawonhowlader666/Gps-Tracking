@@ -37,7 +37,7 @@ class DeviceDropdown extends StatelessWidget {
             border: InputBorder.none,
             contentPadding: EdgeInsets.zero,
           ),
-          value: selectedVehicle,
+          initialValue: selectedVehicle,
           items: devices
               .map((device) => DropdownMenuItem<String>(
                     value: _formatVehicleName(device),

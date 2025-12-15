@@ -26,7 +26,7 @@ class FuelPriceCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'updated'.tr + ': $updatedDate',
+                '${'updated'.tr}: $updatedDate',
                 style: const TextStyle(fontSize: 12, color: Colors.black87),
               ),
             ),
