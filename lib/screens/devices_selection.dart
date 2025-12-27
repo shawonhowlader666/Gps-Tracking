@@ -307,7 +307,7 @@ class _DevicePageState extends State<DeviceSelection> {
                             padding: const EdgeInsets.all(5),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: color.withOpacity(0.3),
+                              color: color.withValues(alpha: 0.3),
                             ),
                             child: Image(
                               image: CachedNetworkImageProvider(

@@ -517,41 +517,41 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     }
   }
 
-  Widget _buildStatsCard() {
-    final activeCount = fenceList.where((f) => f.active.toString() == "1").length;
-    final circleCount = fenceList.where((f) => f.type == 'circle').length;
-    final polygonCount = fenceList.where((f) => f.type == 'polygon').length;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [CustomColor.primary, CustomColor.primary.withValues(alpha: 0.8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: CustomColor.primary.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildStatItem(Icons.check_circle, 'Active', activeCount.toString()),
-          _buildStatDivider(),
-          _buildStatItem(Icons.radio_button_unchecked, 'Circle', circleCount.toString()),
-          _buildStatDivider(),
-          _buildStatItem(Icons.pentagon_outlined, 'Polygon', polygonCount.toString()),
-        ],
-      ),
-    );
-  }
+  // Widget _buildStatsCard() {
+  //   final activeCount = fenceList.where((f) => f.active.toString() == "1").length;
+  //   final circleCount = fenceList.where((f) => f.type == 'circle').length;
+  //   final polygonCount = fenceList.where((f) => f.type == 'polygon').length;
+  //
+  //   return Container(
+  //     margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+  //     padding: const EdgeInsets.all(20),
+  //     decoration: BoxDecoration(
+  //       gradient: LinearGradient(
+  //         colors: [CustomColor.primary, CustomColor.primary.withValues(alpha: 0.8)],
+  //         begin: Alignment.topLeft,
+  //         end: Alignment.bottomRight,
+  //       ),
+  //       borderRadius: BorderRadius.circular(16),
+  //       boxShadow: [
+  //         BoxShadow(
+  //           color: CustomColor.primary.withValues(alpha: 0.3),
+  //           blurRadius: 10,
+  //           offset: const Offset(0, 4),
+  //         ),
+  //       ],
+  //     ),
+  //     child: Row(
+  //       mainAxisAlignment: MainAxisAlignment.spaceAround,
+  //       children: [
+  //         _buildStatItem(Icons.check_circle, 'Active', activeCount.toString()),
+  //         _buildStatDivider(),
+  //         _buildStatItem(Icons.radio_button_unchecked, 'Circle', circleCount.toString()),
+  //         _buildStatDivider(),
+  //         _buildStatItem(Icons.pentagon_outlined, 'Polygon', polygonCount.toString()),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _buildStatItem(IconData icon, String label, String value) {
     return Column(

@@ -258,7 +258,7 @@ class _GeofencePageState extends State<GeofencePage> {
                 BoxShadow(
                     blurRadius: 20,
                     offset: Offset.zero,
-                    color: Colors.grey.withOpacity(0.5))
+                    color: Colors.grey.withValues(alpha: 0.5))
               ]),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

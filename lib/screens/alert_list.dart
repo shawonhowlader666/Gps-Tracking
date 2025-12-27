@@ -890,7 +890,7 @@ class _AlertListPageState extends State<AlertListPage> {
             onChanged: (value) {
               value ? activateAlert(alert) : removeAlert(alert);
             },
-            activeColor: const Color(0xFF5C8ACF),
+            activeThumbColor: const Color(0xFF5C8ACF),
           ),
         ),
         IconButton(

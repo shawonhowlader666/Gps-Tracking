@@ -606,177 +606,177 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildServerSelector() {
-    if (isLoadingServers) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            children: [
-              CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(kPrimaryOrange),
-              ),
-              SizedBox(height: 12),
-              Text(
-                'Loading servers...',
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (availableServers.isEmpty) {
-      return Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'No servers available. Please check your connection and try again.',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: () => fetchServersFromFirebase(),
-                icon: Icon(Icons.refresh, size: 18),
-                label: Text('Retry'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kPrimaryOrange,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Available Servers',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: kPrimaryOrange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${availableServers.length} servers',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: kPrimaryOrange,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const Gap(8),
-        InkWell(
-          onTap: () => _showServerListDialog(),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kLightGrey),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.dns_outlined, color: kPrimaryOrange, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        selectedServer?['name'] ??
-                            selectedServer?['url'] ??
-                            'View All Servers',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black87,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (selectedServer?['type'] != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          '${selectedServer!['type']}'.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: selectedServer!['type'] == 'premium'
-                                ? Colors.green
-                                : Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-              ],
-            ),
-          ),
-        ),
-        const Gap(8),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.blue.shade200),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.blue, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Login will automatically try all ${availableServers.length} servers to find your account',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.blue.shade900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  // Widget _buildServerSelector() {
+  //   if (isLoadingServers) {
+  //     return Center(
+  //       child: Padding(
+  //         padding: const EdgeInsets.all(20.0),
+  //         child: Column(
+  //           children: [
+  //             CircularProgressIndicator(
+  //               valueColor: AlwaysStoppedAnimation<Color>(kPrimaryOrange),
+  //             ),
+  //             SizedBox(height: 12),
+  //             Text(
+  //               'Loading servers...',
+  //               style: TextStyle(color: Colors.grey[600], fontSize: 12),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //     );
+  //   }
+  //
+  //   if (availableServers.isEmpty) {
+  //     return Card(
+  //       elevation: 2,
+  //       shape: RoundedRectangleBorder(
+  //         borderRadius: BorderRadius.circular(12),
+  //       ),
+  //       child: Padding(
+  //         padding: const EdgeInsets.all(16.0),
+  //         child: Column(
+  //           children: [
+  //             Row(
+  //               children: [
+  //                 Icon(Icons.warning_amber_rounded, color: Colors.orange),
+  //                 SizedBox(width: 12),
+  //                 Expanded(
+  //                   child: Text(
+  //                     'No servers available. Please check your connection and try again.',
+  //                     style: TextStyle(fontSize: 14),
+  //                   ),
+  //                 ),
+  //               ],
+  //             ),
+  //             SizedBox(height: 12),
+  //             ElevatedButton.icon(
+  //               onPressed: () => fetchServersFromFirebase(),
+  //               icon: Icon(Icons.refresh, size: 18),
+  //               label: Text('Retry'),
+  //               style: ElevatedButton.styleFrom(
+  //                 backgroundColor: kPrimaryOrange,
+  //                 foregroundColor: Colors.white,
+  //                 shape: RoundedRectangleBorder(
+  //                   borderRadius: BorderRadius.circular(8),
+  //                 ),
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //     );
+  //   }
+  //
+  //   return Column(
+  //     crossAxisAlignment: CrossAxisAlignment.start,
+  //     children: [
+  //       Row(
+  //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //         children: [
+  //           Text(
+  //             'Available Servers',
+  //             style: TextStyle(
+  //               fontSize: 14,
+  //               fontWeight: FontWeight.w600,
+  //               color: Colors.black87,
+  //             ),
+  //           ),
+  //           Container(
+  //             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+  //             decoration: BoxDecoration(
+  //               color: kPrimaryOrange.withValues(alpha: 0.1),
+  //               borderRadius: BorderRadius.circular(12),
+  //             ),
+  //             child: Text(
+  //               '${availableServers.length} servers',
+  //               style: TextStyle(
+  //                 fontSize: 11,
+  //                 color: kPrimaryOrange,
+  //                 fontWeight: FontWeight.w600,
+  //               ),
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //       const Gap(8),
+  //       InkWell(
+  //         onTap: () => _showServerListDialog(),
+  //         child: Container(
+  //           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  //           decoration: BoxDecoration(
+  //             color: Colors.white,
+  //             borderRadius: BorderRadius.circular(12),
+  //             border: Border.all(color: kLightGrey),
+  //           ),
+  //           child: Row(
+  //             children: [
+  //               Icon(Icons.dns_outlined, color: kPrimaryOrange, size: 20),
+  //               const SizedBox(width: 12),
+  //               Expanded(
+  //                 child: Column(
+  //                   crossAxisAlignment: CrossAxisAlignment.start,
+  //                   children: [
+  //                     Text(
+  //                       selectedServer?['name'] ??
+  //                           selectedServer?['url'] ??
+  //                           'View All Servers',
+  //                       style: TextStyle(
+  //                         fontSize: 14,
+  //                         fontWeight: FontWeight.w500,
+  //                         color: Colors.black87,
+  //                       ),
+  //                       maxLines: 1,
+  //                       overflow: TextOverflow.ellipsis,
+  //                     ),
+  //                     if (selectedServer?['type'] != null) ...[
+  //                       const SizedBox(height: 2),
+  //                       Text(
+  //                         '${selectedServer!['type']}'.toUpperCase(),
+  //                         style: TextStyle(
+  //                           fontSize: 11,
+  //                           color: selectedServer!['type'] == 'premium'
+  //                               ? Colors.green
+  //                               : Colors.grey[600],
+  //                           fontWeight: FontWeight.w500,
+  //                         ),
+  //                       ),
+  //                     ],
+  //                   ],
+  //                 ),
+  //               ),
+  //               Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
+  //             ],
+  //           ),
+  //         ),
+  //       ),
+  //       const Gap(8),
+  //       Container(
+  //         padding: const EdgeInsets.all(12),
+  //         decoration: BoxDecoration(
+  //           color: Colors.blue.shade50,
+  //           borderRadius: BorderRadius.circular(8),
+  //           border: Border.all(color: Colors.blue.shade200),
+  //         ),
+  //         child: Row(
+  //           children: [
+  //             Icon(Icons.info_outline, color: Colors.blue, size: 18),
+  //             const SizedBox(width: 8),
+  //             Expanded(
+  //               child: Text(
+  //                 'Login will automatically try all ${availableServers.length} servers to find your account',
+  //                 style: TextStyle(
+  //                   fontSize: 11,
+  //                   color: Colors.blue.shade900,
+  //                 ),
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //     ],
+  //   );
+  // }
 
   void _showServerListDialog() {
     showDialog(

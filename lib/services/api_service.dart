@@ -14,9 +14,6 @@ import 'package:gpspro/services/model/share_perm.dart';
 import 'package:gpspro/services/model/user.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:http/http.dart' as http;
-import 'dart:developer' as l;
-
-import 'model/device_item.dart';
 
 class APIService {
   static String? serverURL;

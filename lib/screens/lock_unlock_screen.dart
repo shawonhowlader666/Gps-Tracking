@@ -6,7 +6,6 @@ import 'package:get/get.dart';
 import 'package:gpspro/config.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
-import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/widgets/banner_ad_widget.dart';
 
 class LockUnlockScreen extends StatefulWidget {
@@ -160,8 +159,8 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                             ),
                             decoration: BoxDecoration(
                               color: _isEngineOn
-                                  ? const Color(0xFF22C55E).withOpacity(0.1)
-                                  : const Color(0xFFEF4444).withOpacity(0.1),
+                                  ? const Color(0xFF22C55E).withValues(alpha: 0.1)
+                                  : const Color(0xFFEF4444).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: _isEngineOn
@@ -186,7 +185,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                                         color: (_isEngineOn
                                             ? const Color(0xFF22C55E)
                                             : const Color(0xFFEF4444))
-                                            .withOpacity(0.6),
+                                            .withValues(alpha: 0.6),
                                         blurRadius: 8,
                                         spreadRadius: 2,
                                       ),
@@ -276,13 +275,13 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.4),
+                    color: Colors.black.withValues(alpha: 0.4),
                     blurRadius: 30,
                     offset: Offset(0, _animationController.value * 10 + 15),
                     spreadRadius: -5,
                   ),
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 15,
                     offset: const Offset(0, -5),
                   ),
@@ -303,13 +302,13 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.5),
+                        color: Colors.black.withValues(alpha: 0.5),
                         blurRadius: 10,
                         offset: const Offset(5, 5),
                         spreadRadius: -5,
                       ),
                       BoxShadow(
-                        color: Colors.white.withOpacity(0.1),
+                        color: Colors.white.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(-5, -5),
                         spreadRadius: -5,
@@ -325,17 +324,17 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                         color: buttonColor,
                         boxShadow: [
                           BoxShadow(
-                            color: buttonColor.withOpacity(0.7),
+                            color: buttonColor.withValues(alpha: 0.7),
                             blurRadius: 40,
                             spreadRadius: 5,
                           ),
                           BoxShadow(
-                            color: buttonColor.withOpacity(0.4),
+                            color: buttonColor.withValues(alpha: 0.4),
                             blurRadius: 60,
                             spreadRadius: 15,
                           ),
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                             blurRadius: 15,
                             offset: const Offset(0, 8),
                           ),
@@ -354,8 +353,8 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                                 shape: BoxShape.circle,
                                 gradient: RadialGradient(
                                   colors: [
-                                    Colors.white.withOpacity(0.4),
-                                    Colors.white.withOpacity(0.0),
+                                    Colors.white.withValues(alpha: 0.4),
+                                    Colors.white.withValues(alpha: 0.0),
                                   ],
                                 ),
                               ),
@@ -395,7 +394,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
   Widget _buildLoadingOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.5),
+      color: Colors.black.withValues(alpha: 0.5),
       child: Center(
         child: Container(
           padding: const EdgeInsets.all(32),
@@ -520,7 +519,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB).withOpacity(0.1),
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(

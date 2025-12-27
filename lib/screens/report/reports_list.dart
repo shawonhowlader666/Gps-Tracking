@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/arguments/report_args.dart';
-import 'package:gpspro/flutter_flow/flutter_flow_theme.dart';
-import 'package:gpspro/theme/custom_color.dart';
 
 class ReportListPage extends StatefulWidget {
   const ReportListPage({super.key});
