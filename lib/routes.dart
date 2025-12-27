@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:gpspro/screens/add_alerts.dart';
 import 'package:gpspro/screens/alert_list.dart';
 import 'package:gpspro/screens/device_dashboard.dart';
 import 'package:gpspro/screens/device_event.dart';
@@ -22,7 +21,6 @@ import 'package:gpspro/screens/report/report_trip_view.dart';
 import 'package:gpspro/screens/report/reports_list.dart';
 import 'package:gpspro/screens/splash_screen.dart';
 import 'package:gpspro/screens/stop_map.dart';
-
 import 'screens/report/report_event.dart';
 import 'screens/report/report_stop.dart';
 import 'screens/report/report_summary.dart';
@@ -52,7 +50,7 @@ final Map<String, WidgetBuilder> routes = {
   '/geofenceList': (context) => GeofenceListPage(),
   '/geofenceAdd': (context) => GeofenceAddPage(),
   '/alertList': (context) => AlertListPage(),
-  '/addAlert': (context) => AddAlertsPage(),
+  // '/addAlert': (context) => AddAlertsPage(),
   '/notification': (context) => NotificationTypePage(),
   '/stopMap': (context) => StopMapPage(),
   '/deviceEvent': (context) => DeviceEventPage(),

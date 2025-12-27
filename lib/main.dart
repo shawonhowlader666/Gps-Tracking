@@ -5,20 +5,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gpspro/firebase_options.dart';
 import 'package:gpspro/routes.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/theme/custom_color.dart';
+import 'package:gpspro/services/notification_service.dart'; // ADD THIS
 import 'package:overlay_support/overlay_support.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
-
 import 'translation/translation_service.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
+FlutterLocalNotificationsPlugin();
 
 // Notification channel setup
 const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -37,7 +36,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> showNotification(RemoteMessage message) async {
   AndroidNotificationDetails androidPlatformChannelSpecifics =
-      AndroidNotificationDetails(
+  AndroidNotificationDetails(
     channel.id,
     channel.name,
     channelDescription: channel.description,
@@ -49,6 +48,7 @@ Future<void> showNotification(RemoteMessage message) async {
   NotificationDetails platformChannelSpecifics = NotificationDetails(
     android: androidPlatformChannelSpecifics,
   );
+
   log("Firebase notification ${message.notification?.title} ${message.notification?.body}");
   log("Firebase notification ${message.data}");
 
@@ -69,16 +69,35 @@ void main() async {
 
     // Initialize notifications plugin
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('logo'); // Default icon
+    AndroidInitializationSettings('logo');
+
+    const DarwinInitializationSettings initializationSettingsIOS =
+    DarwinInitializationSettings(
+      requestSoundPermission: true,
+      requestBadgePermission: true,
+      requestAlertPermission: true,
+    );
 
     await flutterLocalNotificationsPlugin.initialize(
-      InitializationSettings(android: initializationSettingsAndroid),
+      const InitializationSettings(
+        android: initializationSettingsAndroid,
+        iOS: initializationSettingsIOS,
+      ),
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        // Handle notification tap
+        log('Notification tapped: ${response.payload}');
+        if (response.payload != null) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            Get.toNamed('/events');
+          });
+        }
+      },
     );
 
     // Create the notification channel
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+        AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
     await FirebaseMessaging.instance.requestPermission(
@@ -90,6 +109,9 @@ void main() async {
     // Set up Firebase message handlers
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     FirebaseMessaging.onMessage.listen(showNotification);
+
+    // Initialize NotificationService - ADD THIS
+    await NotificationService().initialize(flutterLocalNotificationsPlugin);
 
     // Shared Preferences
     UserRepository.prefs = await SharedPreferences.getInstance();
@@ -113,23 +135,29 @@ class MyApp extends StatefulWidget {
   State<StatefulWidget> createState() => _MyAppPageState();
 }
 
-class _MyAppPageState extends State<MyApp> {
+class _MyAppPageState extends State<MyApp> with WidgetsBindingObserver {
   GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
     super.initState();
-  }
+    WidgetsBinding.instance.addObserver(this);
 
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: CustomColor.primaryColor,
-      statusBarBrightness: Brightness.dark,
+      statusBarColor: Colors.transparent,
+      statusBarBrightness: Brightness.light,
       statusBarIconBrightness: Brightness.dark,
     ));
+  }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
     ]);
@@ -138,22 +166,27 @@ class _MyAppPageState extends State<MyApp> {
       return OrientationBuilder(builder: (context, orientation) {
         return OverlaySupport.global(
             child: GetMaterialApp(
-          locale: _locale,
-          fallbackLocale: TranslationService.fallbackLocale,
-          translations: TranslationService(),
-          debugShowCheckedModeBanner: false,
-          navigatorKey: navigatorKey,
-          theme: ThemeData(
-            useMaterial3: false,
-            primarySwatch: CustomColor.primaryColor,
-            visualDensity: VisualDensity.adaptivePlatformDensity,
-            textTheme: GoogleFonts.outfitTextTheme(
-              Theme.of(context).textTheme,
-            ),
-          ),
-          initialRoute: '/',
-          routes: routes,
-        ));
+              locale: _locale,
+              fallbackLocale: TranslationService.fallbackLocale,
+              translations: TranslationService(),
+              debugShowCheckedModeBanner: false,
+              navigatorKey: navigatorKey,
+              theme: ThemeData(
+                useMaterial3: true,
+                primarySwatch: CustomColor.primaryColor,
+                visualDensity: VisualDensity.adaptivePlatformDensity,
+                textTheme: GoogleFonts.rethinkSansTextTheme(),
+                appBarTheme: AppBarTheme(
+                  systemOverlayStyle: SystemUiOverlayStyle(
+                    statusBarColor: Colors.transparent,
+                    statusBarBrightness: Brightness.light,
+                    statusBarIconBrightness: Brightness.dark,
+                  ),
+                ),
+              ),
+              initialRoute: '/',
+              routes: routes,
+            ));
       });
     });
   }

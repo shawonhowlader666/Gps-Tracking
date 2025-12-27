@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/config.dart';
+import 'package:gpspro/lib/constants/app_constants.dart';
 import 'package:gpspro/screens/server_maintenance_screen.dart';
 import 'package:gpspro/services/admob_service.dart';
 import 'package:gpspro/services/model/login.dart';
@@ -342,10 +343,14 @@ class _SplashScreenPageState extends State<SplashScreenPage>
           _buildFloatingElements(),
 
           // Main content
-          SafeArea(
+      SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Spacer(flex: 2),
+                const SizedBox(height: 40),
 
                 // Logo Section
                 _buildLogoSection(),
@@ -360,15 +365,15 @@ class _SplashScreenPageState extends State<SplashScreenPage>
                 // Tagline
                 _buildTagline(),
 
-                const Spacer(flex: 3),
+                const SizedBox(height: 50),
 
-                // Loading Section - Car with Progress
+                // Loading Section
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 30),
                   child: _buildLoadingSection(),
                 ),
 
-                const Spacer(flex: 2),
+                const SizedBox(height: 40),
 
                 // Footer
                 _buildFooter(),
@@ -377,7 +382,10 @@ class _SplashScreenPageState extends State<SplashScreenPage>
               ],
             ),
           ),
-        ],
+        ),
+      )
+
+      ],
       ),
     );
   }
@@ -616,8 +624,8 @@ class _SplashScreenPageState extends State<SplashScreenPage>
                         child: Padding(
                           padding: const EdgeInsets.all(22),
                           child: Image.asset(
-                            'images/logo.png',
-                            fit: BoxFit.contain,
+                            AppConstants.appIcon,
+                            fit: BoxFit.cover,
                           ),
                         ),
                       ),
@@ -652,7 +660,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
             ).createShader(bounds);
           },
           child: const Text(
-            'GPS PRO',
+            AppConstants.appName,
             style: TextStyle(
               fontSize: 40,
               fontWeight: FontWeight.w800,
@@ -1183,11 +1191,11 @@ class AnimatedBuilder extends AnimatedWidget {
   final Widget? child;
 
   const AnimatedBuilder({
-    Key? key,
+    super.key,
     required Animation<double> animation,
     required this.builder,
     this.child,
-  }) : super(key: key, listenable: animation);
+  }) : super(listenable: animation);
 
   @override
   Widget build(BuildContext context) {

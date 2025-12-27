@@ -693,7 +693,7 @@ class _MapPageState extends State<MapPage> {
                           padding: const EdgeInsets.only(right: 10),
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
-                            
+
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -810,7 +810,7 @@ class _MapPageState extends State<MapPage> {
             child: Column(
               children: <Widget>[
                 FloatingActionButton(
-                  heroTag: "mapType",
+                  heroTag: "mapTypeLocation",
                   mini: true,
                   onPressed: () {
                     CameraPosition cPosition = CameraPosition(
@@ -826,7 +826,7 @@ class _MapPageState extends State<MapPage> {
                   child: const m.Icon(Icons.gps_fixed, size: 30.0),
                 ),
                 FloatingActionButton(
-                  heroTag: "mapType",
+                  heroTag: "mapTypeMenu",
                   mini: true,
                   onPressed: () {},
                   materialTapTargetSize: MaterialTapTargetSize.padded,

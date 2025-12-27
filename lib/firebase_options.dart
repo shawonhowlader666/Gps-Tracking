@@ -50,20 +50,20 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDRXLaDS-KjMpVYby50qJDRkGiSbiC7M9g',
-    appId: '1:427598289167:android:9eae80a06f608875aac67a',
-    messagingSenderId: '427598289167',
-    projectId: 'gps-mobile-app-8d942',
-    storageBucket: 'gps-mobile-app-8d942.firebasestorage.app',
+    apiKey: 'AIzaSyCIs0gOVNcdHheglqmke7KSkC4YWvQ2AHI',
+    appId: '1:58525743652:android:07b24220947da13db836b1',
+    messagingSenderId: '58525743652',
+    projectId: 'trust-me-cd5ac',
+    storageBucket: 'trust-me-cd5ac.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAL_8BLNS-SfdvM-AY0XcHD2NOR1qHPyAI',
-    appId: '1:427598289167:ios:71eafa2b12498dfdaac67a',
-    messagingSenderId: '427598289167',
-    projectId: 'gps-mobile-app-8d942',
-    storageBucket: 'gps-mobile-app-8d942.firebasestorage.app',
-    iosBundleId: 'com.sptrackgps.mobileapp',
+    apiKey: 'AIzaSyCIs0gOVNcdHheglqmke7KSkC4YWvQ2AHI',
+    appId: '1:58525743652:ios:310fe941af46fdb8b836b1',
+    messagingSenderId: '58525743652',
+    projectId: 'trust-me-cd5ac',
+    storageBucket: 'trust-me-cd5ac.firebasestorage.app',
+    iosBundleId: 'com.trustmegps.app',
   );
 
 }

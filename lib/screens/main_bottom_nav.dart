@@ -239,7 +239,7 @@ class CurvedBackgroundPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Color(0xFFF4A607),
+          Color(0xFF3E6FB8),
           const Color(0xFFF8F9FC),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))

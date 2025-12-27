@@ -5,7 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/material.dart' as m;
 import 'package:get/get.dart';
-import 'package:gpspro/config.dart';
 import 'package:gpspro/arguments/report_args.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/model/device.dart';

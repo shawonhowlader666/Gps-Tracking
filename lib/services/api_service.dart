@@ -1,7 +1,6 @@
-// ignore_for_file: prefer_interpolation_to_compose_strings, file_names
 
 import 'dart:convert';
-
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/services/model/alert.dart';
 import 'package:gpspro/services/model/device.dart';
@@ -16,6 +15,8 @@ import 'package:gpspro/services/model/user.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:http/http.dart' as http;
 import 'dart:developer' as l;
+
+import 'model/device_item.dart';
 
 class APIService {
   static String? serverURL;
@@ -164,16 +165,82 @@ class APIService {
     print(response.body);
     return response;
   }
+  //
+  // static Future<List<Geofence>?> getGeoFences() async {
+  //   headers['Accept'] = "application/json";
+  //   final response = await http.get(
+  //       Uri.parse(
+  //           "$serverURL/api/get_geofences?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
+  //       headers: headers);
+  //   if (response.statusCode == 200) {
+  //     Iterable list = json.decode(response.body.replaceAll("ï»¿", ""))['items']
+  //         ['geofences'];
+  //     if (list.isNotEmpty) {
+  //       return list.map((model) => Geofence.fromJson(model)).toList();
+  //     } else {
+  //       return null;
+  //     }
+  //   } else {
+  //     return null;
+  //   }
+  // }
+
+  // static Future<http.Response?> addGeofence(fence) async {
+  //   headers['content-type'] =
+  //       "application/x-www-form-urlencoded; charset=UTF-8";
+  //   final response = await http.post(
+  //       Uri.parse(
+  //           "$serverURL/api/add_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
+  //       body: fence,
+  //       headers: headers);
+  //   return response;
+  // }
+  //
+  // static Future<http.Response> destroyGeofence(id) async {
+  //   headers['content-type'] =
+  //       "application/x-www-form-urlencoded; charset=UTF-8";
+  //   final response = await http.get(
+  //       Uri.parse(
+  //           "$serverURL/api/destroy_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
+  //       headers: headers);
+  //   return response;
+  // }
+  // Fix the destroyGeofence method in api_service.dart
+
+  // In api_service.dart
+
+  static Future<http.Response?> addGeofence(Map<String, dynamic> fence) async {
+    headers['content-type'] = "application/x-www-form-urlencoded; charset=UTF-8";
+
+    print('Creating geofence with data: $fence'); // Debug log
+
+    final response = await http.post(
+      Uri.parse(
+          "$serverURL/api/add_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"
+      ),
+      body: fence,
+      headers: headers,
+    );
+
+    print('Response: ${response.statusCode} - ${response.body}'); // Debug log
+    return response;
+  }
 
   static Future<List<Geofence>?> getGeoFences() async {
     headers['Accept'] = "application/json";
     final response = await http.get(
-        Uri.parse(
-            "$serverURL/api/get_geofences?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
-        headers: headers);
+      Uri.parse(
+          "$serverURL/api/get_geofences?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"
+      ),
+      headers: headers,
+    );
+
+    print('Geofences response: ${response.body}'); // Debug log
+
     if (response.statusCode == 200) {
-      Iterable list = json.decode(response.body.replaceAll("ï»¿", ""))['items']
-          ['geofences'];
+      final jsonData = json.decode(response.body.replaceAll("ï»¿", ""));
+      Iterable list = jsonData['items']['geofences'];
+
       if (list.isNotEmpty) {
         return list.map((model) => Geofence.fromJson(model)).toList();
       } else {
@@ -184,24 +251,50 @@ class APIService {
     }
   }
 
-  static Future<http.Response?> addGeofence(fence) async {
-    headers['content-type'] =
-        "application/x-www-form-urlencoded; charset=UTF-8";
-    final response = await http.post(
+  static Future<http.Response> destroyGeofence(id) async {
+    headers['content-type'] = "application/x-www-form-urlencoded; charset=UTF-8";
+    final response = await http.get(
         Uri.parse(
-            "$serverURL/api/add_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
-        body: fence,
+            "$serverURL/api/destroy_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&geofence_id=$id"),
         headers: headers);
     return response;
   }
 
-  static Future<http.Response> destroyGeofence(id) async {
-    headers['content-type'] =
-        "application/x-www-form-urlencoded; charset=UTF-8";
-    final response = await http.get(
+  // Add these methods to api_service.dart
+
+// Get devices associated with a geofence
+  static Future<List<dynamic>?> getGeofenceDevices(int? fenceId) async {
+    if (fenceId == null) return null;
+
+    try {
+      final response = await http.get(
         Uri.parse(
-            "$serverURL/api/destroy_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
-        headers: headers);
+            "$serverURL/api/get_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&geofence_id=$fenceId"
+        ),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body.replaceAll("ï»¿", ""));
+        return data['items']?['devices'] ?? [];
+      }
+    } catch (e) {
+      debugPrint('Error fetching geofence devices: $e');
+    }
+    return null;
+  }
+
+// Update geofence with devices
+  static Future<http.Response?> updateGeofence(int fenceId, Map<String, dynamic> data) async {
+    headers['content-type'] = "application/x-www-form-urlencoded; charset=UTF-8";
+
+    final response = await http.post(
+      Uri.parse(
+          "$serverURL/api/edit_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"
+      ),
+      body: data,
+      headers: headers,
+    );
     return response;
   }
 
@@ -543,4 +636,5 @@ class APIService {
         headers: headers);
     return response;
   }
+
 }

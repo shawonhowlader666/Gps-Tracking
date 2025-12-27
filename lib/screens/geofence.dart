@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -10,7 +9,6 @@ import 'package:gpspro/services/model/user.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/ui/custom_icon.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'geofence_list.dart';
 
 class GeofencePage extends StatefulWidget {

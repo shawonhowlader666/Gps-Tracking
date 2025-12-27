@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:gpspro/services/model/bill.dart';
 import 'package:gpspro/services/model/payment_stats.dart';
 import 'package:gpspro/services/payment_service.dart';
@@ -16,6 +15,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
   bool _isLoading = true;
   bool _isLoadingMore = false;
   int _currentPage = 1;
+  String? _errorMessage;
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -25,6 +25,13 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
     _scrollController.addListener(_scrollListener);
   }
 
+  @override
+  void dispose() {
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _scrollListener() {
     if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
       _loadMoreBills();
@@ -32,73 +39,171 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
-    final stats = await PaymentService.getStats();
-    final bills = await PaymentService.getBills(page: 1);
+    try {
+      final stats = await PaymentService.getStats();
+      final bills = await PaymentService.getBills(page: 1);
 
-    setState(() {
-      _stats = stats;
-      _bills = bills ?? [];
-      _isLoading = false;
-    });
+      if (!mounted) return;
+
+      setState(() {
+        _stats = stats;
+        _bills = bills ?? [];
+        _isLoading = false;
+        _currentPage = 1;
+      });
+    } catch (e) {
+      debugPrint('Error loading data: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = _getErrorMessage(e);
+      });
+    }
   }
 
   Future<void> _loadMoreBills() async {
     if (_isLoadingMore) return;
 
+    if (!mounted) return;
+
     setState(() {
       _isLoadingMore = true;
     });
 
-    _currentPage++;
-    final moreBills = await PaymentService.getBills(page: _currentPage);
+    try {
+      _currentPage++;
+      final moreBills = await PaymentService.getBills(page: _currentPage);
 
-    if (moreBills != null && moreBills.isNotEmpty) {
+      if (!mounted) return;
+
+      if (moreBills != null && moreBills.isNotEmpty) {
+        setState(() {
+          _bills.addAll(moreBills);
+          _isLoadingMore = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading more bills: $e');
+
+      if (!mounted) return;
+
       setState(() {
-        _bills.addAll(moreBills);
         _isLoadingMore = false;
+        _currentPage--;
       });
-    } else {
-      setState(() {
-        _isLoadingMore = false;
-      });
+
+      _showErrorSnackBar('Failed to load more bills');
     }
   }
 
   Future<void> _initiatePayment() async {
-    // Check if there is due amount
     if (_stats == null || _stats!.due <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No due available to pay')),
-      );
+      if (!mounted) return;
+      _showErrorSnackBar('No due available to pay');
       return;
     }
 
-    // Show loading or something?
-    // For now, just call API
-    final gatewayUrl = await PaymentService.initiateSslPayment();
-    if (gatewayUrl != null) {
-      // Navigate to WebView
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => WebViewScreen(
-            title: 'Payment',
-            url: gatewayUrl,
+    // Show loading dialog
+    if (!mounted) return;
+    _showLoadingDialog();
+
+    try {
+      final gatewayUrl = await PaymentService.initiateSslPayment();
+
+      if (!mounted) return;
+
+      // Hide loading dialog
+      Navigator.of(context).pop();
+
+      if (gatewayUrl != null) {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WebViewScreen(
+              title: 'Payment',
+              url: gatewayUrl,
+            ),
+          ),
+        );
+
+        if (mounted) {
+          _loadData();
+        }
+      } else {
+        _showErrorSnackBar('Failed to initiate payment');
+      }
+    } catch (e) {
+      debugPrint('Payment initiation error: $e');
+
+      if (!mounted) return;
+
+      // Hide loading dialog if showing
+      Navigator.of(context).pop();
+
+      _showErrorSnackBar(_getErrorMessage(e));
+    }
+  }
+
+  String _getErrorMessage(dynamic error) {
+    String errorString = error.toString().toLowerCase();
+    if (errorString.contains('timeout') || errorString.contains('timed out')) {
+      return 'Connection timed out. Please check your internet connection.';
+    } else if (errorString.contains('socket') || errorString.contains('connection')) {
+      return 'Network error. Please check your internet connection.';
+    } else {
+      return 'Something went wrong. Please try again.';
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: _loadData,
+        ),
+      ),
+    );
+  }
+
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Initiating payment...'),
+              ],
+            ),
           ),
         ),
-      ).then((_) {
-        // Refresh data when coming back from WebView
-        _loadData();
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to initiate payment')),
-      );
-    }
+      ),
+    );
   }
 
   @override
@@ -110,38 +215,86 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         backgroundColor: const Color(0xFF3E6FB8),
         foregroundColor: Colors.white,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadData,
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildStatsCard(),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Transaction History',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildBillsList(),
-                    if (_isLoadingMore)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(child: CircularProgressIndicator()),
-                      ),
-                  ],
-                ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null && _bills.isEmpty) {
+      return _buildErrorWidget();
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildStatsCard(),
+            const SizedBox(height: 24),
+            const Text(
+              'Transaction History',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
               ),
             ),
+            const SizedBox(height: 12),
+            _buildBillsList(),
+            if (_isLoadingMore)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage ?? 'Something went wrong',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3E6FB8),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -269,10 +422,26 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
 
   Widget _buildBillsList() {
     if (_bills.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(32.0),
-          child: Text("No transactions found"),
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            children: [
+              Icon(
+                Icons.receipt_long_outlined,
+                size: 48,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "No transactions found",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }

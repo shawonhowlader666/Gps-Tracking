@@ -7,6 +7,7 @@ const Color YELLOW_CUSTOM = Color(0xffFFAC00);
 
 class CustomColor {
   static var primaryColor = MaterialColor(0xFF39a4db, color);
+  static var primary= Color(0xFF4478C5);
   static var secondaryColor = Colors.white;
   static var onColor = Colors.green;
   static var offColor = Colors.grey;

@@ -1,5 +1,3 @@
-// ignore_for_file: file_names
-
 import 'dart:async';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -8,11 +6,12 @@ import 'package:gpspro/services/model/device_item.dart';
 import 'package:gpspro/services/model/event.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
+import 'package:gpspro/services/notification_service.dart';
 
 class DataController extends GetxController {
   // Device Lists
   RxList<Device> devices = <Device>[].obs;
-  RxList<DeviceItem> onlyDevices = <DeviceItem>[].obs; // Kept for other screens
+  RxList<DeviceItem> onlyDevices = <DeviceItem>[].obs;
   RxList<DeviceItem> filteredDevices = <DeviceItem>[].obs;
   RxList<DeviceItem> searchedDevices = <DeviceItem>[].obs;
 
@@ -34,6 +33,12 @@ class DataController extends GetxController {
   RxList<Event> events = <Event>[].obs;
   var counter = 0.obs;
   var markers = <Marker>{}.obs;
+
+  // For tracking previous events
+  final List<int> _previousEventIds = [];
+
+  // Notification service
+  final NotificationService _notificationService = NotificationService();
 
   @override
   Future<void> onInit() async {
@@ -93,14 +98,12 @@ class DataController extends GetxController {
   }
 
   Future<void> _processDeviceItems(List<Device> deviceGroups) async {
-    onlyDevices.clear(); // Clear existing devices
+    onlyDevices.clear();
     for (var group in deviceGroups) {
       if (group.items != null) {
-        onlyDevices
-            .addAll(group.items!); // Maintain onlyDevices for other screens
+        onlyDevices.addAll(group.items!);
       }
     }
-    // Initialize filteredDevices with all devices
     filteredDevices.assignAll(onlyDevices);
   }
 
@@ -121,7 +124,6 @@ class DataController extends GetxController {
           onlyDevices.where((device) => device.iconColor == status).toList());
     }
 
-    // Apply search if there's active search text
     if (searchText.isNotEmpty) {
       searchDevices(searchText.value);
     }
@@ -154,18 +156,16 @@ class DataController extends GetxController {
     final searchLower = text.toLowerCase();
     searchedDevices.assignAll(filteredDevices
         .where((device) =>
-            device.name?.toLowerCase().contains(searchLower) ?? false)
+    device.name?.toLowerCase().contains(searchLower) ?? false)
         .toList());
   }
 
   void _applyFilters() {
     if (searchText.isEmpty) {
-      // No search text - show filtered devices
       if (selectedFilterIndex.value == 0) {
         filteredDevices.assignAll(onlyDevices);
       }
     } else {
-      // Has search text - show searched devices
       searchDevices(searchText.value);
     }
   }
@@ -182,6 +182,9 @@ class DataController extends GetxController {
     try {
       final eventsResponse = await APIService.getEventList();
       if (eventsResponse != null) {
+        // Check for new events and show notifications
+        _checkForNewEvents(eventsResponse);
+
         events.value = eventsResponse;
       }
     } catch (e) {
@@ -191,7 +194,42 @@ class DataController extends GetxController {
     }
   }
 
+  // Check for new events and trigger notifications
+  void _checkForNewEvents(List<Event> newEvents) {
+    if (_previousEventIds.isEmpty) {
+      // First time loading events - just populate the list
+      _previousEventIds.addAll(
+          newEvents.where((e) => e.id != null).map((e) => e.id as int)
+      );
+      return;
+    }
+
+    // Find new events
+    for (var event in newEvents) {
+      if (event.id != null && !_previousEventIds.contains(event.id)) {
+        // New event detected - show notification
+        _notificationService.showEventNotification(event);
+        print("🔔 New event notification: ${event.message}");
+      }
+    }
+
+    // Update previous event IDs
+    _previousEventIds.clear();
+    _previousEventIds.addAll(
+        newEvents.where((e) => e.id != null).map((e) => e.id as int)
+    );
+  }
+
   void setExpandedIndex(int index) {
     expandedIndex.value = expandedIndex.value == index ? -1 : index;
+  }
+
+  // Manual notification trigger (for testing)
+  void sendTestNotification() {
+    _notificationService.showLocalNotification(
+      title: "🧪 Test Notification",
+      body: "This is a test notification from GPS Pro",
+      payload: "test",
+    );
   }
 }

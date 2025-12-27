@@ -25,10 +25,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 // Device Status Enum
 enum DeviceStatus {
-  running,
-  idle,
-  stop,
-  offline,
+  running,  // Green - Moving (speed > 0)
+  idle,     // Yellow - Engine ON, not moving
+  stop,     // Red - Engine OFF, stopped
+  offline,  // Grey - Device disconnected
 }
 
 class DevicePage extends StatefulWidget {
@@ -44,12 +44,15 @@ class _DevicePageState extends State<DevicePage> {
   final FocusNode _searchFocusNode = FocusNode();
   SingleDevice? sd;
   int expiryTime = 10;
-  int _selectedperiod = 0;
+  // int _selectedperiod = 0;
   int? selectedIconId;
 
   final DataController controller = Get.find<DataController>();
   int? _showingAddressForDeviceId;
   Timer? _addressHideTimer;
+
+  // ✅ ADD: Flag to track disposal state
+  bool _isDisposed = false;
 
   // Custom filter variables
   int _selectedFilterIndex = 0;
@@ -60,36 +63,57 @@ class _DevicePageState extends State<DevicePage> {
   int _stopCount = 0;
   int _offlineCount = 0;
 
-  void _showAddress(int deviceId) {
-    _hideAddress();
+  // ✅ FIXED: Safe setState wrapper
+  void _safeSetState(VoidCallback fn) {
+    if (mounted && !_isDisposed) {
+      setState(fn);
+    }
+  }
 
-    setState(() {
+  void _showAddress(int deviceId) {
+    // ✅ Check before proceeding
+    if (_isDisposed || !mounted) return;
+
+    _cancelAddressTimer();
+
+    _safeSetState(() {
       _showingAddressForDeviceId = deviceId;
     });
 
-    _addressHideTimer = Timer(Duration(seconds: 15), () {
+    _addressHideTimer = Timer(const Duration(seconds: 15), () {
       _hideAddress();
     });
   }
 
+  // ✅ NEW: Separate method just to cancel timer (no setState)
+  void _cancelAddressTimer() {
+    _addressHideTimer?.cancel();
+    _addressHideTimer = null;
+  }
+
+  // ✅ FIXED: _hideAddress with mounted check
   void _hideAddress() {
-    if (_addressHideTimer != null) {
-      _addressHideTimer!.cancel();
-      _addressHideTimer = null;
-    }
-    setState(() {
+    _cancelAddressTimer();
+
+    // Only call setState if widget is still mounted
+    if (mounted && !_isDisposed) {
+      setState(() {
+        _showingAddressForDeviceId = null;
+      });
+    } else {
+      // Direct assignment when disposed (no setState)
       _showingAddressForDeviceId = null;
-    });
+    }
   }
 
   Widget _buildAddressWidget(DeviceItem device) {
     final shouldShow = _showingAddressForDeviceId == device.id;
 
     return AnimatedCrossFade(
-      duration: Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 300),
       crossFadeState:
       shouldShow ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-      firstChild: SizedBox.shrink(),
+      firstChild: const SizedBox.shrink(),
       secondChild: Padding(
         padding: const EdgeInsets.only(left: 0, right: 20, bottom: 10),
         child: SizedBox(
@@ -99,7 +123,7 @@ class _DevicePageState extends State<DevicePage> {
             double.parse(device.lat.toString()).toString(),
             double.parse(device.lng.toString()).toString(),
           )
-              : SizedBox.shrink(),
+              : const SizedBox.shrink(),
         ),
       ),
     );
@@ -109,17 +133,23 @@ class _DevicePageState extends State<DevicePage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadDevices();
+      if (mounted && !_isDisposed) {
+        _loadDevices();
+      }
     });
   }
 
   void _loadDevices() {
+    if (_isDisposed || !mounted) return;
+
     controller.filterDevicesByStatus("all");
     _calculateCounts();
     _filterDevices("all");
   }
 
   void _calculateCounts() {
+    if (_isDisposed || !mounted) return;
+
     final allDevices = controller.filteredDevices;
 
     _allCount = allDevices.length;
@@ -145,117 +175,141 @@ class _DevicePageState extends State<DevicePage> {
           break;
       }
     }
-    setState(() {});
+
+    _safeSetState(() {});
   }
 
-  DeviceStatus _getDeviceStatus(DeviceItem device) {
-    // Get speed value
-    double speed = double.tryParse(device.speed?.toString() ?? '0') ?? 0;
+  // DEVICE STATUS DETECTION METHODS - Keep as is...
+  bool _isDeviceOnline(DeviceItem device) {
+    final online = device.online?.toLowerCase().trim() ?? '';
 
-    // Check icon color first (from server)
-    String? iconColor = device.iconColor?.toLowerCase();
-
-    // Offline check - red color or no recent data
-    if (iconColor == "red") {
-      return DeviceStatus.offline;
+    if (online.isEmpty) {
+      return false;
     }
 
-    // Running check - green color and speed > 0
-    if (iconColor == "green" && speed > 0) {
-      return DeviceStatus.running;
+    if (online.contains('offline')) {
+      return false;
     }
 
-    // Idle check - yellow color (engine on, not moving)
-    if (iconColor == "yellow") {
-      return DeviceStatus.idle;
+    if (online == 'ack' || online.contains('ack')) {
+      return false;
     }
 
-    // Stop check - green color but speed = 0 (parked/stopped)
-    if (iconColor == "green" && speed == 0) {
-      // Check if ignition is off - then it's stopped
-      bool ignitionOff = _isIgnitionOff(device);
-      if (ignitionOff) {
-        return DeviceStatus.stop;
+    if (online.contains('online')) {
+      return true;
+    }
+
+    if (device.timestamp != null) {
+      try {
+        final lastUpdate = DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
+        final diff = DateTime.now().difference(lastUpdate);
+        return diff.inMinutes < 5;
+      } catch (_) {
+        return false;
       }
-      // Check stop duration - if stopped for more than 5 minutes
-      String? stopDuration = device.stopDuration;
-      if (stopDuration != null && stopDuration.isNotEmpty) {
-        int stopMinutes = _parseStopDuration(stopDuration);
-        if (stopMinutes > 5) {
-          return DeviceStatus.stop;
-        }
-      }
-      // If ignition is on but not moving, it's idle
-      return DeviceStatus.idle;
     }
 
-    // Check based on speed and stop duration
-    if (speed == 0) {
-      // Check stop duration to determine if stopped or idle
-      String? stopDuration = device.stopDuration;
-      if (stopDuration != null && stopDuration.isNotEmpty) {
-        // If stopped for a long time, consider it as stopped
-        int stopMinutes = _parseStopDuration(stopDuration);
-        if (stopMinutes > 5) {
-          return DeviceStatus.stop;
-        }
-      }
-      return DeviceStatus.idle;
-    }
-
-    // Default to running if speed > 0
-    if (speed > 0) {
-      return DeviceStatus.running;
-    }
-
-    return DeviceStatus.offline;
+    return false;
   }
 
-  bool _isIgnitionOff(DeviceItem device) {
-    if (device.sensors == null) return false;
+  bool _isEngineOn(DeviceItem device) {
+    if (device.engineStatus != null) {
+      final status = device.engineStatus;
 
-    for (var sensor in device.sensors!) {
-      String? type = sensor['type']?.toString().toLowerCase();
-      if (type == 'ignition' || type == 'acc' || type == 'engine') {
-        var value = sensor['value'];
-        if (value != null) {
-          String valueStr = value.toString().toLowerCase();
-          if (valueStr == 'off' || valueStr == '0' || valueStr == 'false') {
-            return true;
+      if (status is bool) {
+        return status;
+      }
+
+      if (status is int) {
+        return status == 1;
+      }
+
+      if (status is String) {
+        final s = status.toLowerCase().trim();
+        if (s == 'on' || s == '1' || s == 'true' || s == 'ign on' || s == 'engine on') {
+          return true;
+        }
+        if (s == 'off' || s == '0' || s == 'false' || s == 'ign off' || s == 'engine off') {
+          return false;
+        }
+      }
+    }
+
+    if (device.sensors != null && device.sensors!.isNotEmpty) {
+      for (var sensor in device.sensors!) {
+        String? type = sensor['type']?.toString().toLowerCase();
+        if (type == 'ignition' || type == 'acc' || type == 'engine') {
+          var value = sensor['value'];
+          if (value != null) {
+            String valueStr = value.toString().toLowerCase().trim();
+            if (valueStr == 'on' || valueStr == '1' || valueStr == 'true') {
+              return true;
+            }
+            if (valueStr == 'off' || valueStr == '0' || valueStr == 'false') {
+              return false;
+            }
           }
         }
       }
     }
+
+    final traccar = device.deviceData?.traccar;
+    if (traccar != null) {
+      final engineOnAt = traccar.engineOnAt;
+      final engineOffAt = traccar.engineOffAt;
+
+      if (engineOnAt != null && engineOffAt != null) {
+        try {
+          final onTime = DateTime.parse(engineOnAt);
+          final offTime = DateTime.parse(engineOffAt);
+          return onTime.isAfter(offTime);
+        } catch (_) {}
+      }
+
+      if (engineOnAt != null && engineOffAt == null) {
+        return true;
+      }
+
+      if (engineOffAt != null && engineOnAt == null) {
+        return false;
+      }
+    }
+
+    if (device.stopDurationSec != null && device.stopDurationSec! > 300) {
+      return false;
+    }
+
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+    if (speed > 0) {
+      return true;
+    }
+
     return false;
   }
 
-  int _parseStopDuration(String duration) {
-    // Parse duration like "2h 30m", "45m", "1d 2h", etc.
-    int totalMinutes = 0;
-
-    RegExp dayRegex = RegExp(r'(\d+)\s*d');
-    RegExp hourRegex = RegExp(r'(\d+)\s*h');
-    RegExp minRegex = RegExp(r'(\d+)\s*m');
-
-    var dayMatch = dayRegex.firstMatch(duration);
-    if (dayMatch != null) {
-      totalMinutes += int.parse(dayMatch.group(1)!) * 24 * 60;
+  DeviceStatus _getDeviceStatus(DeviceItem device) {
+    if (!_isDeviceOnline(device)) {
+      return DeviceStatus.offline;
     }
 
-    var hourMatch = hourRegex.firstMatch(duration);
-    if (hourMatch != null) {
-      totalMinutes += int.parse(hourMatch.group(1)!) * 60;
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+
+    if (speed > 0) {
+      return DeviceStatus.running;
     }
 
-    var minMatch = minRegex.firstMatch(duration);
-    if (minMatch != null) {
-      totalMinutes += int.parse(minMatch.group(1)!);
+    final engineOn = _isEngineOn(device);
+
+    if (engineOn) {
+      return DeviceStatus.idle;
     }
 
-    return totalMinutes;
+    return DeviceStatus.stop;
   }
 
   void _filterDevices(String filter) {
+    if (_isDisposed || !mounted) return;
+
     controller.filterDevicesByStatus("all");
     final allDevices = controller.filteredDevices.toList();
 
@@ -293,10 +347,12 @@ class _DevicePageState extends State<DevicePage> {
         _selectedFilterIndex = 0;
     }
 
-    setState(() {});
+    _safeSetState(() {});
   }
 
   void _searchDevices(String query) {
+    if (_isDisposed || !mounted) return;
+
     if (query.isEmpty) {
       _filterDevices(_getFilterName(_selectedFilterIndex));
     } else {
@@ -304,11 +360,9 @@ class _DevicePageState extends State<DevicePage> {
       final allDevices = controller.filteredDevices.toList();
       _displayDevices = allDevices.where((device) {
         final name = device.name?.toLowerCase() ?? '';
-        // final imei = device.imei?.toLowerCase() ?? '';
         return name.contains(query.toLowerCase());
-            // imei.contains(query.toLowerCase());
       }).toList();
-      setState(() {});
+      _safeSetState(() {});
     }
   }
 
@@ -329,14 +383,26 @@ class _DevicePageState extends State<DevicePage> {
     }
   }
 
+  // ✅ FIXED: dispose method
   @override
   void dispose() {
-    _hideAddress();
+    // Mark as disposed FIRST to prevent any setState calls
+    _isDisposed = true;
+
+    // Cancel timer WITHOUT calling setState
+    _cancelAddressTimer();
+
+    // Direct assignment (no setState needed in dispose)
+    _showingAddressForDeviceId = null;
+
+    // Dispose controllers
     _searchFocusNode.dispose();
     _searchController.dispose();
     _name.dispose();
+
     super.dispose();
   }
+
 
   void editDeviceDialog(BuildContext context, dynamic device) {
     Dialog simpleDialog = Dialog(
@@ -530,26 +596,19 @@ class _DevicePageState extends State<DevicePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(70),
+        preferredSize: const Size.fromHeight(58),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                const Color(0xFF3E6FB8),
-                const Color(0xFF5C8ACF),
-              ],
-            ),
+            color: Colors.white,
             borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(24),
-              bottomRight: Radius.circular(24),
+              bottomLeft: Radius.circular(16),
+              bottomRight: Radius.circular(16),
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF6366F1).withValues(alpha: 0.3),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
+                color: Colors.grey.withValues(alpha: 0.8),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -559,39 +618,26 @@ class _DevicePageState extends State<DevicePage> {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: Color(0xFF0F4FAF).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
                       Icons.directions_car_rounded,
-                      color: Colors.white,
+                      color: Color(0xFF0F4FAF),
                       size: 24,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 22),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'vehicles'.tr,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          '$_allCount ${'devices'.tr}',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.8),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'vehicles'.tr,
+                      style: const TextStyle(
+                        color: Color(0xFF0F4FAF),
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   GestureDetector(
@@ -608,7 +654,7 @@ class _DevicePageState extends State<DevicePage> {
                         Icons.search_rounded,
                         color: controller.isSearchVisible.value
                             ? const Color(0xFF898BEA)
-                            : Colors.white,
+                            : Color(0xFF0F4FAF),
                         size: 22,
                       ),
                     )),
@@ -626,7 +672,7 @@ class _DevicePageState extends State<DevicePage> {
                       ),
                       child: const Icon(
                         Icons.refresh_rounded,
-                        color: Colors.white,
+                        color: Color(0xFF0F4FAF),
                         size: 22,
                       ),
                     ),
@@ -703,64 +749,63 @@ class _DevicePageState extends State<DevicePage> {
             ),
           ],
         );
-      }),
+      }
+      ),
     );
   }
 
   Widget _buildStatusFilter() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 2, 4, 0),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _buildFilterCard(
-              index: 0,
-              icon: Icons.apps_rounded,
-              label: 'all'.tr,
-              count: _allCount,
-              primaryColor: const Color(0xFF5C8ACF),
-              isSelected: _selectedFilterIndex == 0,
-              onTap: () => _filterDevices("all"),
-            ),
-            _buildFilterCard(
-              index: 1,
-              icon: Icons.directions_car_filled_rounded,
-              label: 'running'.tr,
-              count: _runningCount,
-              primaryColor: const Color(0xFF22C55E),
-              isSelected: _selectedFilterIndex == 1,
-              onTap: () => _filterDevices("running"),
-            ),
-            _buildFilterCard(
-              index: 2,
-              icon: Icons.pause_circle_filled_rounded,
-              label: 'idle'.tr,
-              count: _idleCount,
-              primaryColor: const Color(0xFFF59E0B),
-              isSelected: _selectedFilterIndex == 2,
-              onTap: () => _filterDevices("idle"),
-            ),
-            _buildFilterCard(
-              index: 3,
-              icon: Icons.local_parking_rounded,
-              label: 'stop'.tr,
-              count: _stopCount,
-              primaryColor: const Color(0xFF3B82F6),
-              isSelected: _selectedFilterIndex == 3,
-              onTap: () => _filterDevices("stop"),
-            ),
-            _buildFilterCard(
-              index: 4,
-              icon: Icons.power_off_rounded,
-              label: 'offline'.tr,
-              count: _offlineCount,
-              primaryColor: const Color(0xFFEF4444),
-              isSelected: _selectedFilterIndex == 4,
-              onTap: () => _filterDevices("offline"),
-            ),
-          ],
-        ),
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildFilterCard(
+            index: 0,
+            icon: Icons.apps_rounded,
+            label: 'all'.tr,
+            count: _allCount,
+            primaryColor: const Color(0xFF5C8ACF).withValues(alpha: 0.4),
+            isSelected: _selectedFilterIndex == 0,
+            onTap: () => _filterDevices("all"),
+          ),
+          _buildFilterCard(
+            index: 1,
+            icon: Icons.directions_car_filled_rounded,
+            label: 'running'.tr,
+            count: _runningCount,
+            primaryColor: const Color(0xFF22C55E).withValues(alpha: 0.4),  // Green
+            isSelected: _selectedFilterIndex == 1,
+            onTap: () => _filterDevices("running"),
+          ),
+          _buildFilterCard(
+            index: 2,
+            icon: Icons.pause_circle_filled_rounded,
+            label: 'idle'.tr,
+            count: _idleCount,
+            primaryColor: const Color(0xFFF59E0B).withValues(alpha: 0.4),  // Yellow/Amber
+            isSelected: _selectedFilterIndex == 2,
+            onTap: () => _filterDevices("idle"),
+          ),
+          // _buildFilterCard(
+          //   index: 3,
+          //   icon: Icons.local_parking_rounded,
+          //   label: 'stop'.tr,
+          //   count: _stopCount,
+          //   primaryColor: const Color(0xFFEF4444).withValues(alpha: 0.4),  // Red
+          //   isSelected: _selectedFilterIndex == 3,
+          //   onTap: () => _filterDevices("stop"),
+          // ),
+          _buildFilterCard(
+            index: 4,
+            icon: Icons.signal_wifi_off_rounded,
+            label: 'offline'.tr,
+            count: _offlineCount,
+            primaryColor: const Color(0xFFEF4444).withValues(alpha: 0.4),  // Grey
+            isSelected: _selectedFilterIndex == 4,
+            onTap: () => _filterDevices("offline"),
+          ),
+        ],
       ),
     );
   }
@@ -1140,62 +1185,11 @@ class _DevicePageState extends State<DevicePage> {
     });
   }
 
-  _StatusColors _getStatusColors(String? iconColor, {DeviceStatus? status}) {
-    // Use status if provided (priority)
-    if (status != null) {
-      switch (status) {
-        case DeviceStatus.running:
-          return _StatusColors(
-            primary: const Color(0xFF22C55E),
-            bgGradientStart: const Color(0xFFDCFCE7),
-            bgGradientEnd: const Color(0xFFF0FDF4),
-            borderColor: const Color(0xFF86EFAC),
-            iconBgColor: const Color(0xFF22C55E).withValues(alpha: 0.15),
-            actionBarColor: const Color(0xFFF0FDF4),
-            statusText: 'Running',
-            statusIcon: Icons.directions_car,
-          );
-        case DeviceStatus.idle:
-          return _StatusColors(
-            primary: const Color(0xFFF59E0B),
-            bgGradientStart: const Color(0xFFFEF3C7),
-            bgGradientEnd: const Color(0xFFFFFBEB),
-            borderColor: const Color(0xFFFCD34D),
-            iconBgColor: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-            actionBarColor: const Color(0xFFFFFBEB),
-            statusText: 'Idle',
-            statusIcon: Icons.pause_circle_outline,
-          );
-        case DeviceStatus.stop:
-          return _StatusColors(
-            primary: const Color(0xFF3B82F6),
-            bgGradientStart: const Color(0xFFDBEAFE),
-            bgGradientEnd: const Color(0xFFEFF6FF),
-            borderColor: const Color(0xFF93C5FD),
-            iconBgColor: const Color(0xFF3B82F6).withValues(alpha: 0.15),
-            actionBarColor: const Color(0xFFEFF6FF),
-            statusText: 'Stopped',
-            statusIcon: Icons.local_parking,
-          );
-        case DeviceStatus.offline:
-          return _StatusColors(
-            primary: const Color(0xFFEF4444),
-            bgGradientStart: const Color(0xFFFEE2E2),
-            bgGradientEnd: const Color(0xFFFEF2F2),
-            borderColor: const Color(0xFFFCA5A5),
-            iconBgColor: const Color(0xFFEF4444).withValues(alpha: 0.15),
-            actionBarColor: const Color(0xFFFEF2F2),
-            statusText: 'Offline',
-            statusIcon: Icons.power_off,
-          );
-      }
-    }
-
-    // Fallback to iconColor based (original logic)
-    switch (iconColor) {
-      case "green":
+  _StatusColors _getStatusColors(DeviceStatus status) {
+    switch (status) {
+      case DeviceStatus.running:
         return _StatusColors(
-          primary: const Color(0xFF22C55E),
+          primary: const Color(0xFF22C55E),  // Green
           bgGradientStart: const Color(0xFFDCFCE7),
           bgGradientEnd: const Color(0xFFF0FDF4),
           borderColor: const Color(0xFF86EFAC),
@@ -1204,9 +1198,9 @@ class _DevicePageState extends State<DevicePage> {
           statusText: 'Running',
           statusIcon: Icons.directions_car,
         );
-      case "yellow":
+      case DeviceStatus.idle:
         return _StatusColors(
-          primary: const Color(0xFFF59E0B),
+          primary: const Color(0xFFF59E0B),  // Yellow/Amber
           bgGradientStart: const Color(0xFFFEF3C7),
           bgGradientEnd: const Color(0xFFFFFBEB),
           borderColor: const Color(0xFFFCD34D),
@@ -1215,27 +1209,27 @@ class _DevicePageState extends State<DevicePage> {
           statusText: 'Idle',
           statusIcon: Icons.pause_circle_outline,
         );
-      case "red":
+      case DeviceStatus.stop:
         return _StatusColors(
-          primary: const Color(0xFFEF4444),
+          primary: const Color(0xFFEF4444),  // Red
+          bgGradientStart: const Color(0xFFFEE2E2),
+          bgGradientEnd: const Color(0xFFFEF2F2),
+          borderColor: const Color(0xFFFCA5A5),
+          iconBgColor: const Color(0xFFEF4444).withValues(alpha: 0.15),
+          actionBarColor: const Color(0xFFFEF2F2),
+          statusText: 'Stopped',
+          statusIcon: Icons.local_parking,
+        );
+      case DeviceStatus.offline:
+        return _StatusColors(
+          primary: const Color(0xFFEF4444),  // Red
           bgGradientStart: const Color(0xFFFEE2E2),
           bgGradientEnd: const Color(0xFFFEF2F2),
           borderColor: const Color(0xFFFCA5A5),
           iconBgColor: const Color(0xFFEF4444).withValues(alpha: 0.15),
           actionBarColor: const Color(0xFFFEF2F2),
           statusText: 'Offline',
-          statusIcon: Icons.power_off,
-        );
-      default:
-        return _StatusColors(
-          primary: const Color(0xFF6B7280),
-          bgGradientStart: const Color(0xFFF3F4F6),
-          bgGradientEnd: const Color(0xFFF9FAFB),
-          borderColor: const Color(0xFFD1D5DB),
-          iconBgColor: const Color(0xFF6B7280).withValues(alpha: 0.15),
-          actionBarColor: const Color(0xFFF9FAFB),
-          statusText: 'Unknown',
-          statusIcon: Icons.help_outline,
+          statusIcon: Icons.signal_wifi_off,
         );
     }
   }
@@ -1244,13 +1238,12 @@ class _DevicePageState extends State<DevicePage> {
       DeviceItem device, BuildContext context, int index, int totalLength) {
     // Get actual device status
     final deviceStatus = _getDeviceStatus(device);
-    final statusColors =
-    _getStatusColors(device.iconColor, status: deviceStatus);
+    final statusColors = _getStatusColors(deviceStatus);
     final sensors = _buildSensorWidgets(device, statusColors);
     final isLocked = false;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -1264,13 +1257,15 @@ class _DevicePageState extends State<DevicePage> {
               if (index.isEven) BannerAdWidget(),
               Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      statusColors.bgGradientStart,
-                      statusColors.bgGradientEnd,
+                      // statusColors.bgGradientStart,
+                      // statusColors.bgGradientEnd,
+                      Colors.white,
+                      Colors.white60
                     ],
                   ),
                   boxShadow: [
@@ -1304,7 +1299,7 @@ class _DevicePageState extends State<DevicePage> {
                         children: [
                           Row(
                             children: [
-                              _buildVehicleIcon(device, statusColors),
+                              _buildVehicleIcon(device, statusColors, deviceStatus),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: _buildVehicleInfo(
@@ -1339,9 +1334,7 @@ class _DevicePageState extends State<DevicePage> {
     );
   }
 
-  Widget _buildVehicleIcon(DeviceItem device, _StatusColors statusColors) {
-    final deviceStatus = _getDeviceStatus(device);
-
+  Widget _buildVehicleIcon(DeviceItem device, _StatusColors statusColors, DeviceStatus deviceStatus) {
     return Stack(
       children: [
         Container(
@@ -1428,9 +1421,9 @@ class _DevicePageState extends State<DevicePage> {
       case DeviceStatus.idle:
         return Icons.pause;
       case DeviceStatus.stop:
-        return Icons.local_parking;
-      case DeviceStatus.offline:
         return Icons.power_off;
+      case DeviceStatus.offline:
+        return Icons.signal_wifi_off;
     }
   }
 
@@ -1520,7 +1513,9 @@ class _DevicePageState extends State<DevicePage> {
             children: [
               Icon(
                 status == DeviceStatus.stop
-                    ? Icons.local_parking
+                    ? Icons.power_off
+                    : status == DeviceStatus.idle
+                    ? Icons.pause
                     : Icons.speed,
                 size: 16,
                 color: statusColors.primary,
@@ -1528,7 +1523,9 @@ class _DevicePageState extends State<DevicePage> {
               const SizedBox(width: 6),
               Text(
                 status == DeviceStatus.stop
-                    ? 'Parked'
+                    ? 'Engine Off'
+                    : status == DeviceStatus.idle
+                    ? 'Engine On'
                     : convertSpeed(device.speed, device.distanceUnitHour!),
                 style: TextStyle(
                   color: statusColors.primary,
@@ -1604,7 +1601,7 @@ class _DevicePageState extends State<DevicePage> {
         ),
         child: Icon(
           icon,
-          color: statusColors.primary,
+          color: Colors.black,
           size: 20,
         ),
       ),
@@ -1727,11 +1724,11 @@ class _DevicePageState extends State<DevicePage> {
                 color: Colors.white,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: statusColors.primary.withValues(alpha: 0.2),
+                  color: Colors.grey.shade100
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: statusColors.primary.withValues(alpha: 0.1),
+                    color: Colors.grey,
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -1739,7 +1736,7 @@ class _DevicePageState extends State<DevicePage> {
               ),
               child: Icon(
                 icon,
-                color: statusColors.primary,
+                color: Colors.black.withValues(alpha: 0.4),
                 size: 20,
               ),
             ),
@@ -1747,7 +1744,7 @@ class _DevicePageState extends State<DevicePage> {
             Text(
               label,
               style: TextStyle(
-                color: statusColors.primary,
+                color: Colors.black,
                 fontWeight: FontWeight.w600,
                 fontSize: 10.5,
                 letterSpacing: 0.2,
@@ -1761,8 +1758,7 @@ class _DevicePageState extends State<DevicePage> {
 
   void _showMoreOptions(BuildContext context, DeviceItem device) {
     final deviceStatus = _getDeviceStatus(device);
-    final statusColors =
-    _getStatusColors(device.iconColor, status: deviceStatus);
+    final statusColors = _getStatusColors(deviceStatus);
     final isLocked = false;
 
     showModalBottomSheet(
@@ -1783,8 +1779,8 @@ class _DevicePageState extends State<DevicePage> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                statusColors.bgGradientStart,
-                statusColors.bgGradientEnd,
+                Colors.grey,
+                Colors.grey,
               ],
             ),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -1890,7 +1886,9 @@ class _DevicePageState extends State<DevicePage> {
                                 const SizedBox(width: 8),
                                 Text(
                                   deviceStatus == DeviceStatus.stop
-                                      ? 'Parked'
+                                      ? 'Engine Off'
+                                      : deviceStatus == DeviceStatus.idle
+                                      ? 'Engine On'
                                       : convertSpeed(device.speed,
                                       device.distanceUnitHour!),
                                   style: TextStyle(
@@ -1924,7 +1922,7 @@ class _DevicePageState extends State<DevicePage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Colors.white60,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
@@ -2089,7 +2087,7 @@ class _DevicePageState extends State<DevicePage> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Colors.white60,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(

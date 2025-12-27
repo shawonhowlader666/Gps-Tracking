@@ -5,7 +5,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/config.dart';
 import 'package:gpspro/services/api_service.dart';
-import 'package:gpspro/services/model/device_item.dart';
+import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/widgets/banner_ad_widget.dart';
 
@@ -18,7 +18,8 @@ class LockUnlockScreen extends StatefulWidget {
   _LockUnlockScreenState createState() => _LockUnlockScreenState();
 }
 
-class _LockUnlockScreenState extends State<LockUnlockScreen> {
+class _LockUnlockScreenState extends State<LockUnlockScreen>
+    with SingleTickerProviderStateMixin {
   List<String> _commands = <String>[];
   List<String> _commandsValue = <String>[];
   int _selectedCommand = 0;
@@ -26,19 +27,78 @@ class _LockUnlockScreenState extends State<LockUnlockScreen> {
   double _dialogCommandHeight = 150.0;
   TextEditingController _customCommand = TextEditingController();
   bool _isLoading = false;
+  bool _isEngineOn = false;
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkEngineStatus();
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+  }
+
+  @override
+  void dispose() {
+    _customCommand.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _checkEngineStatus() {
+    if (widget.device.engineStatus != null) {
+      final status = widget.device.engineStatus;
+      if (status is bool) {
+        setState(() => _isEngineOn = status);
+      } else if (status is int) {
+        setState(() => _isEngineOn = status == 1);
+      } else if (status is String) {
+        final s = status.toLowerCase().trim();
+        setState(() => _isEngineOn = s == 'on' || s == '1' || s == 'true');
+      }
+    } else {
+      final traccar = widget.device.deviceData?.traccar;
+      if (traccar != null) {
+        final engineOnAt = traccar.engineOnAt;
+        final engineOffAt = traccar.engineOffAt;
+        if (engineOnAt != null && engineOffAt != null) {
+          try {
+            final onTime = DateTime.parse(engineOnAt);
+            final offTime = DateTime.parse(engineOffAt);
+            setState(() => _isEngineOn = onTime.isAfter(offTime));
+          } catch (_) {}
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-        title: Text('lockUnlockDevice'.tr),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        title: Text(
+          'Engine Control',
+          style: const TextStyle(
+            color: Color(0xFF1E293B),
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+          ),
+        ),
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF64748B)),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         actions: [
           IconButton(
-            icon: m.Icon(Icons.more_vert),
-            onPressed: () {
-              showCommandDialog(context, widget.device);
-            },
+            icon: const m.Icon(Icons.settings, color: Color(0xFF64748B)),
+            onPressed: () => showCommandDialog(context, widget.device),
           ),
         ],
       ),
@@ -48,58 +108,125 @@ class _LockUnlockScreenState extends State<LockUnlockScreen> {
             children: [
               Expanded(
                 child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Card(
-                      elevation: 8,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'deviceControl'.tr,
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).primaryColor,
-                              ),
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Vehicle Name
+                          Text(
+                            widget.device.name ?? 'Unknown Device',
+                            style: const TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
                             ),
-                            SizedBox(height: 20),
+                            textAlign: TextAlign.center,
+                          ),
+
+                          if (widget.device.deviceData?.plateNumber != null) ...[
+                            const SizedBox(height: 8),
                             Text(
-                              widget.device.name ?? '',
+                              widget.device.deviceData!.plateNumber!,
                               style: TextStyle(
-                                fontSize: 18,
+                                fontSize: 16,
+                                color: Colors.grey[600],
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            SizedBox(height: 30),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          ],
+
+                          const SizedBox(height: 60),
+
+                          // Engine Status Text
+                          Text(
+                            'ENGINE STATUS',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[500],
+                              letterSpacing: 2,
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Status Indicator
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _isEngineOn
+                                  ? const Color(0xFF22C55E).withOpacity(0.1)
+                                  : const Color(0xFFEF4444).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: _isEngineOn
+                                    ? const Color(0xFF22C55E)
+                                    : const Color(0xFFEF4444),
+                                width: 2,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                _buildControlButton(
-                                  context,
-                                  icon: Icons.lock_outline,
-                                  label: 'lock'.tr.toUpperCase(),
-                                  color: Colors.red,
-                                  onPressed: () =>
-                                      sendEngineCommand('engineStop'),
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _isEngineOn
+                                        ? const Color(0xFF22C55E)
+                                        : const Color(0xFFEF4444),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: (_isEngineOn
+                                            ? const Color(0xFF22C55E)
+                                            : const Color(0xFFEF4444))
+                                            .withOpacity(0.6),
+                                        blurRadius: 8,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                _buildControlButton(
-                                  context,
-                                  icon: Icons.lock_open,
-                                  label: 'unlock'.tr.toUpperCase(),
-                                  color: Colors.green,
-                                  onPressed: () =>
-                                      sendEngineCommand('engineResume'),
+                                const SizedBox(width: 12),
+                                Text(
+                                  _isEngineOn ? 'UNLOCKED' : 'LOCKED',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: _isEngineOn
+                                        ? const Color(0xFF22C55E)
+                                        : const Color(0xFFEF4444),
+                                    letterSpacing: 1.5,
+                                  ),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
+                          ),
+
+                          const SizedBox(height: 80),
+
+                          // Analog Button
+                          _buildAnalogButton(),
+
+                          const SizedBox(height: 40),
+
+                          // Info Text
+                          Text(
+                            _isEngineOn
+                                ? 'Tap to lock engine'
+                                : 'Tap to unlock engine',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -108,55 +235,199 @@ class _LockUnlockScreenState extends State<LockUnlockScreen> {
               BannerAdWidget(forceShow: ALWAYS_SHOW_BANNER_ADS),
             ],
           ),
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: Center(
-                child: CircularProgressIndicator(),
-              ),
-            ),
+          if (_isLoading) _buildLoadingOverlay(),
         ],
       ),
     );
   }
 
-  Widget _buildControlButton(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onPressed,
-  }) {
-    return Column(
-      children: [
-        SizedBox(
-          width: 100,
-          height: 100,
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : onPressed,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: color,
-              shape: CircleBorder(),
-              padding: EdgeInsets.all(20),
+  Widget _buildAnalogButton() {
+    final isOn = _isEngineOn;
+    final buttonColor = isOn ? const Color(0xFFEF4444) : const Color(0xFF22C55E);
+    final buttonText = isOn ? 'OFF' : 'ON';
+
+    return GestureDetector(
+      onTapDown: (_) => _animationController.forward(),
+      onTapUp: (_) {
+        _animationController.reverse();
+        if (!_isLoading) {
+          _toggleEngine();
+        }
+      },
+      onTapCancel: () => _animationController.reverse(),
+      child: AnimatedBuilder(
+        animation: _animationController,
+        builder: (context, child) {
+          final scale = 1.0 - (_animationController.value * 0.05);
+          return Transform.scale(
+            scale: scale,
+            child: Container(
+              width: 220,
+              height: 220,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFF1E293B),
+                    const Color(0xFF0F172A),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.4),
+                    blurRadius: 30,
+                    offset: Offset(0, _animationController.value * 10 + 15),
+                    spreadRadius: -5,
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 15,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        const Color(0xFF334155),
+                        const Color(0xFF1E293B),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 10,
+                        offset: const Offset(5, 5),
+                        spreadRadius: -5,
+                      ),
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(-5, -5),
+                        spreadRadius: -5,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: buttonColor,
+                        boxShadow: [
+                          BoxShadow(
+                            color: buttonColor.withOpacity(0.7),
+                            blurRadius: 40,
+                            spreadRadius: 5,
+                          ),
+                          BoxShadow(
+                            color: buttonColor.withOpacity(0.4),
+                            blurRadius: 60,
+                            spreadRadius: 15,
+                          ),
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 15,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        children: [
+                          // Shine effect
+                          Positioned(
+                            top: 15,
+                            left: 15,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: RadialGradient(
+                                  colors: [
+                                    Colors.white.withOpacity(0.4),
+                                    Colors.white.withOpacity(0.0),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Text
+                          Center(
+                            child: Text(
+                              buttonText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 3,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black26,
+                                    offset: Offset(0, 2),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-            child: m.Icon(
-              icon,
-              size: 40,
-              color: Colors.white,
-            ),
-          ),
-        ),
-        SizedBox(height: 10),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-      ],
+          );
+        },
+      ),
     );
+  }
+
+  Widget _buildLoadingOverlay() {
+    return Container(
+      color: Colors.black.withOpacity(0.5),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(
+                strokeWidth: 3,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Sending command...',
+                style: TextStyle(
+                  color: Colors.grey[800],
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _toggleEngine() {
+    final commandType = _isEngineOn ? 'engineStop' : 'engineResume';
+    sendEngineCommand(commandType);
   }
 
   void sendEngineCommand(String commandType) async {
@@ -172,28 +443,34 @@ class _LockUnlockScreenState extends State<LockUnlockScreen> {
       final res = await APIService.sendCommands(requestBody);
 
       if (res.statusCode == 200) {
+        setState(() {
+          _isEngineOn = commandType == 'engineResume';
+        });
+
         Fluttertoast.showToast(
-          msg: 'commandSentSuccessfully'.tr,
+          msg: commandType == 'engineStop'
+              ? 'Engine locked successfully'
+              : 'Engine unlocked successfully',
           toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.CENTER,
-          backgroundColor: Colors.green,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFF22C55E),
           textColor: Colors.white,
         );
       } else {
         Fluttertoast.showToast(
-          msg: 'errorSendingCommand'.tr,
+          msg: 'Failed to send command',
           toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.CENTER,
-          backgroundColor: Colors.red,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFFEF4444),
           textColor: Colors.white,
         );
       }
     } catch (e) {
       Fluttertoast.showToast(
-        msg: 'connectionError'.tr,
+        msg: 'Connection error',
         toastLength: Toast.LENGTH_SHORT,
-        gravity: ToastGravity.CENTER,
-        backgroundColor: Colors.red,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: const Color(0xFFEF4444),
         textColor: Colors.white,
       );
     } finally {
@@ -209,104 +486,160 @@ class _LockUnlockScreenState extends State<LockUnlockScreen> {
 
     Dialog simpleDialog = Dialog(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: StatefulBuilder(
         builder: (BuildContext context, StateSetter setState) {
           Iterable list;
           APIService.getSavedCommands(device.id.toString()).then((value) => {
-                if (value != null)
+            if (value != null)
+              {
+                list = json.decode(value.body),
+                if (_commands.isEmpty)
                   {
-                    list = json.decode(value.body),
-                    if (_commands.isEmpty)
-                      {
-                        list.forEach((element) {
-                          _commands.add(element["title"]);
-                          _commandsValue.add(element["type"]);
-                        }),
-                        setState(() {}),
-                      }
+                    list.forEach((element) {
+                      _commands.add(element["title"]);
+                      _commandsValue.add(element["type"]);
+                    }),
+                    setState(() {}),
                   }
-              });
+              }
+          });
 
           return Container(
-            height: _dialogCommandHeight,
-            width: 300.0,
-            padding: EdgeInsets.all(20),
+            constraints: BoxConstraints(
+              maxHeight: _dialogCommandHeight + 50,
+            ),
+            padding: const EdgeInsets.all(20),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  'sendCommand'.tr,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 15),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    _commands.isNotEmpty
-                        ? DropdownButton<String>(
-                            hint: Text(('select_command').tr),
-                            value: _commands.isNotEmpty
-                                ? _commands[_selectedCommand]
-                                : null,
-                            items: _commands.map((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(
-                                  value,
-                                  style: TextStyle(),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                if (value == ("customCommand").tr) {
-                                  _dialogCommandHeight = 200.0;
-                                } else {
-                                  _dialogCommandHeight = 150.0;
-                                }
-                                _commandSelected = value!;
-                                _selectedCommand = _commands.indexOf(value);
-                              });
-                            },
-                          )
-                        : CircularProgressIndicator(),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2563EB).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.send,
+                        color: Color(0xFF2563EB),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'sendCommand'.tr,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
                   ],
                 ),
-                if (_commandSelected == ("customCommand").tr)
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: _commands.isNotEmpty
+                      ? DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      hint: Text('select_command'.tr),
+                      value: _commands.isNotEmpty
+                          ? _commands[_selectedCommand]
+                          : null,
+                      items: _commands.map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            value,
+                            style: const TextStyle(fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          if (value == "customCommand".tr) {
+                            _dialogCommandHeight = 200.0;
+                          } else {
+                            _dialogCommandHeight = 150.0;
+                          }
+                          _commandSelected = value!;
+                          _selectedCommand = _commands.indexOf(value);
+                        });
+                      },
+                    ),
+                  )
+                      : const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                ),
+                if (_commandSelected == "customCommand".tr)
                   Padding(
-                    padding: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.only(top: 16),
                     child: TextField(
                       controller: _customCommand,
                       decoration: InputDecoration(
-                        labelText: ('commandCustom').tr,
-                        border: OutlineInputBorder(),
+                        labelText: 'commandCustom'.tr,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.all(12),
                       ),
                     ),
                   ),
-                Spacer(),
+                const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: <Widget>[
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                      ),
                       child: Text(
-                        ('cancel').tr,
-                        style: TextStyle(color: Colors.red),
+                        'cancel'.tr,
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: CustomColor.primaryColor,
+                        backgroundColor: const Color(0xFF2563EB),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
                       ),
                       onPressed: () => sendCommand(device),
-                      child: Text(('ok').tr),
+                      child: Text(
+                        'ok'.tr,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -326,7 +659,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen> {
   void sendCommand(DeviceItem device) async {
     try {
       Map<String, String> requestBody;
-      if (_commandSelected == ("customCommand").tr) {
+      if (_commandSelected == "customCommand".tr) {
         requestBody = <String, String>{
           'id': "",
           'device_id': device.id.toString(),
@@ -345,19 +678,20 @@ class _LockUnlockScreenState extends State<LockUnlockScreen> {
 
       if (res.statusCode == 200) {
         Fluttertoast.showToast(
-          msg: ('command_sent').tr,
+          msg: 'command_sent'.tr,
           toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.CENTER,
-          backgroundColor: Colors.green,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFF22C55E),
           textColor: Colors.white,
         );
         Navigator.of(context).pop();
+        _checkEngineStatus();
       } else {
         Fluttertoast.showToast(
-          msg: ('errorMsg').tr,
+          msg: 'errorMsg'.tr,
           toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.CENTER,
-          backgroundColor: Colors.red,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFFEF4444),
           textColor: Colors.white,
         );
       }
@@ -365,8 +699,8 @@ class _LockUnlockScreenState extends State<LockUnlockScreen> {
       Fluttertoast.showToast(
         msg: 'Connection error',
         toastLength: Toast.LENGTH_SHORT,
-        gravity: ToastGravity.CENTER,
-        backgroundColor: Colors.red,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: const Color(0xFFEF4444),
         textColor: Colors.white,
       );
     }
