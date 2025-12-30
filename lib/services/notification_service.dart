@@ -15,32 +15,27 @@ class NotificationService {
 
   bool _isInitialized = false;
 
-  // Initialize notification service
   Future<void> initialize(FlutterLocalNotificationsPlugin plugin) async {
     if (_isInitialized) return;
 
     _localNotifications = plugin;
 
     try {
-      // Create additional notification channels
       await _createNotificationChannels();
-
-      // Setup message handlers
       _setupMessageHandlers();
-
       _isInitialized = true;
-      print("✅ Notification Service Initialized");
     } catch (e) {
-      print("❌ Notification initialization error: $e");
+      print("Error initializing notification service: $e");
     }
   }
 
-  // Create Android notification channels
+  // Create Android notification channels - USE DEFAULT SOUND FIRST
   Future<void> _createNotificationChannels() async {
     if (!Platform.isAndroid) return;
 
+    // Alert channel - using default sound (safer)
     const AndroidNotificationChannel alertChannel = AndroidNotificationChannel(
-      'alert_channel',
+      'alert_channel_v1', // Use versioned channel ID
       'Alert Notifications',
       description: 'Critical alerts and SOS notifications',
       importance: Importance.max,
@@ -48,15 +43,30 @@ class NotificationService {
       playSound: true,
       enableLights: true,
       ledColor: Color(0xFFFF0000),
+      // Remove custom sound to test first, or use:
+      // sound: RawResourceAndroidNotificationSound('alert_sound'),
     );
 
+    // Event channel
     const AndroidNotificationChannel eventChannel = AndroidNotificationChannel(
-      'event_channel',
+      'event_channel_v1', // Use versioned channel ID
       'Event Notifications',
       description: 'GPS tracking event notifications',
       importance: Importance.high,
       enableVibration: true,
       playSound: true,
+    );
+
+    // SOS channel
+    const AndroidNotificationChannel sosChannel = AndroidNotificationChannel(
+      'sos_channel_v1', // Use versioned channel ID
+      'SOS Notifications',
+      description: 'Emergency SOS alerts',
+      importance: Importance.max,
+      enableVibration: true,
+      playSound: true,
+      enableLights: true,
+      ledColor: Color(0xFFFF0000),
     );
 
     final androidPlugin = _localNotifications
@@ -66,149 +76,205 @@ class NotificationService {
     if (androidPlugin != null) {
       await androidPlugin.createNotificationChannel(alertChannel);
       await androidPlugin.createNotificationChannel(eventChannel);
+      await androidPlugin.createNotificationChannel(sosChannel);
     }
   }
 
-  // Setup message handlers
   void _setupMessageHandlers() {
-    // Handle notification opened from terminated state
     FirebaseMessaging.instance.getInitialMessage().then((message) {
       if (message != null) {
         _handleNotificationOpen(message.data);
       }
     });
 
-    // Handle notification opened from background state
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       _handleNotificationOpen(message.data);
     });
   }
 
-  // Show local notification for events
+  // Show local notification - WITH ERROR HANDLING
+  Future<void> showLocalNotification({
+    int? id,
+    required String title,
+    required String body,
+    String? payload,
+    String channelId = 'event_channel_v1',
+    Priority priority = Priority.high,
+    Importance importance = Importance.high,
+  }) async {
+    try {
+      final androidDetails = AndroidNotificationDetails(
+        channelId,
+        _getChannelName(channelId),
+        channelDescription: _getChannelDescription(channelId),
+        importance: importance,
+        priority: priority,
+        showWhen: true,
+        enableVibration: true,
+        playSound: true,
+        // Use default sound (remove custom sound for now)
+        // sound: RawResourceAndroidNotificationSound('notification_sound'),
+        icon: '@mipmap/ic_launcher', // Use default launcher icon
+        styleInformation: BigTextStyleInformation(
+          body,
+          contentTitle: title,
+          summaryText: 'Trust Me',
+        ),
+      );
+
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      final notificationDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await _localNotifications.show(
+        id ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title,
+        body,
+        notificationDetails,
+        payload: payload,
+      );
+    } catch (e) {
+      print("Error showing notification: $e");
+      // Fallback: Try with minimal settings
+      await _showFallbackNotification(id, title, body, payload);
+    }
+  }
+
+  // Fallback notification with minimal settings
+  Future<void> _showFallbackNotification(
+      int? id,
+      String title,
+      String body,
+      String? payload,
+      ) async {
+    try {
+      const androidDetails = AndroidNotificationDetails(
+        'default_channel',
+        'Default Notifications',
+        channelDescription: 'Default notification channel',
+        importance: Importance.high,
+        priority: Priority.high,
+      );
+
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      await _localNotifications.show(
+        id ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title,
+        body,
+        const NotificationDetails(android: androidDetails, iOS: iosDetails),
+        payload: payload,
+      );
+    } catch (e) {
+      print("Fallback notification also failed: $e");
+    }
+  }
+
+  // Show event notification
   Future<void> showEventNotification(Event event) async {
     final eventStyle = _getEventStyle(event.message ?? '');
+
+    String channelId;
+    if (eventStyle.isSOS) {
+      channelId = 'sos_channel_v1';
+    } else if (eventStyle.isAlert) {
+      channelId = 'alert_channel_v1';
+    } else {
+      channelId = 'event_channel_v1';
+    }
 
     await showLocalNotification(
       id: event.id ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: '${eventStyle.emoji} ${event.device_name ?? "Unknown Device"}',
       body: event.message ?? 'New event occurred',
       payload: event.id.toString(),
-      channelId: eventStyle.isAlert ? 'alert_channel' : 'event_channel',
+      channelId: channelId,
       priority: eventStyle.isAlert ? Priority.max : Priority.high,
       importance: eventStyle.isAlert ? Importance.max : Importance.high,
     );
   }
 
-  // Show local notification
-  Future<void> showLocalNotification({
-    int? id,
-    required String title,
-    required String body,
-    String? payload,
-    String channelId = 'event_channel',
-    Priority priority = Priority.high,
-    Importance importance = Importance.high,
-  }) async {
-    final androidDetails = AndroidNotificationDetails(
-      channelId,
-      channelId == 'alert_channel'
-          ? 'Alert Notifications'
-          : 'Event Notifications',
-      channelDescription: channelId == 'alert_channel'
-          ? 'Critical alerts and SOS notifications'
-          : 'GPS tracking event notifications',
-      importance: importance,
-      priority: priority,
-      showWhen: true,
-      enableVibration: true,
-      playSound: true,
-      icon: 'logo', // Your existing icon
-      largeIcon: const DrawableResourceAndroidBitmap('logo'),
-      styleInformation: BigTextStyleInformation(
-        body,
-        contentTitle: title,
-        summaryText: 'GPS Pro',
-      ),
-    );
-
-    final iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      subtitle: body,
-    );
-
-    final notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _localNotifications.show(
-      id ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title,
-      body,
-      notificationDetails,
-      payload: payload,
-    );
+  String _getChannelName(String channelId) {
+    switch (channelId) {
+      case 'alert_channel_v1':
+        return 'Alert Notifications';
+      case 'sos_channel_v1':
+        return 'SOS Notifications';
+      case 'event_channel_v1':
+      default:
+        return 'Event Notifications';
+    }
   }
 
-  // Handle notification open
+  String _getChannelDescription(String channelId) {
+    switch (channelId) {
+      case 'alert_channel_v1':
+        return 'Critical alerts notifications';
+      case 'sos_channel_v1':
+        return 'Emergency SOS alerts';
+      case 'event_channel_v1':
+      default:
+        return 'GPS tracking event notifications';
+    }
+  }
+
   void _handleNotificationOpen(Map<String, dynamic> data) {
     print("Notification opened with data: $data");
 
     Future.delayed(const Duration(milliseconds: 500), () {
       try {
-        if (data.containsKey('eventId')) {
-          // Navigate to specific event
-          Get.toNamed('/events');
-        } else {
-          // Navigate to events page
-          Get.toNamed('/events');
-        }
+        Get.toNamed('/events');
       } catch (e) {
         print("Navigation error: $e");
       }
     });
   }
 
-  // Get event style
   _EventNotificationStyle _getEventStyle(String message) {
     message = message.toLowerCase();
 
-    if (message.contains('alarm') ||
-        message.contains('sos') ||
-        message.contains('alert')) {
-      return _EventNotificationStyle(emoji: '🚨', isAlert: true);
+    if (message.contains('sos')) {
+      return _EventNotificationStyle(emoji: '🆘', isAlert: true, isSOS: true);
+    } else if (message.contains('alarm') || message.contains('alert')) {
+      return _EventNotificationStyle(emoji: '🚨', isAlert: true, isSOS: false);
     } else if (message.contains('speed')) {
-      return _EventNotificationStyle(emoji: '⚡', isAlert: true);
+      return _EventNotificationStyle(emoji: '⚡', isAlert: true, isSOS: false);
     } else if (message.contains('geofence')) {
-      return _EventNotificationStyle(emoji: '📍', isAlert: false);
+      return _EventNotificationStyle(emoji: '📍', isAlert: false, isSOS: false);
     } else if (message.contains('ignition')) {
-      return _EventNotificationStyle(emoji: '🔑', isAlert: false);
+      return _EventNotificationStyle(emoji: '🔑', isAlert: false, isSOS: false);
     } else if (message.contains('online')) {
-      return _EventNotificationStyle(emoji: '✅', isAlert: false);
+      return _EventNotificationStyle(emoji: '✅', isAlert: false, isSOS: false);
     } else if (message.contains('offline')) {
-      return _EventNotificationStyle(emoji: '❌', isAlert: false);
+      return _EventNotificationStyle(emoji: '❌', isAlert: false, isSOS: false);
     } else if (message.contains('fuel')) {
-      return _EventNotificationStyle(emoji: '⛽', isAlert: true);
+      return _EventNotificationStyle(emoji: '⛽', isAlert: true, isSOS: false);
     } else if (message.contains('battery')) {
-      return _EventNotificationStyle(emoji: '🔋', isAlert: true);
+      return _EventNotificationStyle(emoji: '🔋', isAlert: true, isSOS: false);
     }
 
-    return _EventNotificationStyle(emoji: '🔔', isAlert: false);
+    return _EventNotificationStyle(emoji: '🔔', isAlert: false, isSOS: false);
   }
 
-  // Get FCM token
   Future<String?> getToken() async {
     return await _fcm.getToken();
   }
 
-  // Cancel all notifications
   Future<void> cancelAll() async {
     await _localNotifications.cancelAll();
   }
 
-  // Cancel specific notification
   Future<void> cancel(int id) async {
     await _localNotifications.cancel(id);
   }
@@ -217,6 +283,11 @@ class NotificationService {
 class _EventNotificationStyle {
   final String emoji;
   final bool isAlert;
+  final bool isSOS;
 
-  _EventNotificationStyle({required this.emoji, required this.isAlert});
+  _EventNotificationStyle({
+    required this.emoji,
+    required this.isAlert,
+    required this.isSOS,
+  });
 }

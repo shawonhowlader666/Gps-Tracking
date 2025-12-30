@@ -9,29 +9,31 @@ import 'package:gpspro/screens/report/report_event.dart';
 import 'package:gpspro/theme/custom_color.dart';
 
 class EventMapPage extends StatefulWidget {
+  const EventMapPage({super.key});
+
   @override
   _EventMapPageState createState() => _EventMapPageState();
 }
 
 class _EventMapPageState extends State<EventMapPage> {
-  Completer<GoogleMapController> _controller = Completer();
+  final Completer<GoogleMapController> _controller = Completer();
   GoogleMapController? mapController;
   StreamController<int>? _postsController;
-  MapType _currentMapType = MapType.normal;
+  final MapType _currentMapType = MapType.normal;
   static ReportEventArgument? args;
-  Set<Marker> _markers = Set<Marker>();
+  final Set<Marker> _markers = <Marker>{};
   Timer? _timer;
   Event? event;
 
   @override
   void initState() {
-    _postsController = new StreamController();
+    _postsController = StreamController();
     getPosition();
     super.initState();
   }
 
   void getPosition() {
-    _timer = new Timer.periodic(Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (args != null) _timer!.cancel();
       // APIService.getEventById(args.eventId.toString()).then((event) => {
       //       APIService.getPositionById(

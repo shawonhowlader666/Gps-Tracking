@@ -13,7 +13,7 @@ import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
 
 class GeofenceAddPage extends StatefulWidget {
-  const GeofenceAddPage({Key? key}) : super(key: key);
+  const GeofenceAddPage({super.key});
 
   @override
   State<GeofenceAddPage> createState() => _GeofenceAddPageState();
@@ -34,10 +34,10 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
   LatLng? _currentLocation;
 
   // Markers and Shapes
-  Set<Marker> _markers = {};
-  Set<Circle> _circles = {};
-  Set<Polygon> _polygons = {};
-  List<LatLng> _polygonPoints = [];
+  final Set<Marker> _markers = {};
+  final Set<Circle> _circles = {};
+  final Set<Polygon> _polygons = {};
+  final List<LatLng> _polygonPoints = [];
 
   // Geofence settings
   String _geofenceType = 'circle';
@@ -46,9 +46,9 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
   Color _fenceColor = Colors.blue;
 
   // Device selection
-  List<DeviceItem> _selectedDevices = [];
+  final List<DeviceItem> _selectedDevices = [];
   List<DeviceItem> _devicesList = [];
-  List<DeviceItem> _searchResult = [];
+  final List<DeviceItem> _searchResult = [];
 
   // UI State
   bool _showControlPanel = false;

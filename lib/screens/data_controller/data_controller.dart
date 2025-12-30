@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:gpspro/services/model/device.dart';
@@ -92,7 +94,6 @@ class DataController extends GetxController {
         _reapplyCurrentFilter();
       }
     } catch (e) {
-      print("Error getting devices: $e");
       isLoading.value = false;
     }
   }
@@ -180,18 +181,42 @@ class DataController extends GetxController {
 
   void getEvents() async {
     try {
+      isEventLoading.value = true;
+
       final eventsResponse = await APIService.getEventList();
-      if (eventsResponse != null) {
+
+      if (eventsResponse != null && eventsResponse.isNotEmpty) {
         // Check for new events and show notifications
         _checkForNewEvents(eventsResponse);
-
         events.value = eventsResponse;
+      } else {
+        // Handle empty events
+        events.value = <Event>[].obs;
       }
+
+    } on SocketException catch (e) {
+      _showError('No internet connection. Please check your network.');
+    } on TimeoutException catch (e) {
+      _showError('Connection timeout. Please try again.');
+    } on Exception catch (e) {
+      _showError(e.toString().replaceAll('Exception: ', ''));
     } catch (e) {
-      print("Error getting events: $e");
+      _showError('An unexpected error occurred');
     } finally {
       isEventLoading.value = false;
     }
+  }
+
+// Helper method to show errors
+  void _showError(String message) {
+    Get.snackbar(
+      'Error',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+    );
   }
 
   // Check for new events and trigger notifications
@@ -209,7 +234,6 @@ class DataController extends GetxController {
       if (event.id != null && !_previousEventIds.contains(event.id)) {
         // New event detected - show notification
         _notificationService.showEventNotification(event);
-        print("🔔 New event notification: ${event.message}");
       }
     }
 

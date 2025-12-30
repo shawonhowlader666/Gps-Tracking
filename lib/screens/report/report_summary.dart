@@ -4,16 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/arguments/report_args.dart';
 import 'package:gpspro/flutter_flow/flutter_flow_theme.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
-
 
 class TravelRecord {
   final String date;
@@ -220,7 +217,6 @@ class _ReportSummaryPageState extends State<ReportSummaryPage> {
     }
   }
 
-
   void _parseExtractedText(String text) {
     final lines = text.split('\n');
     final records = <TravelRecord>[];
@@ -283,8 +279,10 @@ class _ReportSummaryPageState extends State<ReportSummaryPage> {
         if (simpleFormatMatch != null) {
           records.add(TravelRecord(
             date: simpleFormatMatch.group(1)!,
-            startTime: _na, // No time info in this format
-            endTime: _na, // No time info in this format
+            startTime: _na,
+            // No time info in this format
+            endTime: _na,
+            // No time info in this format
             travelTime: simpleFormatMatch.group(2)!,
             distance: '${simpleFormatMatch.group(3)} Km',
             moveDuration: simpleFormatMatch.group(4)!,

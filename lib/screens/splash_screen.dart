@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/config.dart';
-import 'package:gpspro/lib/constants/app_constants.dart';
+import 'package:gpspro/constants/app_constants.dart';
 import 'package:gpspro/screens/server_maintenance_screen.dart';
 import 'package:gpspro/services/admob_service.dart';
 import 'package:gpspro/services/model/login.dart';

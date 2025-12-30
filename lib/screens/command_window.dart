@@ -10,6 +10,8 @@ import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/theme/custom_color.dart';
 
 class CommandWindowPage extends StatefulWidget {
+  const CommandWindowPage({super.key});
+
   @override
   State<StatefulWidget> createState() => _CommandPageState();
 }
@@ -118,7 +120,6 @@ class _CommandPageState extends State<CommandWindowPage> {
       'type': type
     };
 
-    print(requestBody.toString());
 
     APIService.sendCommands(requestBody).then((res) => {
           if (res.statusCode == 200)

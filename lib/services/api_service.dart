@@ -1,5 +1,7 @@
 
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/services/model/alert.dart';
@@ -325,21 +327,56 @@ class APIService {
   }
 
   static Future<RxList<Event>?> getEventList() async {
-    headers['Accept'] = "application/json";
-    final response = await http.get(
-        Uri.parse(
-            "$serverURL/api/get_events?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
-        headers: headers);
-    if (response.statusCode == 200) {
-      Iterable list =
-          json.decode(response.body.replaceAll("ï»¿", ""))['items']['data'];
-      if (list.isNotEmpty) {
-        return list.map((model) => Event.fromJson(model)).toList().obs;
-      } else {
+    try {
+      headers['Accept'] = "application/json";
+
+      // Get language with fallback
+      final language = UserRepository.getLanguage() ?? 'en';
+      final hash = UserRepository.getHash() ?? '';
+
+      final uri = Uri.parse(
+          "$serverURL/api/get_events?user_api_hash=$hash&lang=$language"
+      );
+
+      // ✅ Add timeout
+      final response = await http.get(
+        uri,
+        headers: headers,
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw TimeoutException('Connection timeout - Please check your internet');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body.replaceAll("ï»¿", ""));
+
+        if (jsonData['items'] != null && jsonData['items']['data'] != null) {
+          Iterable list = jsonData['items']['data'];
+
+          if (list.isNotEmpty) {
+            return list.map((model) => Event.fromJson(model)).toList().obs;
+          }
+        }
         return null;
+
+      } else if (response.statusCode == 401) {
+        throw Exception('Unauthorized - Please login again');
+      } else if (response.statusCode >= 500) {
+        throw Exception('Server error - Please try again later');
+      } else {
+        throw Exception('Failed to load events: ${response.statusCode}');
       }
-    } else {
-      return null;
+
+    } on SocketException {
+      throw Exception('No internet connection');
+    } on TimeoutException {
+      throw Exception('Connection timeout - Please check your internet');
+    } on FormatException {
+      throw Exception('Invalid response format');
+    } catch (e) {
+      throw Exception('Error loading events: $e');
     }
   }
 

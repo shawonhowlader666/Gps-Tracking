@@ -12,21 +12,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'geofence_list.dart';
 
 class GeofencePage extends StatefulWidget {
+  const GeofencePage({super.key});
+
   @override
   State<StatefulWidget> createState() => _GeofencePageState();
 }
 
 class _GeofencePageState extends State<GeofencePage> {
   static FenceArguments? args;
-  Completer<GoogleMapController> _controller = Completer();
+  final Completer<GoogleMapController> _controller = Completer();
   GoogleMapController? mapController;
   MapType _currentMapType = MapType.normal;
   bool _trafficEnabled = false;
   Color _trafficButtonColor = CustomColor.primaryColor;
-  Set<Marker> _markers = Set<Marker>();
-  Set<Circle> _circles = Set<Circle>();
+  Set<Marker> _markers = <Marker>{};
+  Set<Circle> _circles = <Circle>{};
   double _valRadius = 500;
-  double _valRadiusMax = 10000;
+  final double _valRadiusMax = 10000;
   bool addFenceVisible = false;
   bool deleteFenceVisible = false;
   bool addClicked = false;
@@ -48,8 +50,8 @@ class _GeofencePageState extends State<GeofencePage> {
   }
 
   void getFences() async {
-    _markers = Set<Marker>();
-    _circles = Set<Circle>();
+    _markers = <Marker>{};
+    _circles = <Circle>{};
   }
 
   void drawPolyline() async {
@@ -95,8 +97,9 @@ class _GeofencePageState extends State<GeofencePage> {
     LatLngBounds l1 = await c.getVisibleRegion();
     LatLngBounds l2 = await c.getVisibleRegion();
     mapController!.animateCamera(CameraUpdate.zoomTo(4));
-    if (l1.southwest.latitude == -90 || l2.southwest.latitude == -90)
+    if (l1.southwest.latitude == -90 || l2.southwest.latitude == -90) {
       check(u, c);
+    }
   }
 
   void _onMapTypeButtonPressed() {
@@ -143,7 +146,7 @@ class _GeofencePageState extends State<GeofencePage> {
   }
 
   void updateNewCircle(radius) {
-    _circles = Set<Circle>();
+    _circles = <Circle>{};
     setState(() {
       _circles.add(Circle(
           circleId: CircleId("circle"),
@@ -223,8 +226,8 @@ class _GeofencePageState extends State<GeofencePage> {
                   onPressed: _onMapTypeButtonPressed,
                   materialTapTargetSize: MaterialTapTargetSize.padded,
                   backgroundColor: CustomColor.primaryColor,
-                  child: const Icon(Icons.map, size: 30.0),
                   mini: true,
+                  child: const Icon(Icons.map, size: 30.0),
                 ),
                 FloatingActionButton(
                   heroTag: "traffic",
@@ -263,7 +266,7 @@ class _GeofencePageState extends State<GeofencePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Container(
+              SizedBox(
                   width: MediaQuery.of(context).size.width * 0.95,
                   child: Row(
                     children: <Widget>[
@@ -283,7 +286,7 @@ class _GeofencePageState extends State<GeofencePage> {
                   child: Row(
                     children: <Widget>[
                       Text(('radius').tr),
-                      Container(
+                      SizedBox(
                           width: MediaQuery.of(context).size.width * 0.65,
                           child: Slider(
                             value: _valRadius,
@@ -306,7 +309,7 @@ class _GeofencePageState extends State<GeofencePage> {
                   padding: EdgeInsets.all(10.0),
                   child: Row(
                     children: <Widget>[
-                      Container(
+                      SizedBox(
                           width: MediaQuery.of(context).size.width * 0.86,
                           child: ElevatedButton(
                             onPressed: () {

@@ -20,7 +20,7 @@ import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/config.dart';
 
-import 'package:gpspro/lib/constants/app_constants.dart';
+import 'package:gpspro/constants/app_constants.dart';
 
 // Define custom colors
 const Color kPrimaryOrange = Color(0xFF3E6FB8);
@@ -145,7 +145,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     if (prefs!.getString('email') != null) {
       _emailFilter.text = prefs!.getString('email')!;
       _passwordFilter.text = prefs!.getString('password')!;
-      _rememberMe = prefs!.getBool('rememberMe') ?? true;
+      _rememberMe = prefs!.getBool('rememberMe') ?? false;
     }
 
     // Set initial language based on preferences

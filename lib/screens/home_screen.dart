@@ -4,14 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/config.dart';
-import 'package:gpspro/lib/constants/app_constants.dart';
+import 'package:gpspro/constants/app_constants.dart';
 import 'package:gpspro/screens/home/home_controller.dart';
 import 'package:gpspro/screens/payment_list.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/payment_service.dart';
+import 'data_controller/data_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,6 +24,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final HomeController homeController = Get.put(HomeController());
+
+  // Use DataController instead of EventsController
+  late final DataController dataController;
+
   Timer? _countdownTimer;
   Duration? _timeLeft;
   double? _dueAmount;
@@ -39,7 +45,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Use addPostFrameCallback to avoid frame drops during init
+    // Initialize DataController - use put to create if not exists
+    dataController = Get.put(DataController(), permanent: true);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _checkPaymentStatus();
@@ -96,7 +104,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final stats = await PaymentService.getStats();
       if (!mounted) return;
 
+      // No due amount - clear everything
       if (stats == null || stats.due <= 0) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('grace_end_time'); // Clear grace period
         if (mounted) setState(() => _dueAmount = null);
         return;
       }
@@ -109,12 +120,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted) return;
 
       if (graceEnd == null) {
-        _showPaymentDialog(stats.due, allowSnooze: true);
+        // First time showing - allow snooze
+        _showPaymentDialog(stats.due, allowSnooze: true, isBlocking: false);
       } else {
         final now = DateTime.now().millisecondsSinceEpoch;
         if (now > graceEnd) {
+          // Grace period expired - blocking mode
+          // But still allow payment button to work
           _showPaymentDialog(stats.due, allowSnooze: false, isBlocking: true);
         } else {
+          // Within grace period - show countdown
           _startCountdown(DateTime.fromMillisecondsSinceEpoch(graceEnd));
         }
       }
@@ -168,81 +183,324 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     showDialog(
       context: context,
       barrierDismissible: !isBlocking,
+      barrierColor: Colors.black.withValues(alpha: isBlocking ? 0.7 : 0.5),
       builder: (dialogContext) => PopScope(
         canPop: !isBlocking,
-        child: AlertDialog(
+        child: Dialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(20),
           ),
-          title: Row(
-            children: [
-              const Icon(Icons.warning_amber_rounded,
-                  color: dangerColor, size: 24),
-              const SizedBox(width: 8),
-              const Text(
-                'পেমেন্ট বকেয়া',
-                style: TextStyle(fontSize: 18),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('মোট বকেয়া: ৳ ${due.toStringAsFixed(2)}'),
-              const SizedBox(height: 8),
-              if (isBlocking)
-                const Text(
-                  'সম্মানিত গ্রাহক, আপনার পেমেন্টের গ্রেস পিরিয়ড শেষ হয়েছে। '
-                  'সেবা চালু রাখতে অনুগ্রহ করে পেমেন্ট সম্পন্ন করুন।',
-                  style: TextStyle(color: dangerColor, fontSize: 13),
-                )
-              else
-                const Text(
-                  'সেবা অব্যাহত রাখতে অনুগ্রহ করে আপনার বকেয়া পরিশোধ করুন।',
-                  style: TextStyle(fontSize: 13),
-                ),
-            ],
-          ),
-          actions: [
-            if (allowSnooze)
-              ElevatedButton(
-                onPressed: () async {
-                  final prefs = await SharedPreferences.getInstance();
-                  final later = DateTime.now().add(const Duration(days: 7));
-                  await prefs.setInt(
-                    'grace_end_time',
-                    later.millisecondsSinceEpoch,
-                  );
-                  if (dialogContext.mounted) {
-                    Navigator.pop(dialogContext);
-                    _startCountdown(later);
-                  }
-                },
-                child: const Text('৭ দিন সময় নিন'),
-              ),
-            ElevatedButton(
-              onPressed: () {
-                if (!isBlocking && dialogContext.mounted) {
-                  Navigator.pop(dialogContext);
-                }
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PaymentListScreen(),
+          elevation: 10,
+          child: Container(
+            padding: const EdgeInsets.all(0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header with gradient
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: isBlocking
+                          ? [const Color(0xFFE53935), const Color(0xFFD32F2F)]
+                          : [const Color(0xFFFF9800), const Color(0xFFF57C00)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
                   ),
-                ).then((_) {
-                  if (mounted) _checkPaymentStatus();
-                });
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isBlocking
+                              ? Icons.error_outline_rounded
+                              : Icons.warning_amber_rounded,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        isBlocking ? 'পেমেন্ট জরুরি!' : 'পেমেন্ট বকেয়া',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Amount section
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'মোট বকেয়া',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '৳',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFD32F2F),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            due.toStringAsFixed(2),
+                            style: const TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFD32F2F),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isBlocking
+                              ? const Color(0xFFFFEBEE)
+                              : const Color(0xFFFFF3E0),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              color: isBlocking
+                                  ? const Color(0xFFD32F2F)
+                                  : const Color(0xFFF57C00),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                isBlocking
+                                    ? 'আপনার গ্রেস পিরিয়ড শেষ। সেবা চালু রাখতে এখনই পেমেন্ট করুন।'
+                                    : 'সেবা অব্যাহত রাখতে বকেয়া পরিশোধ করুন।',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isBlocking
+                                      ? const Color(0xFFD32F2F)
+                                      : const Color(0xFFF57C00),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Buttons
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: Column(
+                    children: [
+                      // Pay Now Button - ALWAYS WORKS
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // ALWAYS close dialog first, then navigate
+                            Navigator.of(dialogContext).pop();
+
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PaymentListScreen(),
+                              ),
+                            ).then((_) {
+                              if (mounted) _checkPaymentStatus();
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4CAF50),
+                            foregroundColor: Colors.white,
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.payment_rounded, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'এখনই পেমেন্ট করুন',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Snooze Button - Only show if allowed AND not blocking
+                      if (allowSnooze && !isBlocking) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton(
+                            onPressed: () async {
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              final later =
+                                  DateTime.now().add(const Duration(days: 7));
+                              await prefs.setInt(
+                                'grace_end_time',
+                                later.millisecondsSinceEpoch,
+                              );
+                              if (dialogContext.mounted) {
+                                Navigator.of(dialogContext).pop();
+                                _startCountdown(later);
+                              }
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.grey[700],
+                              side: BorderSide(color: Colors.grey[300]!),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.schedule_rounded, size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  '৭ দিন পরে মনে করিয়ে দিন',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      // Contact Support - Show when blocking
+                      if (isBlocking) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              // Close dialog and open support
+                              Navigator.of(dialogContext).pop();
+                              _contactSupport();
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.grey[700],
+                              side: BorderSide(color: Colors.grey[300]!),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.support_agent, size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  'সাপোর্টে যোগাযোগ করুন',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+// Add this method for support contact
+  void _contactSupport() {
+    // Option 1: Open phone dialer
+    // launchUrl(Uri.parse('tel:+8801XXXXXXXXX'));
+
+    // Option 2: Open WhatsApp
+    // launchUrl(Uri.parse('https://wa.me/8801XXXXXXXXX'));
+
+    // Option 3: Show contact dialog
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.support_agent, color: primaryColor),
+            SizedBox(width: 8),
+            Text('সাপোর্ট', style: TextStyle(fontSize: 18)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.phone, color: successColor),
+              title: const Text('ফোন করুন'),
+              subtitle: const Text('+8801960446666'),
+              onTap: () {
+                Navigator.pop(ctx);
+                launchUrl(Uri.parse('tel:+8801960446666'));
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('এেমেন্ট করুন'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat, color: successColor),
+              title: const Text('WhatsApp'),
+              subtitle: const Text('+8801960446666'),
+              onTap: () {
+                Navigator.pop(ctx);
+                launchUrl(Uri.parse('https://wa.me/+8801960446666'));
+              },
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('বন্ধ করুন'),
+          ),
+        ],
       ),
     );
   }
@@ -481,34 +739,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   errorBuilder: (_, __, ___) =>
                       const Icon(Icons.apps, size: 40),
                 ),
-                // Expanded(
-                // child: Image.asset(
-                //   AppConstants.logoPath,
-                //   height: 30,
-                //   width: 150,
-                //   fit: BoxFit.contain,
-                //   errorBuilder: (_, __, ___) => const Text('GPS Pro'),
-                // ),
-                // ),
-
                 Expanded(
-                    child: Center(
-                        child: Text(
-                  AppConstants.appName,
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w600,
+                  child: Center(
+                    child: Text(
+                      AppConstants.appName,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ))),
-                const SizedBox(width: 6),
-                _buildAppBarIcon(
-                  Icons.notifications_outlined,
-                  () {
-                    Get.snackbar('Notifications', 'No new notifications',
-                        snackPosition: SnackPosition.TOP);
-                  },
-                  badge: 0,
                 ),
+                const SizedBox(width: 6),
+                // Wrap with Obx for reactive updates
+                Obx(() => _buildAppBarIcon(
+                      Icons.notifications_outlined,
+                      () {
+                        // Navigate to events page
+                       // Get.toNamed('/events');
+                      },
+                      badge: dataController.events.length,
+                    )),
               ],
             ),
           ),
@@ -521,6 +772,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return GestureDetector(
       onTap: onTap,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Container(
             width: 40,
@@ -533,19 +785,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           if (badge != null && badge > 0)
             Positioned(
-              right: 0,
-              top: 0,
+              right: -2,
+              top: -2,
               child: Container(
-                width: 16,
-                height: 16,
-                decoration: BoxDecoration(
+                padding: const EdgeInsets.all(2),
+                constraints: const BoxConstraints(
+                  minWidth: 18,
+                  minHeight: 18,
+                ),
+                decoration: const BoxDecoration(
                   color: dangerColor,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
+                  border: Border.fromBorderSide(
+                    BorderSide(color: Colors.white, width: 1.5),
+                  ),
                 ),
                 child: Center(
                   child: Text(
-                    badge > 9 ? '9+' : badge.toString(),
+                    badge > 99 ? '99+' : badge.toString(),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 9,
@@ -568,7 +825,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       int runningCount = 0;
       int idleCount = 0;
       int stopCount = 0;
-      int offlineCount = 0;
+      //int stopCount = 0;
 
       for (final d in vehicles) {
         switch (_getDeviceStatus(d)) {
@@ -581,10 +838,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           case 'stop':
             stopCount++;
             break;
-          case 'offline':
-            offlineCount++;
-            break;
-        }
+          }
       }
 
       return Row(
@@ -592,7 +846,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _buildStatChip('All', dc.allCount.value, primaryColor),
           _buildStatChip('Running', runningCount, successColor),
           _buildStatChip('Idle', idleCount, warningColor),
-          _buildStatChip('Offline', offlineCount, dangerColor),
+          _buildStatChip('Stop', stopCount, dangerColor),
         ],
       );
     });
@@ -1661,8 +1915,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isDeviceOnline(DeviceItem device) {
     final online = device.online?.toLowerCase().trim() ?? '';
 
-    // Explicit offline indicators
-    if (online.contains('offline')) return false;
+    // Explicit stop indicators
+    if (online.contains('stop')) return false;
     if (online == 'ack' || online.contains('ack')) return false;
 
     // Explicit online indicators
@@ -1674,14 +1928,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (active == "0" || active == "false") return false;
     }
 
-    // Check timestamp - if last update was too long ago, consider offline
+    // Check timestamp - if last update was too long ago, consider stop
     if (device.timestamp != null && device.timestamp! > 0) {
       try {
         final lastUpdate =
             DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
         final diff = DateTime.now().difference(lastUpdate);
 
-        // Consider offline if no update in last 10 minutes
+        // Consider stop if no update in last 10 minutes
         if (diff.inMinutes > 10) return false;
 
         return true;
@@ -1717,12 +1971,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final lat = double.tryParse(device.lat.toString()) ?? 0;
       final lng = double.tryParse(device.lng.toString()) ?? 0;
       if (lat != 0 && lng != 0) {
-        // Has valid coordinates, assume online if no explicit offline indicator
+        // Has valid coordinates, assume online if no explicit stop indicator
         if (online.isEmpty) return true;
       }
     }
 
-    // Default to offline if no positive indicators found
+    // Default to stop if no positive indicators found
     return false;
   }
 
@@ -1741,14 +1995,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
         // Positive indicators
         if (s == 'on' || s == '1' || s == 'true') return true;
-        if (s == 'ign on' || s == 'ignition on' || s == 'engine on')
+        if (s == 'ign on' || s == 'ignition on' || s == 'engine on') {
           return true;
+        }
         if (s.contains('on') && !s.contains('off')) return true;
 
         // Negative indicators
         if (s == 'off' || s == '0' || s == 'false') return false;
-        if (s == 'ign off' || s == 'ignition off' || s == 'engine off')
+        if (s == 'ign off' || s == 'ignition off' || s == 'engine off') {
           return false;
+        }
       }
     }
 
@@ -1776,21 +2032,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Check detectEngine from deviceData
     if (device.deviceData?.detectEngine != null) {
       final detectEngine = device.deviceData!.detectEngine!.toLowerCase();
-      if (detectEngine == 'on' || detectEngine == '1' || detectEngine == 'true')
+      if (detectEngine == 'on' || detectEngine == '1' || detectEngine == 'true') {
         return true;
+      }
       if (detectEngine == 'off' ||
           detectEngine == '0' ||
-          detectEngine == 'false') return false;
+          detectEngine == 'false') {
+        return false;
+      }
     }
 
     // Check detectEngine from device (root level)
     if (device.detectEngine != null) {
       final detectEngine = device.detectEngine!.toLowerCase();
-      if (detectEngine == 'on' || detectEngine == '1' || detectEngine == 'true')
+      if (detectEngine == 'on' || detectEngine == '1' || detectEngine == 'true') {
         return true;
+      }
       if (detectEngine == 'off' ||
           detectEngine == '0' ||
-          detectEngine == 'false') return false;
+          detectEngine == 'false') {
+        return false;
+      }
     }
 
     // Infer from stop duration - if stopped for very short time, might still have engine on
@@ -1808,18 +2070,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   /// Get the current status of the device
-  /// Priority: offline → running → idle → stop
+  /// Priority: stop → running → idle → stop
   ///
   /// Status definitions:
   /// - **running**: Vehicle is moving (speed > 0)
   /// - **idle**: Vehicle is not moving but engine/key is ON (speed = 0, engine ON)
   /// - **stop**: Vehicle is stopped, engine OFF, but device is connected (speed = 0, engine OFF, online)
-  /// - **offline**: GPS device is disconnected/not communicating
+  /// - **stop**: GPS device is disconnected/not communicating
   String _getDeviceStatus(DeviceItem device) {
     // STEP 1: Check if device is online/connected
     // If device is not online, it's OFFLINE regardless of other states
     if (!_isDeviceOnline(device)) {
-      return 'offline';
+      return 'stop';
     }
 
     // STEP 2: Device is online, check if vehicle is moving
@@ -1850,9 +2112,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case 'idle':
         return warningColor; // Orange/Yellow
       case 'stop':
-        return dangerColor; // Red
-      case 'offline':
-      default:
+        return dangerColor; default:
         return dangerColor; // Grey
     }
   }
@@ -1866,7 +2126,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return 'Idle';
       case 'stop':
         return 'Stopped';
-      case 'offline':
       default:
         return 'Offline';
     }
@@ -1880,10 +2139,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case 'idle':
         return Icons.local_parking; // Parking icon for idle
       case 'stop':
-        return Icons.power_off; // Power off for stopped
-      case 'offline':
-      default:
-        return Icons.signal_wifi_off; // No signal for offline
+        return Icons.power_off; default:
+        return Icons.signal_wifi_off; // No signal for stop
     }
   }
 }

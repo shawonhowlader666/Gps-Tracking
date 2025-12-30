@@ -64,7 +64,7 @@ class _ReportListPageState extends State<ReportListPage> with SingleTickerProvid
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -97,7 +97,7 @@ class _ReportListPageState extends State<ReportListPage> with SingleTickerProvid
                 onTap: () => _navigateToReport(1, "/reportRoute"),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
               _buildReportCard(
                 icon: Icons.location_on,
@@ -111,7 +111,7 @@ class _ReportListPageState extends State<ReportListPage> with SingleTickerProvid
                 onTap: () => _navigateToReport(3, "/reportStop"),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
               _buildReportCard(
                 icon: Icons.notifications_active,
@@ -125,7 +125,7 @@ class _ReportListPageState extends State<ReportListPage> with SingleTickerProvid
                 onTap: () => _navigateToReport(8, "/reportEvent"),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
               _buildReportCard(
                 icon: Icons.fence,
@@ -139,7 +139,7 @@ class _ReportListPageState extends State<ReportListPage> with SingleTickerProvid
                 onTap: () => _navigateToReport(7, "/reportStop"),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
               _buildReportCard(
                 icon: Icons.access_time,
@@ -233,11 +233,11 @@ class _ReportListPageState extends State<ReportListPage> with SingleTickerProvid
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 5,
             offset: const Offset(0, 4),
           ),
         ],

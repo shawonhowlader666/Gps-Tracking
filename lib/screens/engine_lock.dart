@@ -11,7 +11,7 @@ import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
 
 class EngineLockScreen extends StatefulWidget {
-  const EngineLockScreen({Key? key}) : super(key: key);
+  const EngineLockScreen({super.key});
 
   @override
   State<StatefulWidget> createState() => _EngineLockScreenState();

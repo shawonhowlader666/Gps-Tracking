@@ -289,7 +289,7 @@ class _DevicePageState extends State<DevicePage> {
 
   DeviceStatus _getDeviceStatus(DeviceItem device) {
     if (!_isDeviceOnline(device)) {
-      return DeviceStatus.offline;
+      return DeviceStatus.stop;
     }
 
     final speed = double.tryParse(device.speed.toString()) ?? 0;
@@ -304,7 +304,7 @@ class _DevicePageState extends State<DevicePage> {
       return DeviceStatus.idle;
     }
 
-    return DeviceStatus.stop;
+    return DeviceStatus.offline;
   }
 
   void _filterDevices(String filter) {
@@ -787,24 +787,24 @@ class _DevicePageState extends State<DevicePage> {
             isSelected: _selectedFilterIndex == 2,
             onTap: () => _filterDevices("idle"),
           ),
-          // _buildFilterCard(
-          //   index: 3,
-          //   icon: Icons.local_parking_rounded,
-          //   label: 'stop'.tr,
-          //   count: _stopCount,
-          //   primaryColor: const Color(0xFFEF4444).withValues(alpha: 0.4),  // Red
-          //   isSelected: _selectedFilterIndex == 3,
-          //   onTap: () => _filterDevices("stop"),
-          // ),
           _buildFilterCard(
-            index: 4,
-            icon: Icons.signal_wifi_off_rounded,
-            label: 'offline'.tr,
-            count: _offlineCount,
-            primaryColor: const Color(0xFFEF4444).withValues(alpha: 0.4),  // Grey
-            isSelected: _selectedFilterIndex == 4,
-            onTap: () => _filterDevices("offline"),
+            index: 3,
+            icon: Icons.local_parking_rounded,
+            label: 'stop'.tr,
+            count: _stopCount,
+            primaryColor: const Color(0xFFEF4444).withValues(alpha: 0.4),  // Red
+            isSelected: _selectedFilterIndex == 3,
+            onTap: () => _filterDevices("stop"),
           ),
+          // _buildFilterCard(
+          //   index: 4,
+          //   icon: Icons.signal_wifi_off_rounded,
+          //   label: 'offline'.tr,
+          //   count: _offlineCount,
+          //   primaryColor: const Color(0xFFEF4444).withValues(alpha: 0.4),  // Grey
+          //   isSelected: _selectedFilterIndex == 4,
+          //   onTap: () => _filterDevices("offline"),
+          // ),
         ],
       ),
     );
@@ -1341,20 +1341,20 @@ class _DevicePageState extends State<DevicePage> {
           height: 68,
           width: 68,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(8),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                statusColors.primary.withValues(alpha: 0.6),
-                statusColors.primary.withValues(alpha: 0.2),
+                statusColors.primary.withValues(alpha: 0.4),
+                statusColors.primary.withValues(alpha: 0.1),
               ],
             ),
             boxShadow: [
               BoxShadow(
-                color: statusColors.primary.withValues(alpha: 0.4),
-                blurRadius: 4,
-                offset: const Offset(0, 4),
+                color: Colors.grey.withValues(alpha: 0.4),
+                blurRadius: 2,
+                offset: const Offset(0, 2),
               ),
             ],
           ),

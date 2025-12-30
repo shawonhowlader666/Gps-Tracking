@@ -14,6 +14,7 @@ import 'package:gpspro/screens/login.dart';
 import 'package:gpspro/screens/notification_map.dart';
 import 'package:gpspro/screens/notifications.dart';
 import 'package:gpspro/screens/playback.dart';
+import 'package:gpspro/screens/report/recent_events.dart';
 import 'package:gpspro/screens/report/report_fuel.dart';
 import 'package:gpspro/screens/report/report_route.dart';
 import 'package:gpspro/screens/report/report_stop_view.dart';
@@ -55,4 +56,5 @@ final Map<String, WidgetBuilder> routes = {
   '/stopMap': (context) => StopMapPage(),
   '/deviceEvent': (context) => DeviceEventPage(),
   '/engineLock': (context) => const EngineLockScreen(),
+  '/event': (context) =>  EventsPage()
 };

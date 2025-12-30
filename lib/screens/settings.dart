@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:get/get.dart';
-import 'package:gpspro/lib/constants/app_constants.dart';
+import 'package:gpspro/constants/app_constants.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gpspro/screens/payment_list.dart';
 
 class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key});
+
   @override
   State<StatefulWidget> createState() => _SettingsPageState();
 }
@@ -26,7 +28,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
   }
 
-  getUser() async {
+  Future<void> getUser() async {
     setState(() {
       isLoading = false;
     });
@@ -54,7 +56,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  logout() async {
+  Future<void> logout() async {
     try {
       // Show loading indicator
       showDialog(
@@ -76,7 +78,6 @@ class _SettingsPageState extends State<SettingsPage> {
         try {
           await _image!.delete();
         } catch (e) {
-          print('Error deleting profile image: $e');
         }
       }
 
@@ -93,7 +94,6 @@ class _SettingsPageState extends State<SettingsPage> {
       Phoenix.rebirth(context);
 
     } catch (e) {
-      print('Logout error: $e');
       if (mounted) {
         Navigator.pop(context);
       }
@@ -209,15 +209,15 @@ class _SettingsPageState extends State<SettingsPage> {
                   );
                 },
               ),
-              _buildDivider(),
-              _buildSettingItem(
-                icon: Icons.add_circle_outline,
-                iconColor: const Color(0xFF8B5CF6),
-                iconBgColor: const Color(0xFFF3E8FF),
-                title: 'Add Vehicles',
-                subtitle: 'Register vehicles',
-                onTap: () {},
-              ),
+              // _buildDivider(),
+              // _buildSettingItem(
+              //   icon: Icons.add_circle_outline,
+              //   iconColor: const Color(0xFF8B5CF6),
+              //   iconBgColor: const Color(0xFFF3E8FF),
+              //   title: 'Add Vehicles',
+              //   subtitle: 'Register vehicles',
+              //   onTap: () {},
+              // ),
             ]),
             const SizedBox(height: 24),
             _buildSectionTitle('Support'),
@@ -736,7 +736,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       _buildTermsSection(
                         'Contact Information',
-                        'For questions about these terms, contact us at:\nEmail: support@spytrack.com\nWebsite: www.spytrack.com',
+                        'For questions about these terms, contact us at:\nEmail: asthahelpbd@gmail.com\nPhone: +1-XXX-XXX-XXXX',
                       ),
                       const SizedBox(height: 10),
                       Center(
