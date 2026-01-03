@@ -15,22 +15,13 @@ import 'package:gpspro/screens/street_view_screen.dart';
 import 'package:gpspro/services/admob_service.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/services/model/playback_route.dart';
-import 'package:gpspro/services/model/share_perm.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
-import 'package:gpspro/widgets/address.dart';
-import 'package:gpspro/widgets/banner_ad_widget.dart';
 import 'package:gpspro/widgets/bloc/custom_info_widget.dart';
 import 'package:intl/intl.dart';
-import 'package:rxdart/rxdart.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:vector_math/vector_math.dart' as v;
-import 'package:flutter/material.dart' as m;
-
 import 'common_method.dart';
 
 class TrackDevicePage extends StatefulWidget {
@@ -66,7 +57,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
   bool first = true;
   LatLng? oldPin;
   String? _mapStyle;
-  Animation<double>? _animation;
 
   final _mapMarkerSC = StreamController<List<Marker>>.broadcast();
 
@@ -86,6 +76,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
   bool _isDisposed = false;
   String todaytotalDistance = "loading".tr;
   bool showAddress = false;
+
+  // NEW SMOOTH ANIMATION VARIABLES
+  AnimationController? _carAnimationController;
+  LatLng? _currentCarPosition;
+  double _currentCarBearing = 0.0;
+  bool _isAnimatingCar = false;
 
   // PLAYBACK MODE VARIABLES
   bool _isPlaybackMode = false;
@@ -134,9 +130,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   // Draggable sheet controllers
   final DraggableScrollableController _trackingSheetController =
-      DraggableScrollableController();
+  DraggableScrollableController();
   final DraggableScrollableController _playbackSheetController =
-      DraggableScrollableController();
+  DraggableScrollableController();
 
   // SAFE MAP CONTROLLER ACCESS
   Future<void> _safeAnimateCamera(CameraUpdate cameraUpdate) async {
@@ -167,11 +163,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     rootBundle.loadString('assets/map_style.txt').then((string) {
       _mapStyle = string;
+    }).catchError((error) {
+      debugPrint('Error loading map style: $error');
     });
 
     _initPlaybackAnimation();
     _initTrackingData();
-
   }
 
   void _initTrackingData() {
@@ -180,7 +177,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     Timer startTimer(Function() callback) {
       callback();
-      return Timer.periodic(const Duration(seconds: 20), (timer) => callback());
+      return Timer.periodic(const Duration(seconds: 10), (timer) => callback());
     }
 
     _todayKmTimer = startTimer(getTodayKm);
@@ -218,14 +215,14 @@ class _TrackDeviceState extends State<TrackDevicePage>
     if (baseTimeForMapAnimation <= 1) {
       if (start.latitude != end.latitude && start.longitude != end.longitude) {
         double intermediateLat = (end.latitude - start.latitude) *
-                (baseTimeForMapAnimation *
-                    baseTimeForMapAnimation *
-                    (3.0 - 2.0 * baseTimeForMapAnimation)) +
+            (baseTimeForMapAnimation *
+                baseTimeForMapAnimation *
+                (3.0 - 2.0 * baseTimeForMapAnimation)) +
             start.latitude;
         double intermediateLon = (end.longitude - start.longitude) *
-                (baseTimeForMapAnimation *
-                    baseTimeForMapAnimation *
-                    (3.0 - 2.0 * baseTimeForMapAnimation)) +
+            (baseTimeForMapAnimation *
+                baseTimeForMapAnimation *
+                (3.0 - 2.0 * baseTimeForMapAnimation)) +
             start.longitude;
 
         MarkerId markerId = const MarkerId('playbackAnimatingMarker');
@@ -322,6 +319,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
     }
 
     _playbackAnimationController?.dispose();
+    _carAnimationController?.dispose();
     _trackingSheetController.dispose();
     _playbackSheetController.dispose();
     _isMapCreated = false;
@@ -361,7 +359,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       }
     }).whenComplete(() {
       if (mounted && !_isDisposed && !_isPlaybackMode) {
-        _todayKmTimer = Timer(const Duration(seconds: 20), getTodayKm);
+        _todayKmTimer = Timer(const Duration(seconds: 10), getTodayKm);
       }
     });
   }
@@ -384,7 +382,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
     } finally {
       if (mounted && !_isDisposed && !_isPlaybackMode) {
         _todayDetailsTimer =
-            Timer(const Duration(seconds: 20), getTodayDetails);
+            Timer(const Duration(seconds: 10), getTodayDetails);
       }
     }
   }
@@ -393,10 +391,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
     if (!mounted || _isDisposed) return;
     PolylineId id = const PolylineId("polyAnim");
     Polyline polyline = Polyline(
-      width: 3,
+      width: 4,
       polylineId: id,
-      color: Colors.blueAccent,
+      color: Colors.blueAccent.withValues(alpha: 0.7),
       points: newPolylinesData,
+      geodesic: true,
+      startCap: Cap.roundCap,
+      endCap: Cap.roundCap,
     );
     polylines[id] = polyline;
     if (mounted) setState(() {});
@@ -406,21 +407,25 @@ class _TrackDeviceState extends State<TrackDevicePage>
     if (!mounted || _isDisposed) return;
     PolylineId id = const PolylineId("poly");
     Polyline polyline = Polyline(
-      width: 3,
+      width: 4,
       polylineId: id,
       color: Colors.blue,
       points: polylineCoordinates,
+      geodesic: true,
+      startCap: Cap.roundCap,
+      endCap: Cap.roundCap,
     );
     polylines[id] = polyline;
     if (mounted) setState(() {});
   }
 
+  // UPDATED MARKER UPDATE METHOD WITH SMOOTH ANIMATION
   void updateMarker(DeviceItem element) async {
     if (_isPlaybackMode || !mounted || _isDisposed) return;
 
     try {
       await Util.fetchAndCacheImages(
-        UserRepository.getServerUrl()! + "/" + element.icon!.path!,
+        "${UserRepository.getServerUrl()!}/${element.icon!.path!}",
       );
 
       BitmapDescriptor markerIcon;
@@ -439,68 +444,225 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
       if (!mounted || _isDisposed) return;
 
-      var pinPosition = LatLng(
+      var newPosition = LatLng(
         double.parse(element.lat.toString()),
         double.parse(element.lng.toString()),
       );
 
       if (first) {
+        // First time initialization
+        _currentCarPosition = newPosition;
+        _currentCarBearing = rotation ? double.parse(element.course.toString()) : 0;
+
         CameraPosition cPosition = CameraPosition(
-          target: pinPosition,
+          target: newPosition,
           zoom: currentZoom,
         );
 
         final pickupMarker = Marker(
           markerId: const MarkerId("driverMarker"),
-          position: pinPosition,
-          rotation: rotation ? double.parse(element.course.toString()) : 0,
+          position: newPosition,
+          rotation: _currentCarBearing,
           icon: markerIcon,
+          anchor: const Offset(0.5, 0.5),
+          flat: true,
         );
 
         await Future.delayed(const Duration(milliseconds: 500));
 
         if (!mounted || _isDisposed) return;
 
+        _markers.clear();
         _markers.add(pickupMarker);
         if (!_mapMarkerSC.isClosed) {
           _mapMarkerSink.add(_markers);
         }
 
-        oldPin = pinPosition;
-
+        oldPin = newPosition;
         await _safeMoveCamera(CameraUpdate.newCameraPosition(cPosition));
 
         isLoading = false;
         first = false;
-      }
+      } else if (_currentCarPosition != null && _currentCarPosition != newPosition) {
+        // Position has changed - animate the car
+        if (!_isAnimatingCar) {
+          double targetBearing = rotation ? double.parse(element.course.toString()) : 0;
 
-      if (!first && oldPin != null && oldPin != pinPosition) {
-        Future.delayed(const Duration(seconds: 5)).then((value) {
-          if (mounted &&
-              !_isDisposed &&
-              _mapController != null &&
-              _isMapCreated) {
-            animateCar(
-              oldPin!.latitude,
-              oldPin!.longitude,
-              double.parse(element.lat.toString()),
-              double.parse(element.lng.toString()),
-              _mapMarkerSink,
-              this,
-              markerIcon,
-            );
-          }
-        });
+          animateCarSmooth(
+            _currentCarPosition!,
+            newPosition,
+            targetBearing,
+            markerIcon,
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error updating marker: $e');
     }
   }
 
+  // NEW SMOOTH CAR ANIMATION METHOD
+  void animateCarSmooth(
+      LatLng fromPosition,
+      LatLng toPosition,
+      double targetBearing,
+      BitmapDescriptor markerIcon,
+      ) async {
+    if (!mounted || _isDisposed || _mapMarkerSC.isClosed || _isAnimatingCar) return;
+
+    _isAnimatingCar = true;
+
+    // Calculate distance to determine animation duration
+    double distance = _calculateDistance(fromPosition, toPosition);
+
+    // Dynamic duration based on distance (min 2s, max 8s)
+    int durationMs = (distance * 100).clamp(2000, 8000).toInt();
+
+    // Dispose previous animation controller if exists
+    _carAnimationController?.dispose();
+
+    _carAnimationController = AnimationController(
+      duration: Duration(milliseconds: durationMs),
+      vsync: this,
+    );
+
+    // Smooth bearing transition
+    double fromBearing = _currentCarBearing;
+    double toBearing = _normalizeBearing(targetBearing);
+
+    // Handle bearing wrap-around (shortest rotation path)
+    double bearingDiff = toBearing - fromBearing;
+    if (bearingDiff > 180) {
+      fromBearing += 360;
+    } else if (bearingDiff < -180) {
+      toBearing += 360;
+    }
+
+    final Animation<double> animation = CurvedAnimation(
+      parent: _carAnimationController!,
+      curve: Curves.linearToEaseOut,
+    );
+
+    animation.addListener(() async {
+      if (!mounted || _isDisposed || _mapMarkerSC.isClosed) {
+        _carAnimationController?.dispose();
+        _isAnimatingCar = false;
+        return;
+      }
+
+      final double t = animation.value;
+
+      // Interpolate position using smooth curve
+      double lat = fromPosition.latitude + (toPosition.latitude - fromPosition.latitude) * t;
+      double lng = fromPosition.longitude + (toPosition.longitude - fromPosition.longitude) * t;
+      LatLng interpolatedPosition = LatLng(lat, lng);
+
+      // Interpolate bearing smoothly
+      double interpolatedBearing = fromBearing + (toBearing - fromBearing) * t;
+      interpolatedBearing = _normalizeBearing(interpolatedBearing);
+
+      // Update current position and bearing
+      _currentCarPosition = interpolatedPosition;
+      _currentCarBearing = interpolatedBearing;
+
+      // Clear and add updated marker
+      _markers.clear();
+
+      final carMarker = Marker(
+        markerId: const MarkerId("driverMarker"),
+        position: interpolatedPosition,
+        icon: markerIcon,
+        anchor: const Offset(0.5, 0.5),
+        flat: true,
+        rotation: interpolatedBearing,
+        draggable: false,
+      );
+
+      _markers.add(carMarker);
+
+      if (!_mapMarkerSC.isClosed) {
+        _mapMarkerSink.add(_markers);
+      }
+
+      // Add to polyline (avoid too many points)
+      if (newPolylinesData.isEmpty ||
+          _calculateDistance(newPolylinesData.last, interpolatedPosition) > 0.00001) {
+        newPolylinesData.add(interpolatedPosition);
+      }
+
+      // Smooth camera follow (update every 10% to reduce jitter)
+      if ((t * 100).toInt() % 10 == 0) {
+        await _safeMoveCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: interpolatedPosition,
+              zoom: currentZoom,
+              bearing: 0,
+            ),
+          ),
+        );
+      }
+    });
+
+    animation.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _isAnimatingCar = false;
+
+        // Update polyline
+        oldPin = toPosition;
+        polylineCoordinates.add(toPosition);
+
+        // Merge new polyline data
+        if (newPolylinesData.isNotEmpty) {
+          polylineCoordinates.addAll(newPolylinesData);
+          newPolylinesData.clear();
+        }
+
+        // Keep polyline size manageable
+        if (polylineCoordinates.length > 100) {
+          polylineCoordinates.removeRange(0, polylineCoordinates.length - 100);
+        }
+
+        drawPolyline();
+
+        _carAnimationController?.dispose();
+        _carAnimationController = null;
+      }
+    });
+
+    _carAnimationController?.forward();
+  }
+
+  // HELPER METHOD: Calculate distance between two LatLng points
+  double _calculateDistance(LatLng from, LatLng to) {
+    const double earthRadius = 6371000; // meters
+
+    double lat1 = from.latitude * m.pi / 180;
+    double lat2 = to.latitude * m.pi / 180;
+    double dLat = (to.latitude - from.latitude) * m.pi / 180;
+    double dLon = (to.longitude - from.longitude) * m.pi / 180;
+
+    double a = m.sin(dLat / 2) * m.sin(dLat / 2) +
+        m.cos(lat1) * m.cos(lat2) * m.sin(dLon / 2) * m.sin(dLon / 2);
+    double c = 2 * m.atan2(m.sqrt(a), m.sqrt(1 - a));
+
+    return earthRadius * c;
+  }
+
+  // HELPER METHOD: Normalize bearing to 0-360 range
+  double _normalizeBearing(double bearing) {
+    while (bearing < 0) bearing += 360;
+    while (bearing >= 360) bearing -= 360;
+    return bearing;
+  }
+
   // PLAYBACK METHODS
   void _enterPlaybackMode() {
     _todayKmTimer?.cancel();
     _todayDetailsTimer?.cancel();
+    _carAnimationController?.stop();
+    _carAnimationController?.dispose();
+    _isAnimatingCar = false;
 
     setState(() {
       _isPlaybackMode = true;
@@ -600,18 +762,18 @@ class _TrackDeviceState extends State<TrackDevicePage>
               Row(
                 children: [
                   _buildQuickSelectButton('today'.tr, Icons.today, Colors.blue,
-                      () {
-                    setModalState(() {
-                      playbackDateTimeFrom = DateTime.now().subtract(Duration(
-                        hours: DateTime.now().hour,
-                        minutes: DateTime.now().minute,
-                        seconds: DateTime.now().second,
-                      ));
-                      playbackDateTimeTo = DateTime.now();
-                    });
-                    Navigator.pop(context);
-                    _fetchPlaybackData();
-                  }),
+                          () {
+                        setModalState(() {
+                          playbackDateTimeFrom = DateTime.now().subtract(Duration(
+                            hours: DateTime.now().hour,
+                            minutes: DateTime.now().minute,
+                            seconds: DateTime.now().second,
+                          ));
+                          playbackDateTimeTo = DateTime.now();
+                        });
+                        Navigator.pop(context);
+                        _fetchPlaybackData();
+                      }),
                   const SizedBox(width: 10),
                   _buildQuickSelectButton(
                       'yesterday'.tr, Icons.history, Colors.orange, () {
@@ -662,58 +824,58 @@ class _TrackDeviceState extends State<TrackDevicePage>
               const SizedBox(height: 15),
               _buildDateTimeSelector('from'.tr, playbackDateTimeFrom,
                   Icons.play_arrow, Colors.green, () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: playbackDateTimeFrom,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now(),
-                );
-                if (date != null) {
-                  final time = await showTimePicker(
-                    context: context,
-                    initialTime: TimeOfDay.fromDateTime(playbackDateTimeFrom),
-                  );
-                  if (time != null) {
-                    setModalState(() {
-                      playbackDateTimeFrom = DateTime(
-                        date.year,
-                        date.month,
-                        date.day,
-                        time.hour,
-                        time.minute,
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: playbackDateTimeFrom,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (date != null) {
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.fromDateTime(playbackDateTimeFrom),
                       );
-                    });
-                  }
-                }
-              }),
+                      if (time != null) {
+                        setModalState(() {
+                          playbackDateTimeFrom = DateTime(
+                            date.year,
+                            date.month,
+                            date.day,
+                            time.hour,
+                            time.minute,
+                          );
+                        });
+                      }
+                    }
+                  }),
               const SizedBox(height: 15),
               _buildDateTimeSelector(
                   'to'.tr, playbackDateTimeTo, Icons.stop, Colors.red,
-                  () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: playbackDateTimeTo,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now(),
-                );
-                if (date != null) {
-                  final time = await showTimePicker(
-                    context: context,
-                    initialTime: TimeOfDay.fromDateTime(playbackDateTimeTo),
-                  );
-                  if (time != null) {
-                    setModalState(() {
-                      playbackDateTimeTo = DateTime(
-                        date.year,
-                        date.month,
-                        date.day,
-                        time.hour,
-                        time.minute,
+                      () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: playbackDateTimeTo,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (date != null) {
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.fromDateTime(playbackDateTimeTo),
                       );
-                    });
-                  }
-                }
-              }),
+                      if (time != null) {
+                        setModalState(() {
+                          playbackDateTimeTo = DateTime(
+                            date.year,
+                            date.month,
+                            date.day,
+                            time.hour,
+                            time.minute,
+                          );
+                        });
+                      }
+                    }
+                  }),
               const SizedBox(height: 25),
               SizedBox(
                 width: double.infinity,
@@ -950,6 +1112,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
           points: playbackRoutePoints,
           width: 4,
           color: const Color(0xFFF26611),
+          geodesic: true,
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
         ));
 
         await _addPlaybackMarkersAndFitBounds();
@@ -1075,7 +1240,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     }
   }
 
-  // Create numbered marker for parking (P1, P2, P3, etc.)
   Future<BitmapDescriptor> _createNumberedMarker(
       String text,
       Color backgroundColor, {
@@ -1131,14 +1295,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
     final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
 
     if (byteData == null) {
-      // Fallback to default marker
       return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
     }
 
     return BitmapDescriptor.bytes(byteData.buffer.asUint8List());
   }
 
-  // Set parking markers with numbered labels (P1, P2, P3, etc.)
   void _setPlaybackParkingMarkers() async {
     if (!mounted || _isDisposed) return;
 
@@ -1153,7 +1315,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
           var markerId = MarkerId('stop${element[0]["id"]}');
 
-          // Create numbered parking marker (P1, P2, P3, etc.)
           BitmapDescriptor parkingIcon;
           try {
             parkingIcon = await _createNumberedMarker(
@@ -1163,7 +1324,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
             );
           } catch (e) {
             debugPrint('Error creating parking marker: $e');
-            // Fallback to default marker
             parkingIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
           }
 
@@ -1201,7 +1361,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     }
   }
 
-  // Set event/alert markers with numbered labels (A1, A2, A3, etc.)
   void _setPlaybackEventsMarkers() async {
     if (!mounted || _isDisposed) return;
 
@@ -1216,7 +1375,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
           var markerId = MarkerId('event${element[0]["id"]}');
 
-          // Create numbered alert marker (A1, A2, A3, etc.)
           BitmapDescriptor eventIcon;
           try {
             eventIcon = await _createNumberedMarker(
@@ -1226,7 +1384,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
             );
           } catch (e) {
             debugPrint('Error creating event marker: $e');
-            // Fallback to default marker
             eventIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
           }
 
@@ -1299,13 +1456,11 @@ class _TrackDeviceState extends State<TrackDevicePage>
     });
 
     if (!isPointActive) {
-      // Remove parking markers
       for (var element in parkingPoints) {
         _playbackMarkers.remove(MarkerId('stop${element[0]["id"]}'));
       }
       setState(() {});
     } else {
-      // Reset and rebuild parking markers
       _parkingMarkers = null;
       _setPlaybackParkingMarkers();
     }
@@ -1319,13 +1474,11 @@ class _TrackDeviceState extends State<TrackDevicePage>
     });
 
     if (!isAlertActive) {
-      // Remove event markers
       for (var element in eventsPoints) {
         _playbackMarkers.remove(MarkerId('event${element[0]["id"]}'));
       }
       setState(() {});
     } else {
-      // Reset and rebuild event markers
       _eventMarkers = null;
       _setPlaybackEventsMarkers();
     }
@@ -1345,10 +1498,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     _playbackAnimationController!.forward();
   }
+
   Widget _buildTimelineItem(PlayBackRoute trip, int index) {
     bool isStopped = trip.status == 1;
 
-    // Calculate parking number for stopped items
     int parkingNumber = 0;
     if (isStopped) {
       for (int i = 0; i <= index; i++) {
@@ -1572,7 +1725,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   void _onMapTypeButtonPressed() {
     setState(() {
       _currentMapType =
-          _currentMapType == MapType.normal ? MapType.hybrid : MapType.normal;
+      _currentMapType == MapType.normal ? MapType.hybrid : MapType.normal;
       _mapTypeBackgroundColor = _currentMapType == MapType.normal
           ? CustomColor.secondaryColor
           : CustomColor.primaryColor;
@@ -1701,19 +1854,15 @@ class _TrackDeviceState extends State<TrackDevicePage>
   Widget _buildBody() {
     return Stack(
       children: [
-        // Map
         !isLoading
             ? _buildMap()
             : const Center(child: CircularProgressIndicator()),
 
-        // Map Controls on Right Side
         _buildMapControls(),
 
-        // Playback info window
         if (_isPlaybackMode && showPlaybackWindow && playbackWindow != null)
           playbackWindow!,
 
-        // Playback markers toggle
         if (_isPlaybackMode && playbackRoutePoints.isNotEmpty)
           Positioned(
             bottom: 120,
@@ -1721,10 +1870,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
             child: _buildMarkerToggleButtons(),
           ),
 
-        // TRACKING Bottom Sheet (when NOT in playback mode)
         if (!_isPlaybackMode) _buildTrackingDraggableSheet(),
 
-        // PLAYBACK Bottom Sheet (when in playback mode)
         if (_isPlaybackMode) _buildPlaybackDraggableSheet(),
       ],
     );
@@ -1803,9 +1950,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
               foregroundColor: CustomColor.primaryColor,
               onPressed: () {
                 Get.to(() => StreetViewScreen(
-                      latitude: device?.lat ?? 0.0,
-                      longitude: device?.lng ?? 0.0,
-                    ));
+                  latitude: device?.lat ?? 0.0,
+                  longitude: device?.lng ?? 0.0,
+                ));
               },
             ),
           ],
@@ -1837,7 +1984,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 
-  // Updated marker toggle buttons with P and A labels instead of images
   Widget _buildMarkerToggleButtons() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1855,7 +2001,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Parking Toggle with P icon and count
           InkWell(
             onTap: _toggleParkingMarkers,
             child: Container(
@@ -1907,7 +2052,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
             ),
           ),
           const SizedBox(width: 10),
-          // Alert Toggle with A icon and count
           InkWell(
             onTap: _toggleEventMarkers,
             child: Container(
@@ -1993,9 +2137,16 @@ class _TrackDeviceState extends State<TrackDevicePage>
       myLocationEnabled: true,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,
+      buildingsEnabled: true,
+      indoorViewEnabled: false,
+      liteModeEnabled: false,
       onMapCreated: (GoogleMapController controller) {
         _mapController = controller;
         _isMapCreated = true;
+
+        if (_mapStyle != null) {
+          controller.setMapStyle(_mapStyle);
+        }
       },
       markers: _isPlaybackMode
           ? Set<Marker>.of(_playbackMarkers.values)
@@ -2034,7 +2185,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
             controller: scrollController,
             padding: EdgeInsets.zero,
             children: [
-              // Drag Handle
               Center(
                 child: Container(
                   margin: const EdgeInsets.only(top: 10, bottom: 5),
@@ -2047,15 +2197,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
                 ),
               ),
 
-              // Speedometer Section with Sensors
               _buildSpeedometerSection(),
 
               const Divider(height: 1),
 
-              // Other Sensors & Details
               _buildOtherSensorsSection(),
 
-              // Device Details
               _buildDeviceDetailsSection(),
             ],
           ),
@@ -2068,7 +2215,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     Color statusColor = _getStatusColor();
     int currentSpeed = device?.speed ?? 0;
 
-    // Get 4 important sensors
     List<Map<String, dynamic>> importantSensors = _getImportantSensors();
 
     return Padding(
@@ -2076,7 +2222,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Left Sensors (2)
           Expanded(
             flex: 2,
             child: Column(
@@ -2098,13 +2243,11 @@ class _TrackDeviceState extends State<TrackDevicePage>
             ),
           ),
 
-          // Center Speedometer
           Expanded(
             flex: 3,
             child: _buildAnalogSpeedometer(currentSpeed, statusColor),
           ),
 
-          // Right Sensors (2)
           Expanded(
             flex: 2,
             child: Column(
@@ -2219,7 +2362,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
   List<Map<String, dynamic>> _getImportantSensors() {
     List<Map<String, dynamic>> sensors = [];
 
-    // Add default important metrics
     sensors.add({
       'icon': 'assets/images/sensors/total-distance.png',
       'name': 'Today KM',
@@ -2300,7 +2442,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
         color: CustomColor.primaryColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
         border:
-            Border.all(color: CustomColor.primaryColor.withValues(alpha: 0.2)),
+        Border.all(color: CustomColor.primaryColor.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2342,7 +2484,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
           ),
           const SizedBox(height: 10),
 
-          // Status Row
           Row(
             children: [
               Container(
@@ -2375,7 +2516,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
           const SizedBox(height: 10),
 
-          // Address
           FutureBuilder<String>(
             future: APIService.getGeocoderAddress(
               device?.lat?.toString() ?? "0",
@@ -2407,7 +2547,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
           const SizedBox(height: 15),
 
-          // Quick Stats Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -2659,7 +2798,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
                   onTap: _changePlaybackSpeed,
                   child: Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.orange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(15),
@@ -2710,7 +2849,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 
-
   Widget _buildTimelineChip(IconData icon, String value) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -2725,131 +2863,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 
-  // HELPER METHODS
   String gsmCodeConvert(value) {
     if (value == "71606") return "Movistar";
     if (value == "71610") return "Claro";
     if (value == "71617") return "Entel";
     if (value == "71615") return "Bitel";
     return value.toString();
-  }
-
-  Future<Uint8List> getBytesFromAsset(String path, int width) async {
-    ByteData data = await rootBundle.load(path);
-    ui.Codec codec = await ui.instantiateImageCodec(
-      data.buffer.asUint8List(),
-      targetWidth: width,
-    );
-    ui.FrameInfo fi = await codec.getNextFrame();
-    return (await fi.image.toByteData(format: ui.ImageByteFormat.png))!
-        .buffer
-        .asUint8List();
-  }
-
-  void animateCar(
-    double fromLat,
-    double fromLong,
-    double toLat,
-    double toLong,
-    StreamSink<List<Marker>> mapMarkerSink,
-    TickerProvider provider,
-    BitmapDescriptor markerIcon,
-  ) async {
-    if (!mounted || _isDisposed || _mapMarkerSC.isClosed) return;
-
-    final double bearing = getBearing(
-      LatLng(fromLat, fromLong),
-      LatLng(toLat, toLong),
-    );
-
-    _markers.clear();
-
-    var carMarker = Marker(
-      markerId: const MarkerId("driverMarker"),
-      position: LatLng(fromLat, fromLong),
-      icon: markerIcon,
-      anchor: const Offset(0.5, 0.5),
-      flat: true,
-      rotation: bearing,
-      draggable: false,
-    );
-
-    _markers.add(carMarker);
-    if (!_mapMarkerSC.isClosed) {
-      mapMarkerSink.add(_markers);
-    }
-
-    final animationController = AnimationController(
-      duration: const Duration(seconds: 5),
-      vsync: provider,
-    );
-
-    Tween<double> tween = Tween(begin: 0, end: 1);
-
-    _animation = tween.animate(animationController)
-      ..addListener(() async {
-        if (!mounted || _isDisposed || _mapMarkerSC.isClosed) {
-          animationController.dispose();
-          return;
-        }
-
-        final v = _animation!.value;
-        double lng = v * toLong + (1 - v) * fromLong;
-        double lat = v * toLat + (1 - v) * fromLat;
-        LatLng newPos = LatLng(lat, lng);
-
-        _markers.remove(carMarker);
-
-        carMarker = Marker(
-          markerId: const MarkerId("driverMarker"),
-          position: newPos,
-          icon: markerIcon,
-          anchor: const Offset(0.5, 0.5),
-          flat: true,
-          rotation: bearing,
-          draggable: false,
-        );
-
-        _markers.add(carMarker);
-        if (!_mapMarkerSC.isClosed) {
-          mapMarkerSink.add(_markers);
-        }
-        newPolylinesData.add(carMarker.position);
-
-        oldPin = newPos;
-      });
-
-    await _safeAnimateCamera(CameraUpdate.newCameraPosition(
-      CameraPosition(target: LatLng(toLat, toLong), zoom: currentZoom),
-    ));
-
-    if (oldPin != null) {
-      polylineCoordinates.add(oldPin!);
-    }
-    animationController.forward();
-    newPolylinesData.clear();
-    if (polylineCoordinates.length > 20) {
-      polylineCoordinates.removeRange(0, 10);
-    }
-  }
-
-  double getBearing(LatLng begin, LatLng end) {
-    double lat = (begin.latitude - end.latitude).abs();
-    double lng = (begin.longitude - end.longitude).abs();
-
-    if (begin.latitude < end.latitude && begin.longitude < end.longitude) {
-      return v.degrees(m.atan(lng / lat));
-    } else if (begin.latitude >= end.latitude &&
-        begin.longitude < end.longitude) {
-      return (90 - v.degrees(m.atan(lng / lat))) + 90;
-    } else if (begin.latitude >= end.latitude &&
-        begin.longitude >= end.longitude) {
-      return v.degrees(m.atan(lng / lat)) + 180;
-    } else if (begin.latitude < end.latitude &&
-        begin.longitude >= end.longitude) {
-      return (90 - v.degrees(m.atan(lng / lat))) + 270;
-    }
-    return -1;
   }
 }
 
@@ -2869,7 +2888,6 @@ class SpeedometerPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = m.min(size.width, size.height) / 2 - 10;
 
-    // Background arc
     final bgPaint = Paint()
       ..color = Colors.grey[200]!
       ..style = PaintingStyle.stroke
@@ -2884,7 +2902,6 @@ class SpeedometerPainter extends CustomPainter {
       bgPaint,
     );
 
-    // Speed arc
     final speedPaint = Paint()
       ..color = statusColor
       ..style = PaintingStyle.stroke
@@ -2900,7 +2917,6 @@ class SpeedometerPainter extends CustomPainter {
       speedPaint,
     );
 
-    // Tick marks
     final tickPaint = Paint()
       ..color = Colors.grey[400]!
       ..strokeWidth = 1;
@@ -2918,7 +2934,6 @@ class SpeedometerPainter extends CustomPainter {
       canvas.drawLine(innerPoint, outerPoint, tickPaint);
     }
 
-    // Needle
     final needleAngle =
         m.pi * 0.75 + (speed / maxSpeed).clamp(0, 1) * m.pi * 1.5;
     final needlePaint = Paint()
@@ -2933,7 +2948,6 @@ class SpeedometerPainter extends CustomPainter {
 
     canvas.drawLine(center, needleEnd, needlePaint);
 
-    // Center dot
     canvas.drawCircle(center, 6, Paint()..color = statusColor);
     canvas.drawCircle(center, 3, Paint()..color = Colors.white);
   }

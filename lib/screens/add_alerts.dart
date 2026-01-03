@@ -3,12 +3,12 @@
 //
 // import 'package:flutter/material.dart';
 // import 'package:get/get.dart';
-// import 'package:gpspro/services/model/device_item.dart';
-// import 'package:gpspro/services/model/user.dart';
-// import 'package:gpspro/screens/assign_fence_screen.dart';
-// import 'package:gpspro/screens/data_controller/data_controller.dart';
-// import 'package:gpspro/services/api_service.dart';
-// import 'package:gpspro/theme/custom_color.dart';
+// import 'package:app/services/model/device_item.dart';
+// import 'package:app/services/model/user.dart';
+// import 'package:app/screens/assign_fence_screen.dart';
+// import 'package:app/screens/data_controller/data_controller.dart';
+// import 'package:app/services/api_service.dart';
+// import 'package:app/theme/custom_color.dart';
 // import 'package:shared_preferences/shared_preferences.dart';
 //
 // class AddAlertsPage extends StatefulWidget {

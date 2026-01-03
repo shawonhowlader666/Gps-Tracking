@@ -1906,9 +1906,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // ============================================
   // ENHANCED STATUS DETECTION LOGIC
-  // ============================================
 
   /// Check if the GPS device is online/connected
   /// Returns true if device is communicating with server

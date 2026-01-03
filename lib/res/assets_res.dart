@@ -5,7 +5,7 @@
 // ignore_for_file: lines_longer_than_80_chars
 class AssetsRes {
   AssetsRes._();
-  static const String PLUGIN_NAME = 'gpspro';
+  static const String PLUGIN_NAME = 'app';
   static const String PLUGIN_VERSION = '1.0.3+4';
   static const String FENCE = 'assets/icons/fence.png';
   static const String GROUP = 'assets/icons/group.png';

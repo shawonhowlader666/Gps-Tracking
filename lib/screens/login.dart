@@ -173,7 +173,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           .get();
 
       if (doc.exists) {
-        print('✅ Firebase document found');
         final data = doc.data() as Map<String, dynamic>;
 
         if (data.containsKey('spytrack')) {
@@ -187,16 +186,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             // Handle different data types
             if (urlData is List) {
               serverList = urlData;
-              print('✅ Found ${serverList.length} servers in Firebase');
               for (int i = 0; i < serverList.length; i++) {
-                print('   Server ${i + 1}: ${serverList[i]['name']} - ${serverList[i]['url']}');
               }
             } else if (urlData is String) {
               try {
                 serverList = jsonDecode(urlData) as List;
-                print('✅ Parsed ${serverList.length} servers from JSON string');
               } catch (e) {
-                print('❌ Failed to parse URL string: $e');
               }
             }
 
@@ -218,7 +213,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
             setState(() {
               availableServers = serverList;
-              print('✅ Total available servers: ${availableServers.length}');
 
               // Set default selected server
               if (availableServers.isNotEmpty) {
@@ -236,7 +230,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 } else {
                   selectedServer = availableServers[0];
                 }
-                print('✅ Selected server: ${selectedServer?['name']}');
               }
               isLoadingServers = false;
             });
@@ -244,8 +237,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         }
       }
     } catch (e, stackTrace) {
-      print('❌ Error fetching servers: $e');
-      print('Stack trace: $stackTrace');
       setState(() {
         isLoadingServers = false;
         availableServers = [];
@@ -304,7 +295,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         await AdMobService().initialize();
       }
     } catch (e) {
-      print('Error fetching Firebase config: $e');
     }
   }
 
@@ -1126,12 +1116,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       isLoading = true;
     });
 
-    print('\n' + '=' * 60);
-    print('🚀 STARTING MULTI-SERVER LOGIN');
-    print('=' * 60);
-    print('📧 Email: $_email');
-    print('🌐 Total Servers: ${availableServers.length}');
-    print('=' * 60 + '\n');
 
     bool loginSuccess = false;
     Map<String, dynamic>? successfulServer;
@@ -1143,7 +1127,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         .where((server) => server['message']?.isEmpty != false)
         .toList();
 
-    print('✅ Active servers (without maintenance): ${activeServers.length}\n');
 
     if (activeServers.isEmpty) {
       setState(() {
@@ -1162,16 +1145,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     // Try ALL active servers
     for (int i = 0; i < activeServers.length; i++) {
       var server = activeServers[i];
-      print('┌─────────────────────────────────────────────');
-      print('│ Server ${i + 1}/${activeServers.length}');
-      print('├─────────────────────────────────────────────');
-      print('│ Name: ${server['name']}');
-      print('│ URL: ${server['url']}');
-      print('│ Type: ${server['type']}');
-      print('└─────────────────────────────────────────────');
 
       try {
-        print('   🔄 Attempting login...');
 
         final response =
         await APIService.login(server['url'], _email, _password);
@@ -1180,11 +1155,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           lastStatusCode = response.statusCode;
           lastResponseBody = response.body;
 
-          print('   📥 Response Code: ${response.statusCode}');
 
           if (response.statusCode == 200) {
-            print('   ✅ SUCCESS! Login successful on this server!');
-            print('   🎉 User data received\n');
 
             try {
               UserLogin user = UserLogin.fromJson(
@@ -1215,34 +1187,21 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 selectedServer = server;
               });
 
-              print('=' * 60);
-              print('🎊 LOGIN SUCCESSFUL!');
-              print('=' * 60);
-              print('Connected to: ${server['name']}');
-              print('Server URL: ${server['url']}');
-              print('User Hash: ${user.userApiHash}');
-              print('=' * 60 + '\n');
 
               break; // Stop trying other servers
             } catch (e) {
-              print('   ❌ Error parsing user data: $e');
               continue; // Try next server
             }
           } else if (response.statusCode == 401 || response.statusCode == 400) {
-            print('   ⚠️ Invalid credentials on this server');
           } else if (response.statusCode == 422) {
-            print('   ⚠️ Validation error: ${response.statusCode}');
           } else {
-            print('   ❌ Failed with status: ${response.statusCode}');
           }
         } else {
-          print('   ❌ No response from server (connection failed)');
         }
       } catch (e) {
-        print('   ❌ Exception: $e');
       }
 
-      print(''); // Empty line between server attempts
+      // Empty line between server attempts
     }
 
     setState(() {
@@ -1251,7 +1210,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
     if (loginSuccess && successfulServer != null) {
       // Login successful
-      print('🎯 Proceeding with successful login...\n');
 
       dataController.getDevices();
       updateToken();
@@ -1290,12 +1248,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       Get.offAndToNamed('/home');
     } else {
       // Login failed on all servers
-      print('=' * 60);
-      print('❌ LOGIN FAILED ON ALL SERVERS');
-      print('=' * 60);
-      print('Total servers tried: ${activeServers.length}');
-      print('Last status code: $lastStatusCode');
-      print('=' * 60 + '\n');
 
       if (lastStatusCode == 422) {
         ScaffoldMessenger.of(context).showSnackBar(

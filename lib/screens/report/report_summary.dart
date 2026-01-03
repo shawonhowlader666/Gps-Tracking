@@ -413,7 +413,7 @@ class _ReportSummaryPageState extends State<ReportSummaryPage> {
                   _handleFilterChange(filter);
                 }
               },
-              selectedColor: CustomColor.primaryColor.withOpacity(0.2),
+              selectedColor: CustomColor.primaryColor.withValues(alpha: 0.2),
               backgroundColor: Colors.grey[200],
               labelStyle: TextStyle(
                 color: _selectedFilter == filter

@@ -1994,10 +1994,8 @@ class _DevicePageState extends State<DevicePage> {
                               },
                             ),
                             _buildGridActionItem(
-                              icon: isLocked
-                                  ? Icons.lock_open_outlined
-                                  : Icons.lock_outlined,
-                              label: isLocked ? 'unlock'.tr : 'lock'.tr,
+                              icon: Icons.lock_outlined,
+                              label: 'lock'.tr,
                               color: const Color(0xFFF59E0B),
                               onTap: () {
                                 Navigator.pop(context);

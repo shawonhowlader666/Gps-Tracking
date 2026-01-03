@@ -5,7 +5,7 @@
 // ignore_for_file: lines_longer_than_80_chars
 class ImagesRes {
 ImagesRes._();
-  static const String PLUGIN_NAME = 'gpspro';
+  static const String PLUGIN_NAME = 'app';
   static const String PLUGIN_VERSION = '1.0.3+4';
   static const String APPLE_STORE = 'images/apple-store.png';
   static const String ARROW_LEFT = 'images/arrow_left.gif';

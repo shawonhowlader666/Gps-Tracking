@@ -5,6 +5,6 @@
 // ignore_for_file: lines_longer_than_80_chars
 class IconsRes {
 IconsRes._();
-  static const String PLUGIN_NAME = 'gpspro';
+  static const String PLUGIN_NAME = 'app';
   static const String PLUGIN_VERSION = '1.0.3+4';
 }
