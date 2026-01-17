@@ -15,6 +15,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/payment_service.dart';
 import 'data_controller/data_controller.dart';
 
+// Status enum for consistency
+enum VehicleStatus { running, idle, stop, offline }
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -24,16 +27,21 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final HomeController homeController = Get.put(HomeController());
-
-  // Use DataController instead of EventsController
   late final DataController dataController;
 
   Timer? _countdownTimer;
+  Timer? _statusRefreshTimer;
   Duration? _timeLeft;
   double? _dueAmount;
   bool _isVisible = true;
 
-  // Simple color palette - 4 main status colors
+  // Reactive counts for status
+  final RxInt _runningCount = 0.obs;
+  final RxInt _idleCount = 0.obs;
+  final RxInt _stopCount = 0.obs;
+  final RxInt _offlineCount = 0.obs;
+
+  // Simple color palette
   static const Color primaryColor = Color(0xFF2563EB);
   static const Color successColor = Color(0xFF22C55E);
   static const Color warningColor = Color(0xFFF59E0B);
@@ -45,33 +53,78 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Initialize DataController - use put to create if not exists
     dataController = Get.put(DataController(), permanent: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _checkPaymentStatus();
+        _calculateStatusCounts();
+        _startStatusRefresh();
       }
     });
+  }
+
+  void _startStatusRefresh() {
+    _statusRefreshTimer?.cancel();
+    _statusRefreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (mounted && _isVisible) {
+        _calculateStatusCounts();
+      }
+    });
+  }
+
+  void _calculateStatusCounts() {
+    if (!mounted) return;
+
+    final vehicles = dataController.onlyDevices;
+    int running = 0;
+    int idle = 0;
+    int stop = 0;
+    int offline = 0;
+
+    for (final device in vehicles) {
+      final status = _getVehicleStatus(device);
+      switch (status) {
+        case VehicleStatus.running:
+          running++;
+          break;
+        case VehicleStatus.idle:
+          idle++;
+          break;
+        case VehicleStatus.stop:
+          stop++;
+          break;
+        case VehicleStatus.offline:
+          offline++;
+          break;
+      }
+    }
+
+    _runningCount.value = running;
+    _idleCount.value = idle;
+    _stopCount.value = stop;
+    _offlineCount.value = offline;
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    // Pause timer when app is not visible to reduce frame issues
     switch (state) {
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:
         _isVisible = false;
         _countdownTimer?.cancel();
+        _statusRefreshTimer?.cancel();
         break;
       case AppLifecycleState.resumed:
         _isVisible = true;
         if (_timeLeft != null && _dueAmount != null) {
           _resumeCountdownIfNeeded();
         }
+        _calculateStatusCounts();
+        _startStatusRefresh();
         break;
       case AppLifecycleState.detached:
         break;
@@ -93,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
-    _countdownTimer = null;
+    _statusRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -104,10 +157,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final stats = await PaymentService.getStats();
       if (!mounted) return;
 
-      // No due amount - clear everything
       if (stats == null || stats.due <= 0) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('grace_end_time'); // Clear grace period
+        await prefs.remove('grace_end_time');
         if (mounted) setState(() => _dueAmount = null);
         return;
       }
@@ -120,16 +172,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted) return;
 
       if (graceEnd == null) {
-        // First time showing - allow snooze
         _showPaymentDialog(stats.due, allowSnooze: true, isBlocking: false);
       } else {
         final now = DateTime.now().millisecondsSinceEpoch;
         if (now > graceEnd) {
-          // Grace period expired - blocking mode
-          // But still allow payment button to work
           _showPaymentDialog(stats.due, allowSnooze: false, isBlocking: true);
         } else {
-          // Within grace period - show countdown
           _startCountdown(DateTime.fromMillisecondsSinceEpoch(graceEnd));
         }
       }
@@ -142,7 +190,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _countdownTimer?.cancel();
     _updateTimeLeft(endTime);
 
-    // Use longer interval to reduce frame drops
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted || !_isVisible) {
         timer.cancel();
@@ -168,13 +215,211 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final now = DateTime.now();
     if (now.isBefore(endTime)) {
       final newTimeLeft = endTime.difference(now);
-      // Only update if difference is significant (avoid unnecessary rebuilds)
       if (_timeLeft == null ||
           (_timeLeft!.inSeconds - newTimeLeft.inSeconds).abs() >= 1) {
         setState(() => _timeLeft = newTimeLeft);
       }
     }
   }
+
+  // ==================== STATUS DETECTION METHODS ====================
+
+  /// PRIMARY: Use iconColor from server (most reliable source)
+  /// FALLBACK: Calculate based on online status, speed, and engine
+  VehicleStatus _getVehicleStatus(DeviceItem device) {
+    // 1. PRIMARY: Check iconColor from server
+    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
+
+    if (iconColor == 'green') {
+      return VehicleStatus.running;
+    } else if (iconColor == 'yellow') {
+      return VehicleStatus.idle;
+    } else if (iconColor == 'red') {
+      // Red can mean stopped OR offline - check online status
+      if (_isDeviceOnline(device)) {
+        return VehicleStatus.stop;
+      } else {
+        return VehicleStatus.offline;
+      }
+    }
+
+    // 2. FALLBACK: Calculate status manually if iconColor is not available
+
+    // Check if device is online first
+    if (!_isDeviceOnline(device)) {
+      return VehicleStatus.offline;
+    }
+
+    // Check speed
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+
+    // If moving, it's running
+    if (speed > 0) {
+      return VehicleStatus.running;
+    }
+
+    // Speed is 0, check engine status
+    if (_isEngineOn(device)) {
+      return VehicleStatus.idle;
+    }
+
+    // Speed is 0, engine is off, but device is online = stopped
+    return VehicleStatus.stop;
+  }
+
+  /// Check if device is online/connected to server
+  bool _isDeviceOnline(DeviceItem device) {
+    final online = device.online?.toLowerCase().trim() ?? '';
+
+    // Explicitly offline
+    if (online.contains('offline')) {
+      return false;
+    }
+
+    // Explicitly online
+    if (online.contains('online')) {
+      return true;
+    }
+
+    // Check by iconColor - if it's green or yellow, device is online
+    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
+    if (iconColor == 'green' || iconColor == 'yellow') {
+      return true;
+    }
+
+    // Check by timestamp - if last update was within 5 minutes
+    if (device.timestamp != null && device.timestamp! > 0) {
+      try {
+        final lastUpdate =
+        DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
+        final difference = DateTime.now().difference(lastUpdate);
+        return difference.inMinutes < 5;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    // Check if has speed > 0 (must be online if moving)
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+    if (speed > 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Check if engine/ignition is ON
+  bool _isEngineOn(DeviceItem device) {
+    // 1. Check engineStatus field directly
+    if (device.engineStatus != null) {
+      final status = device.engineStatus;
+      if (status is bool) return status;
+      if (status is int) return status == 1;
+      if (status is String) {
+        final s = status.toLowerCase().trim();
+        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s)) {
+          return true;
+        }
+        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
+            .contains(s)) {
+          return false;
+        }
+      }
+    }
+
+    // 2. Check sensors for ignition/ACC status
+    if (device.sensors != null && device.sensors!.isNotEmpty) {
+      for (var sensor in device.sensors!) {
+        try {
+          final type = (sensor['type'] ?? '').toString().toLowerCase();
+          final name = (sensor['name'] ?? '').toString().toLowerCase();
+          final value = sensor['value'];
+
+          if (type == 'acc' ||
+              type == 'ignition' ||
+              type == 'engine' ||
+              name.contains('ignition') ||
+              name.contains('acc') ||
+              name.contains('engine')) {
+            if (value == null) continue;
+
+            if (value is bool) return value;
+            if (value is int) return value == 1;
+            if (value is String) {
+              final v = value.toLowerCase().trim();
+              if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
+                  .contains(v)) return true;
+              if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
+                  .contains(v)) return false;
+            }
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+    }
+
+    // 3. Check iconColor as indicator
+    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
+    if (iconColor == 'yellow') {
+      return true; // Idle means engine is on but not moving
+    }
+    if (iconColor == 'green') {
+      return true; // Running means engine is definitely on
+    }
+
+    // 4. If speed > 0, engine must be on
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+    if (speed > 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Get the color for the current status
+  Color _getStatusColor(DeviceItem device) {
+    switch (_getVehicleStatus(device)) {
+      case VehicleStatus.running:
+        return successColor;
+      case VehicleStatus.idle:
+        return warningColor;
+      case VehicleStatus.stop:
+        return neutralColor;
+      case VehicleStatus.offline:
+        return dangerColor;
+    }
+  }
+
+  /// Get the label text for the current status
+  String _getStatusLabel(DeviceItem device) {
+    switch (_getVehicleStatus(device)) {
+      case VehicleStatus.running:
+        return 'Running';
+      case VehicleStatus.idle:
+        return 'Idle';
+      case VehicleStatus.stop:
+        return 'Parking';
+      case VehicleStatus.offline:
+        return 'Offline';
+    }
+  }
+
+  /// Get the icon for the current status
+  IconData _getStatusIcon(DeviceItem device) {
+    switch (_getVehicleStatus(device)) {
+      case VehicleStatus.running:
+        return Icons.directions_car;
+      case VehicleStatus.idle:
+        return Icons.pause_circle;
+      case VehicleStatus.stop:
+        return Icons.local_parking;
+      case VehicleStatus.offline:
+        return Icons.signal_wifi_off;
+    }
+  }
+
+  // ==================== PAYMENT DIALOG ====================
 
   void _showPaymentDialog(double due,
       {bool allowSnooze = true, bool isBlocking = false}) {
@@ -196,7 +441,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Header with gradient
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 24),
@@ -241,18 +485,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-
-                // Amount section
                 Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
                       const Text(
                         'মোট বকেয়া',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -316,21 +555,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-
-                // Buttons
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                   child: Column(
                     children: [
-                      // Pay Now Button - ALWAYS WORKS
                       SizedBox(
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
                           onPressed: () {
-                            // ALWAYS close dialog first, then navigate
                             Navigator.of(dialogContext).pop();
-
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -364,8 +598,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         ),
                       ),
-
-                      // Snooze Button - Only show if allowed AND not blocking
                       if (allowSnooze && !isBlocking) ...[
                         const SizedBox(height: 12),
                         SizedBox(
@@ -374,9 +606,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           child: OutlinedButton(
                             onPressed: () async {
                               final prefs =
-                                  await SharedPreferences.getInstance();
+                              await SharedPreferences.getInstance();
                               final later =
-                                  DateTime.now().add(const Duration(days: 7));
+                              DateTime.now().add(const Duration(days: 7));
                               await prefs.setInt(
                                 'grace_end_time',
                                 later.millisecondsSinceEpoch,
@@ -407,8 +639,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         ),
                       ],
-
-                      // Contact Support - Show when blocking
                       if (isBlocking) ...[
                         const SizedBox(height: 12),
                         SizedBox(
@@ -416,7 +646,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           height: 50,
                           child: OutlinedButton(
                             onPressed: () {
-                              // Close dialog and open support
                               Navigator.of(dialogContext).pop();
                               _contactSupport();
                             },
@@ -452,15 +681,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-// Add this method for support contact
   void _contactSupport() {
-    // Option 1: Open phone dialer
-    // launchUrl(Uri.parse('tel:+8801XXXXXXXXX'));
-
-    // Option 2: Open WhatsApp
-    // launchUrl(Uri.parse('https://wa.me/8801XXXXXXXXX'));
-
-    // Option 3: Show contact dialog
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -520,13 +741,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  // ==================== BUILD METHODS ====================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () => homeController.refreshData(),
+          onRefresh: () async {
+            await homeController.refreshData();
+            _calculateStatusCounts();
+          },
           color: primaryColor,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -536,19 +762,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 padding: const EdgeInsets.all(12),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    // Due Reminder Container
                     if (_dueAmount != null && _dueAmount! > 0)
                       RepaintBoundary(child: _buildDueReminderContainer()),
                     if (_dueAmount != null && _dueAmount! > 0)
                       const SizedBox(height: 16),
                     RepaintBoundary(child: _buildStatsRow()),
-                    // const SizedBox(height: 16),
-                    // RepaintBoundary(child: _buildBannerCarousel()),
                     const SizedBox(height: 16),
                     RepaintBoundary(child: _buildVehicleSelector()),
                     const SizedBox(height: 16),
-                    RepaintBoundary(child: _buildLiveStatus()),
-                    const SizedBox(height: 16),
+                    // RepaintBoundary(child: _buildLiveStatus()),
+                    // const SizedBox(height: 16),
                     RepaintBoundary(child: _buildMileageChart()),
                     const SizedBox(height: 16),
                     RepaintBoundary(child: _buildVehicleSummary()),
@@ -686,7 +909,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   backgroundColor: Colors.white,
                   foregroundColor: dangerColor,
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -737,7 +960,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   width: 40,
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) =>
-                      const Icon(Icons.apps, size: 40),
+                  const Icon(Icons.apps, size: 40),
                 ),
                 Expanded(
                   child: Center(
@@ -751,15 +974,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // Wrap with Obx for reactive updates
                 Obx(() => _buildAppBarIcon(
-                      Icons.notifications_outlined,
+                  Icons.notifications_outlined,
                       () {
-                        // Navigate to events page
-                       // Get.toNamed('/events');
-                      },
-                      badge: dataController.events.length,
-                    )),
+                    // Navigate to events page
+                    // Get.toNamed('/events');
+                  },
+                  badge: dataController.events.length,
+                )),
               ],
             ),
           ),
@@ -819,97 +1041,323 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildStatsRow() {
     return Obx(() {
-      final dc = homeController.dataController;
-      final vehicles = dc.onlyDevices;
+      // Recalculate counts when devices change
+      _calculateStatusCounts();
 
-      int runningCount = 0;
-      int idleCount = 0;
-      int stopCount = 0;
-      //int stopCount = 0;
+      final allCount = dataController.onlyDevices.length;
+      final running = _runningCount.value;
+      final idle = _idleCount.value;
+      final parking = _stopCount.value;
+      final offline = _offlineCount.value;
 
-      for (final d in vehicles) {
-        switch (_getDeviceStatus(d)) {
-          case 'running':
-            runningCount++;
-            break;
-          case 'idle':
-            idleCount++;
-            break;
-          case 'stop':
-            stopCount++;
-            break;
-          }
-      }
-
-      return Row(
-        children: [
-          _buildStatChip('All', dc.allCount.value, primaryColor),
-          _buildStatChip('Running', runningCount, successColor),
-          _buildStatChip('Idle', idleCount, warningColor),
-          _buildStatChip('Stop', stopCount, dangerColor),
-        ],
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              offset: const Offset(0, 2),
+              blurRadius: 4,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.pie_chart, color: primaryColor, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'Vehicle Status',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '$allCount Total',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                // Pie Chart
+                SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: allCount == 0
+                      ? _buildEmptyPieChart()
+                      : Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          sectionsSpace: 2,
+                          centerSpaceRadius: 40,
+                          startDegreeOffset: -90,
+                          sections: _buildPieSections(
+                            running: running,
+                            idle: idle,
+                            parking: parking,
+                            offline: offline,
+                          ),
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            allCount.toString(),
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: primaryColor,
+                            ),
+                          ),
+                          Text(
+                            'Vehicles',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 24),
+                // Legend
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildLegendItem(
+                        color: successColor,
+                        label: 'Running',
+                        count: running,
+                        total: allCount,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildLegendItem(
+                        color: warningColor,
+                        label: 'Idle',
+                        count: idle,
+                        total: allCount,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildLegendItem(
+                        color: neutralColor,
+                        label: 'Parking',
+                        count: parking,
+                        total: allCount,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildLegendItem(
+                        color: dangerColor,
+                        label: 'Offline',
+                        count: offline,
+                        total: allCount,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       );
     });
   }
 
-  Widget _buildStatChip(String label, int count, Color color) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 3),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
+  List<PieChartSectionData> _buildPieSections({
+    required int running,
+    required int idle,
+    required int parking,
+    required int offline,
+  }) {
+    final total = running + idle + parking + offline;
+    if (total == 0) return [];
+
+    final sections = <PieChartSectionData>[];
+
+    if (running > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: successColor,
+          value: running.toDouble(),
+          title: running > 0 ? '$running' : '',
+          radius: 20,
+          titleStyle: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+          titlePositionPercentageOffset: 0.55,
         ),
-        child: Column(
+      );
+    }
+
+    if (idle > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: warningColor,
+          value: idle.toDouble(),
+          title: idle > 0 ? '$idle' : '',
+          radius: 20,
+          titleStyle: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+          titlePositionPercentageOffset: 0.55,
+        ),
+      );
+    }
+
+    if (parking > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: neutralColor,
+          value: parking.toDouble(),
+          title: parking > 0 ? '$parking' : '',
+          radius: 20,
+          titleStyle: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+          titlePositionPercentageOffset: 0.55,
+        ),
+      );
+    }
+
+    if (offline > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: dangerColor,
+          value: offline.toDouble(),
+          title: offline > 0 ? '$offline' : '',
+          radius: 20,
+          titleStyle: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+          titlePositionPercentageOffset: 0.55,
+        ),
+      );
+    }
+
+    return sections;
+  }
+
+  Widget _buildEmptyPieChart() {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        PieChart(
+          PieChartData(
+            sectionsSpace: 0,
+            centerSpaceRadius: 40,
+            sections: [
+              PieChartSectionData(
+                color: Colors.grey[200],
+                value: 1,
+                title: '',
+                radius: 20,
+              ),
+            ],
+          ),
+        ),
+        Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              count.toString(),
+              '0',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: color,
+                color: Colors.grey[400],
               ),
             ),
-            const SizedBox(height: 2),
             Text(
-              label,
-              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+              'Vehicles',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey[400],
+              ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildBannerCarousel() {
-    return CarouselSlider(
-      options: CarouselOptions(
-        height: 150,
-        autoPlay: true,
-        enlargeCenterPage: true,
-        viewportFraction: 0.95,
-        autoPlayInterval: const Duration(seconds: 4),
-      ),
-      items: BANNER_IMAGE.map((url) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: CachedNetworkImage(
-            imageUrl: url,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            placeholder: (_, __) => Container(
-              color: Colors.grey[200],
-              child: const Center(child: CircularProgressIndicator()),
-            ),
-            errorWidget: (_, __, ___) => Container(
-              color: Colors.grey[200],
-              child: Icon(Icons.image, color: Colors.grey[400], size: 40),
+  Widget _buildLegendItem({
+    required Color color,
+    required String label,
+    required int count,
+    required int total,
+  }) {
+    final percentage = total > 0 ? (count / total * 100).toStringAsFixed(0) : '0';
+
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[700],
             ),
           ),
-        );
-      }).toList(),
+        ),
+        Text(
+          '$count',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '$percentage%',
+            style: TextStyle(
+              fontSize: 10,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -930,10 +1378,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // Validate selectedId exists in the list
       final validSelectedId =
-          vehicleList.any((d) => d.id == selectedId) ? selectedId : null;
+      vehicleList.any((d) => d.id == selectedId) ? selectedId : null;
 
       return Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -986,8 +1434,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     style: TextStyle(color: Colors.grey[500], fontSize: 13),
                   ),
                   icon:
-                      Icon(Icons.keyboard_arrow_down, color: Colors.grey[600]),
+                  Icon(Icons.keyboard_arrow_down, color: Colors.grey[600]),
                   items: vehicleList.map((device) {
+                    final statusColor = _getStatusColor(device);
                     return DropdownMenuItem<int>(
                       value: device.id,
                       child: Row(
@@ -996,7 +1445,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: _getStatusColor(device),
+                              color: statusColor,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -1005,6 +1454,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             child: Text(
                               device.name ?? 'Unnamed',
                               style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                          Text(
+                            _getStatusLabel(device),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: statusColor,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -1018,8 +1475,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
             if (selected != null) ...[
-              const SizedBox(height: 12),
-              _buildSelectedVehiclePreview(selected),
+              const SizedBox(height: 8),
+              _buildLiveStatus(),
             ],
           ],
         ),
@@ -1027,86 +1484,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  Widget _buildSelectedVehiclePreview(DeviceItem device) {
-    final color = _getStatusColor(device);
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.15)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: device.icon?.path != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: CachedNetworkImage(
-                      imageUrl:
-                          "${UserRepository.getServerUrl()}/${device.icon!.path!}",
-                      fit: BoxFit.contain,
-                      errorWidget: (_, __, ___) =>
-                          Icon(Icons.directions_car, color: color, size: 18),
-                    ),
-                  )
-                : Icon(Icons.directions_car, color: color, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  device.name ?? 'Unnamed',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '${device.speed ?? 0} km/h • ${device.stopDuration ?? 'Active'}',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              _getStatusLabel(device),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildLiveStatus() {
     return Obx(() {
       final device = homeController.selectedDevice;
       if (device == null) return const SizedBox.shrink();
 
-      final color = _getStatusColor(device).withValues(alpha: 0.6);
+      final color = _getStatusColor(device);
+      final status = _getVehicleStatus(device);
+      final isEngineOn = _isEngineOn(device);
+
       return Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: color,
+          color: color.withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
@@ -1134,7 +1525,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -1166,12 +1557,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     Icons.explore, '${device.course ?? 0}°', 'Course'),
                 _buildLiveDivider(),
                 _buildLiveStat(
-                  _isEngineOn(device) ? Icons.power : Icons.power_off,
-                  _isEngineOn(device) ? 'ON' : 'OFF',
+                  isEngineOn ? Icons.power : Icons.power_off,
+                  isEngineOn ? 'ON' : 'OFF',
                   'Engine',
                 ),
                 _buildLiveDivider(),
-                _buildLiveStat(Icons.timer, device.stopDuration ?? '-', 'Stop'),
+                _buildLiveStat(Icons.timer, device.stopDuration ?? '-', 'Parking'),
               ],
             ),
           ],
@@ -1213,7 +1604,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildMileageChart() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1309,7 +1700,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         getTitlesWidget: (value, _) => Text(
                           '${value.toInt()}',
                           style:
-                              TextStyle(fontSize: 10, color: Colors.grey[500]),
+                          TextStyle(fontSize: 10, color: Colors.grey[500]),
                         ),
                       ),
                     ),
@@ -1357,17 +1748,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   barTouchData: BarTouchData(
                     enabled: true,
                     touchTooltipData: BarTouchTooltipData(
-                      getTooltipColor: (_) => Colors.grey[800]!,
+                      getTooltipColor: (_) => Colors.white,
                       tooltipPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                        horizontal: 4,
+                        vertical: 2,
                       ),
-                      tooltipMargin: 4,
+                      tooltipMargin: 0,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         return BarTooltipItem(
                           '${rod.toY.toInt()} km',
                           const TextStyle(
-                            color: Colors.white,
+                            color: Colors.black,
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
                           ),
@@ -1397,6 +1788,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final isLoading = homeController.isLoadingReport.value;
       final report = homeController.todayReport.value;
       final device = homeController.selectedDevice;
+      final error = homeController.reportError.value;
+
+      // Debug log
+      debugPrint('🎨 [UI] Building summary:');
+      debugPrint('   isLoading: $isLoading');
+      debugPrint('   device: ${device?.id}');
+      debugPrint('   report: ${report != null ? "exists" : "null"}');
+      debugPrint('   report.isEmpty: ${report?.isEmpty}');
+      debugPrint('   routeLength: ${report?.routeLength}');
 
       return Container(
         padding: const EdgeInsets.all(14),
@@ -1405,7 +1805,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: Colors.black.withOpacity(0.05),
               offset: const Offset(0, 2),
               blurRadius: 4,
             ),
@@ -1414,6 +1814,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header Row
             Row(
               children: [
                 const Icon(Icons.analytics, color: primaryColor, size: 18),
@@ -1426,107 +1827,135 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     color: Colors.grey[800],
                   ),
                 ),
+                const Spacer(),
+                // Refresh button
+                if (!isLoading)
+                  GestureDetector(
+                    onTap: () {
+                      if (device != null && device.id != null) {
+                        homeController.loadTodayReport(device.id!, forceRefresh: true);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(Icons.refresh, size: 16, color: Colors.grey[600]),
+                    ),
+                  )
+                else
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
               ],
             ),
             const SizedBox(height: 14),
-            if (isLoading)
+
+            // Content
+            if (isLoading && report == null)
               const SizedBox(
                 height: 200,
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (device == null)
               _buildEmptyState('Select a vehicle to view summary')
-            else
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 2.4,
-                children: [
-                  _buildSummaryItem(
-                    Icons.route,
-                    'Distance',
-                    report?.routeLength ?? '0 Km',
-                    primaryColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.speed,
-                    'Top Speed',
-                    report?.topSpeed ?? '0 kph',
-                    warningColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.play_arrow,
-                    'Moving',
-                    report?.moveDuration ?? '0h 0m',
-                    successColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.pause,
-                    'Stopped',
-                    report?.stopDuration ?? '0h 0m',
-                    dangerColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.speed_outlined,
-                    'Avg Speed',
-                    report?.averageSpeed ?? '0 kph',
-                    dangerColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.engineering,
-                    'Engine Hrs',
-                    report?.engineHours ?? '0h 0m',
-                    successColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.build_circle,
-                    'Engine Work',
-                    report?.engineWork ?? '0h 0m',
-                    warningColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.hourglass_empty,
-                    'Engine Idle',
-                    report?.engineIdle ?? '0h 0m',
-                    dangerColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.warning_amber,
-                    'Overspeed',
-                    report?.overspeedCount ?? '0',
-                    dangerColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.local_gas_station,
-                    'Fuel',
-                    device.deviceData?.fuelQuantity ?? '0.00 L',
-                    successColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.straighten,
-                    'Total Dist',
-                    '${device.totalDistance?.toStringAsFixed(1) ?? '0.0'} Km',
-                    primaryColor,
-                  ),
-                  _buildSummaryItem(
-                    Icons.explore,
-                    'Course',
-                    '${device.course ?? 0}°',
-                    dangerColor,
-                  ),
-                ],
-              ),
+            else if (report == null || report.isEmpty)
+                _buildEmptyState(error.isNotEmpty ? error : 'No data available for today')
+              else
+              // DATA AVAILABLE - Show Grid
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 2.4,
+                  children: [
+                    _buildSummaryItem(
+                      Icons.route,
+                      'Distance',
+                      report.routeLength ?? '0 Km',
+                      primaryColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.speed,
+                      'Top Speed',
+                      report.topSpeed ?? '0 kph',
+                      warningColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.play_arrow,
+                      'Moving',
+                      report.moveDuration ?? '0h 0m',
+                      successColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.pause,
+                      'Stopped',
+                      report.stopDuration ?? '0h 0m',
+                      dangerColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.speed_outlined,
+                      'Avg Speed',
+                      report.averageSpeed ?? '0 kph',
+                      neutralColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.engineering,
+                      'Engine Hrs',
+                      report.engineHours ?? '0h 0m',
+                      successColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.build_circle,
+                      'Engine Work',
+                      report.engineWork ?? '0s',
+                      warningColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.hourglass_empty,
+                      'Engine Idle',
+                      report.engineIdle ?? '0h 0m',
+                      dangerColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.warning_amber,
+                      'Overspeed',
+                      report.overspeedCount ?? '0',
+                      dangerColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.local_gas_station,
+                      'Fuel',
+                      report.fuelConsumption ?? device.deviceData?.fuelQuantity ?? '0 L',
+                      successColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.straighten,
+                      'Odometer',
+                      report.odometer ?? '${device.totalDistance?.toStringAsFixed(1) ?? '0'} Km',
+                      primaryColor,
+                    ),
+                    _buildSummaryItem(
+                      Icons.explore,
+                      'Course',
+                      '${device.course ?? 0}°',
+                      neutralColor,
+                    ),
+                  ],
+                ),
           ],
         ),
       );
     });
   }
 
-  Widget _buildSummaryItem(
-      IconData icon, String label, String value, Color color) {
+  Widget _buildSummaryItem(IconData icon, String label, String value, Color color) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1563,13 +1992,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Text(
                   label,
                   style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String message) {
+    return SizedBox(
+      height: 150,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.insert_chart_outlined, size: 40, color: Colors.grey[300]),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1614,7 +2061,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 if (due > 0)
                   Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: dangerColor,
                       borderRadius: BorderRadius.circular(10),
@@ -1763,26 +2210,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildEmptyState(String message) {
-    return SizedBox(
-      height: 150,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.directions_car_outlined,
-                size: 40, color: Colors.grey[300]),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: TextStyle(color: Colors.grey[500], fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showVehicleStatusDialog() {
     final vehicles = homeController.dataController.onlyDevices;
 
@@ -1839,7 +2266,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         color: color.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(8),
                         border:
-                            Border.all(color: color.withValues(alpha: 0.15)),
+                        Border.all(color: color.withValues(alpha: 0.15)),
                       ),
                       child: Row(
                         children: [
@@ -1851,7 +2278,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child:
-                                Icon(_getStatusIcon(v), color: color, size: 16),
+                            Icon(_getStatusIcon(v), color: color, size: 16),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -1904,241 +2331,5 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ),
     );
-  }
-
-  // ENHANCED STATUS DETECTION LOGIC
-
-  /// Check if the GPS device is online/connected
-  /// Returns true if device is communicating with server
-  bool _isDeviceOnline(DeviceItem device) {
-    final online = device.online?.toLowerCase().trim() ?? '';
-
-    // Explicit stop indicators
-    if (online.contains('stop')) return false;
-    if (online == 'ack' || online.contains('ack')) return false;
-
-    // Explicit online indicators
-    if (online.contains('online')) return true;
-
-    // Check device active status from deviceData
-    if (device.deviceData?.active != null) {
-      final active = device.deviceData!.active.toString();
-      if (active == "0" || active == "false") return false;
-    }
-
-    // Check timestamp - if last update was too long ago, consider stop
-    if (device.timestamp != null && device.timestamp! > 0) {
-      try {
-        final lastUpdate =
-            DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
-        final diff = DateTime.now().difference(lastUpdate);
-
-        // Consider stop if no update in last 10 minutes
-        if (diff.inMinutes > 10) return false;
-
-        return true;
-      } catch (_) {
-        // If timestamp parsing fails, continue to other checks
-      }
-    }
-
-    // Check movedTimestamp as alternative
-    if (device.movedTimestamp != null && device.movedTimestamp! > 0) {
-      try {
-        final lastMoved =
-            DateTime.fromMillisecondsSinceEpoch(device.movedTimestamp! * 1000);
-        final diff = DateTime.now().difference(lastMoved);
-
-        // If moved recently, device is online
-        if (diff.inMinutes < 30) return true;
-      } catch (_) {}
-    }
-
-    // Check time string if available
-    if (device.time != null && device.time!.isNotEmpty) {
-      try {
-        final lastTime = DateTime.parse(device.time!);
-        final diff = DateTime.now().difference(lastTime);
-        if (diff.inMinutes > 10) return false;
-        return true;
-      } catch (_) {}
-    }
-
-    // If we have coordinates but no other indicators, check if they're valid
-    if (device.lat != null && device.lng != null) {
-      final lat = double.tryParse(device.lat.toString()) ?? 0;
-      final lng = double.tryParse(device.lng.toString()) ?? 0;
-      if (lat != 0 && lng != 0) {
-        // Has valid coordinates, assume online if no explicit stop indicator
-        if (online.isEmpty) return true;
-      }
-    }
-
-    // Default to stop if no positive indicators found
-    return false;
-  }
-
-  /// Check if engine/ignition is ON
-  /// Returns true if engine is running (key is ON)
-  bool _isEngineOn(DeviceItem device) {
-    // Check engineStatus field directly
-    if (device.engineStatus != null) {
-      final status = device.engineStatus;
-
-      if (status is bool) return status;
-      if (status is int) return status == 1;
-
-      if (status is String) {
-        final s = status.toLowerCase().trim();
-
-        // Positive indicators
-        if (s == 'on' || s == '1' || s == 'true') return true;
-        if (s == 'ign on' || s == 'ignition on' || s == 'engine on') {
-          return true;
-        }
-        if (s.contains('on') && !s.contains('off')) return true;
-
-        // Negative indicators
-        if (s == 'off' || s == '0' || s == 'false') return false;
-        if (s == 'ign off' || s == 'ignition off' || s == 'engine off') {
-          return false;
-        }
-      }
-    }
-
-    // Check traccar data for engine timestamps
-    final traccar = device.deviceData?.traccar;
-    if (traccar != null) {
-      final engineOnAt = traccar.engineOnAt;
-      final engineOffAt = traccar.engineOffAt;
-
-      if (engineOnAt != null && engineOffAt != null) {
-        try {
-          final onTime = DateTime.parse(engineOnAt);
-          final offTime = DateTime.parse(engineOffAt);
-          return onTime.isAfter(offTime);
-        } catch (_) {}
-      }
-
-      // Only engine on time exists
-      if (engineOnAt != null && engineOffAt == null) return true;
-
-      // Only engine off time exists
-      if (engineOffAt != null && engineOnAt == null) return false;
-    }
-
-    // Check detectEngine from deviceData
-    if (device.deviceData?.detectEngine != null) {
-      final detectEngine = device.deviceData!.detectEngine!.toLowerCase();
-      if (detectEngine == 'on' || detectEngine == '1' || detectEngine == 'true') {
-        return true;
-      }
-      if (detectEngine == 'off' ||
-          detectEngine == '0' ||
-          detectEngine == 'false') {
-        return false;
-      }
-    }
-
-    // Check detectEngine from device (root level)
-    if (device.detectEngine != null) {
-      final detectEngine = device.detectEngine!.toLowerCase();
-      if (detectEngine == 'on' || detectEngine == '1' || detectEngine == 'true') {
-        return true;
-      }
-      if (detectEngine == 'off' ||
-          detectEngine == '0' ||
-          detectEngine == 'false') {
-        return false;
-      }
-    }
-
-    // Infer from stop duration - if stopped for very short time, might still have engine on
-    if (device.stopDurationSec != null) {
-      // If stopped for less than 60 seconds, likely engine is still on
-      if (device.stopDurationSec! < 60) return true;
-    }
-
-    // If vehicle is moving, engine must be on
-    final speed = double.tryParse(device.speed.toString()) ?? 0;
-    if (speed > 0) return true;
-
-    // Default to off if no positive indicators
-    return false;
-  }
-
-  /// Get the current status of the device
-  /// Priority: stop → running → idle → stop
-  ///
-  /// Status definitions:
-  /// - **running**: Vehicle is moving (speed > 0)
-  /// - **idle**: Vehicle is not moving but engine/key is ON (speed = 0, engine ON)
-  /// - **stop**: Vehicle is stopped, engine OFF, but device is connected (speed = 0, engine OFF, online)
-  /// - **stop**: GPS device is disconnected/not communicating
-  String _getDeviceStatus(DeviceItem device) {
-    // STEP 1: Check if device is online/connected
-    // If device is not online, it's OFFLINE regardless of other states
-    if (!_isDeviceOnline(device)) {
-      return 'stop';
-    }
-
-    // STEP 2: Device is online, check if vehicle is moving
-    final speed = double.tryParse(device.speed.toString()) ?? 0;
-
-    // If speed > 0, vehicle is RUNNING
-    if (speed > 0) {
-      return 'running';
-    }
-
-    // STEP 3: Vehicle is not moving (speed = 0), check engine status
-    final engineOn = _isEngineOn(device);
-
-    // If engine is ON but not moving, vehicle is IDLE
-    if (engineOn) {
-      return 'idle';
-    }
-
-    // STEP 4: Engine is OFF and not moving, but device is connected = STOP
-    return 'stop';
-  }
-
-  /// Get the color for the current status
-  Color _getStatusColor(DeviceItem device) {
-    switch (_getDeviceStatus(device)) {
-      case 'running':
-        return successColor; // Green
-      case 'idle':
-        return warningColor; // Orange/Yellow
-      case 'stop':
-        return dangerColor; default:
-        return dangerColor; // Grey
-    }
-  }
-
-  /// Get the label text for the current status
-  String _getStatusLabel(DeviceItem device) {
-    switch (_getDeviceStatus(device)) {
-      case 'running':
-        return 'Running';
-      case 'idle':
-        return 'Idle';
-      case 'stop':
-        return 'Stopped';
-      default:
-        return 'Offline';
-    }
-  }
-
-  /// Get the icon for the current status
-  IconData _getStatusIcon(DeviceItem device) {
-    switch (_getDeviceStatus(device)) {
-      case 'running':
-        return Icons.directions_car; // Car icon for running
-      case 'idle':
-        return Icons.local_parking; // Parking icon for idle
-      case 'stop':
-        return Icons.power_off; default:
-        return Icons.signal_wifi_off; // No signal for stop
-    }
   }
 }

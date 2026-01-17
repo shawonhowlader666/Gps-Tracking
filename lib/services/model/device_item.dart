@@ -6,6 +6,7 @@ class DeviceItem extends Object {
   String? name;
   String? online;
   String? time;
+  String? imei;
   int? timestamp;
   int? acktimestamp;
   dynamic lat;
@@ -46,6 +47,7 @@ class DeviceItem extends Object {
       this.name,
       this.online,
       this.time,
+        this.imei,
       this.timestamp,
       this.acktimestamp,
       this.lat,
@@ -86,6 +88,7 @@ class DeviceItem extends Object {
     name = json['name'];
     online = json['online'];
     time = json['time'];
+    imei = json['imei'];
     timestamp = json['timestamp'];
     acktimestamp = json['acktimestamp'];
     lat = json['lat'];
@@ -139,6 +142,7 @@ class DeviceItem extends Object {
     data['name'] = name;
     data['online'] = online;
     data['time'] = time;
+    data['imei'] = imei;
     data['timestamp'] = timestamp;
     data['acktimestamp'] = acktimestamp;
     data['lat'] = lat;

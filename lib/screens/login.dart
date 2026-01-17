@@ -244,6 +244,47 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _callSupportPhone() async {
+    if (PHONE_NO.isEmpty) {
+      Get.snackbar("Sorry!", "Phone number not available");
+      return;
+    }
+
+    final Uri uri = Uri.parse('tel:$PHONE_NO');
+
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        Get.snackbar("Error", "Phone call not supported on this device");
+      }
+    } catch (e) {
+      Get.snackbar("Error", "Failed to open phone app");
+    }
+  }
+
+  Future<void> _openWhatsAppSupport() async {
+    if (WHATS_APP.isEmpty) {
+      Get.snackbar("Sorry!", "WhatsApp not available");
+      return;
+    }
+
+    // Remove spaces, +, -
+    final cleanNumber = WHATS_APP.replaceAll(RegExp(r'[^0-9]'), '');
+    final Uri uri = Uri.parse('https://wa.me/$cleanNumber');
+
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        Get.snackbar("Error", "WhatsApp not installed");
+      }
+    } catch (e) {
+      Get.snackbar("Error", "Failed to open WhatsApp");
+    }
+  }
+
+
   Future<void> fetchConfigAndProceed() async {
     try {
       prefs = await SharedPreferences.getInstance();
@@ -394,11 +435,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           // Chat Icon
                           GestureDetector(
                             onTap: () async {
-                              if (WHATS_APP.isEmpty) {
-                                Get.snackbar(
-                                    "Sorry!", "Not available right now");
+                              if (WHATS_APP.isNotEmpty) {
+                                await _openWhatsAppSupport();
+                              } else if (PHONE_NO.isNotEmpty) {
+                                await _callSupportPhone();
                               } else {
-                                await launchUrl(Uri.parse(WHATS_APP));
+                                Get.snackbar("Sorry!", "Support not available right now");
                               }
                             },
                             child: Container(
@@ -410,13 +452,14 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               ),
                               child: Center(
                                 child: Icon(
-                                  size: 20,
                                   Icons.support_agent_outlined,
+                                  size: 20,
                                   color: kPrimaryOrange,
                                 ),
                               ),
                             ),
                           ),
+
                         ],
                       ),
 
@@ -596,376 +639,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  // Widget _buildServerSelector() {
-  //   if (isLoadingServers) {
-  //     return Center(
-  //       child: Padding(
-  //         padding: const EdgeInsets.all(20.0),
-  //         child: Column(
-  //           children: [
-  //             CircularProgressIndicator(
-  //               valueColor: AlwaysStoppedAnimation<Color>(kPrimaryOrange),
-  //             ),
-  //             SizedBox(height: 12),
-  //             Text(
-  //               'Loading servers...',
-  //               style: TextStyle(color: Colors.grey[600], fontSize: 12),
-  //             ),
-  //           ],
-  //         ),
-  //       ),
-  //     );
-  //   }
-  //
-  //   if (availableServers.isEmpty) {
-  //     return Card(
-  //       elevation: 2,
-  //       shape: RoundedRectangleBorder(
-  //         borderRadius: BorderRadius.circular(12),
-  //       ),
-  //       child: Padding(
-  //         padding: const EdgeInsets.all(16.0),
-  //         child: Column(
-  //           children: [
-  //             Row(
-  //               children: [
-  //                 Icon(Icons.warning_amber_rounded, color: Colors.orange),
-  //                 SizedBox(width: 12),
-  //                 Expanded(
-  //                   child: Text(
-  //                     'No servers available. Please check your connection and try again.',
-  //                     style: TextStyle(fontSize: 14),
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //             SizedBox(height: 12),
-  //             ElevatedButton.icon(
-  //               onPressed: () => fetchServersFromFirebase(),
-  //               icon: Icon(Icons.refresh, size: 18),
-  //               label: Text('Retry'),
-  //               style: ElevatedButton.styleFrom(
-  //                 backgroundColor: kPrimaryOrange,
-  //                 foregroundColor: Colors.white,
-  //                 shape: RoundedRectangleBorder(
-  //                   borderRadius: BorderRadius.circular(8),
-  //                 ),
-  //               ),
-  //             ),
-  //           ],
-  //         ),
-  //       ),
-  //     );
-  //   }
-  //
-  //   return Column(
-  //     crossAxisAlignment: CrossAxisAlignment.start,
-  //     children: [
-  //       Row(
-  //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //         children: [
-  //           Text(
-  //             'Available Servers',
-  //             style: TextStyle(
-  //               fontSize: 14,
-  //               fontWeight: FontWeight.w600,
-  //               color: Colors.black87,
-  //             ),
-  //           ),
-  //           Container(
-  //             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-  //             decoration: BoxDecoration(
-  //               color: kPrimaryOrange.withValues(alpha: 0.1),
-  //               borderRadius: BorderRadius.circular(12),
-  //             ),
-  //             child: Text(
-  //               '${availableServers.length} servers',
-  //               style: TextStyle(
-  //                 fontSize: 11,
-  //                 color: kPrimaryOrange,
-  //                 fontWeight: FontWeight.w600,
-  //               ),
-  //             ),
-  //           ),
-  //         ],
-  //       ),
-  //       const Gap(8),
-  //       InkWell(
-  //         onTap: () => _showServerListDialog(),
-  //         child: Container(
-  //           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-  //           decoration: BoxDecoration(
-  //             color: Colors.white,
-  //             borderRadius: BorderRadius.circular(12),
-  //             border: Border.all(color: kLightGrey),
-  //           ),
-  //           child: Row(
-  //             children: [
-  //               Icon(Icons.dns_outlined, color: kPrimaryOrange, size: 20),
-  //               const SizedBox(width: 12),
-  //               Expanded(
-  //                 child: Column(
-  //                   crossAxisAlignment: CrossAxisAlignment.start,
-  //                   children: [
-  //                     Text(
-  //                       selectedServer?['name'] ??
-  //                           selectedServer?['url'] ??
-  //                           'View All Servers',
-  //                       style: TextStyle(
-  //                         fontSize: 14,
-  //                         fontWeight: FontWeight.w500,
-  //                         color: Colors.black87,
-  //                       ),
-  //                       maxLines: 1,
-  //                       overflow: TextOverflow.ellipsis,
-  //                     ),
-  //                     if (selectedServer?['type'] != null) ...[
-  //                       const SizedBox(height: 2),
-  //                       Text(
-  //                         '${selectedServer!['type']}'.toUpperCase(),
-  //                         style: TextStyle(
-  //                           fontSize: 11,
-  //                           color: selectedServer!['type'] == 'premium'
-  //                               ? Colors.green
-  //                               : Colors.grey[600],
-  //                           fontWeight: FontWeight.w500,
-  //                         ),
-  //                       ),
-  //                     ],
-  //                   ],
-  //                 ),
-  //               ),
-  //               Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-  //             ],
-  //           ),
-  //         ),
-  //       ),
-  //       const Gap(8),
-  //       Container(
-  //         padding: const EdgeInsets.all(12),
-  //         decoration: BoxDecoration(
-  //           color: Colors.blue.shade50,
-  //           borderRadius: BorderRadius.circular(8),
-  //           border: Border.all(color: Colors.blue.shade200),
-  //         ),
-  //         child: Row(
-  //           children: [
-  //             Icon(Icons.info_outline, color: Colors.blue, size: 18),
-  //             const SizedBox(width: 8),
-  //             Expanded(
-  //               child: Text(
-  //                 'Login will automatically try all ${availableServers.length} servers to find your account',
-  //                 style: TextStyle(
-  //                   fontSize: 11,
-  //                   color: Colors.blue.shade900,
-  //                 ),
-  //               ),
-  //             ),
-  //           ],
-  //         ),
-  //       ),
-  //     ],
-  //   );
-  // }
-
-  void _showServerListDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Row(
-                children: [
-                  Icon(Icons.dns, color: kPrimaryOrange),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Available Servers',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                          ),
-                        ),
-                        Text(
-                          'All servers will be checked during login',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close, size: 20),
-                    onPressed: () => Navigator.pop(context),
-                    padding: EdgeInsets.zero,
-                    constraints: BoxConstraints(),
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1),
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.6,
-              ),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: availableServers.length,
-                itemBuilder: (context, index) {
-                  final server = availableServers[index];
-                  final isSelected = selectedServer?['url'] == server['url'];
-                  final hasMessage = server['message']?.isNotEmpty == true;
-
-                  return InkWell(
-                    onTap: () {
-                      setState(() {
-                        selectedServer = server;
-                      });
-                      Navigator.pop(context);
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? kPrimaryOrange.withValues(alpha: 0.1)
-                            : hasMessage
-                            ? Colors.red.shade50
-                            : Colors.white,
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Colors.grey.shade200,
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
-                      ),
-                      child: Row(
-                        children: [
-                          if (hasMessage)
-                            Icon(
-                              Icons.error_outline,
-                              color: Colors.red,
-                              size: 20,
-                            )
-                          else
-                            Icon(
-                              Icons.check_circle,
-                              color: Colors.green,
-                              size: 20,
-                            ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  server['name'] ?? server['url'] ?? 'Unknown',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: hasMessage
-                                        ? Colors.grey
-                                        : Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  server['url'] ?? '',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey[600],
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (hasMessage) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    server['message'],
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.red.shade700,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          if (server['type'] != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: server['type'] == 'premium'
-                                    ? Colors.green.shade100
-                                    : Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '${server['type']}'.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: server['type'] == 'premium'
-                                      ? Colors.green.shade800
-                                      : Colors.grey.shade700,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 16, color: Colors.grey[700]),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Login will try all active servers automatically',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[700]),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildLoginForm() {
     return Column(
       children: [
@@ -1059,29 +732,42 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   Widget _buildLoginButton() {
-    return FFButtonWidget(
-      onPressed: isLoading ? null : _loginPressed,
-      text: 'Sign In →',
-      options: FFButtonOptions(
-        width: double.infinity,
-        height: 50,
-        color: kPrimaryOrange,
-        textStyle: FlutterFlowTheme.of(context).titleSmall.override(
-          fontFamily: 'Open Sans',
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : _loginPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor:
+          isLoading ? Colors.grey.shade400 : kPrimaryOrange,
+          disabledBackgroundColor: Colors.grey.shade400,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 0,
         ),
-        elevation: 0,
-        borderSide: const BorderSide(
-          color: Colors.transparent,
-          width: 1,
+        child: isLoading
+            ? const SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        )
+            : const Text(
+          'Sign In →',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
         ),
-        borderRadius: BorderRadius.circular(16),
       ),
-      showLoadingIndicator: isLoading,
     );
   }
+
+
 
   void updateToken() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -1090,11 +776,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         .then((value) => {APIService.activateFCM(_notificationToken)});
   }
 
-  // UPDATED LOGIN METHOD - Tries ALL servers and connects to first successful one
   void _loginPressed() async {
-    if (_email.isEmpty || _password.isEmpty) {
+    // ------------------ BASIC VALIDATION ------------------
+    if (_email.trim().isEmpty || _password.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Please enter email and password'),
           backgroundColor: Colors.orange,
         ),
@@ -1104,191 +790,122 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
     if (availableServers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No servers available. Please check your connection.'),
+        const SnackBar(
+          content: Text('No servers available. Please try again later.'),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    setState(() {
-      isLoading = true;
-    });
-
+    // ------------------ START LOADING ------------------
+    setState(() => isLoading = true);
 
     bool loginSuccess = false;
     Map<String, dynamic>? successfulServer;
     int? lastStatusCode;
-    String? lastResponseBody;
 
-    // Filter out servers with maintenance messages
-    List<dynamic> activeServers = availableServers
-        .where((server) => server['message']?.isEmpty != false)
-        .toList();
+    try {
+      // Filter active servers (not under maintenance)
+      final List<dynamic> activeServers = availableServers
+          .where((s) => s['message'] == null || s['message'].toString().isEmpty)
+          .toList();
 
-
-    if (activeServers.isEmpty) {
-      setState(() {
-        isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('All servers are under maintenance. Please try again later.'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    // Try ALL active servers
-    for (int i = 0; i < activeServers.length; i++) {
-      var server = activeServers[i];
-
-      try {
-
-        final response =
-        await APIService.login(server['url'], _email, _password);
-
-        if (response != null) {
-          lastStatusCode = response.statusCode;
-          lastResponseBody = response.body;
-
-
-          if (response.statusCode == 200) {
-
-            try {
-              UserLogin user = UserLogin.fromJson(
-                jsonDecode(response.body.replaceAll("ï»¿", "")),
-              );
-
-              // Save server configuration
-              UserRepository.setServerUrl(server['url']);
-              prefs!.setString('serverType', server['type'] ?? 'free');
-              UserRepository.setHash(user.userApiHash!);
-
-              // Handle remember me
-              if (_rememberMe) {
-                UserRepository.setEmail(_email);
-                UserRepository.setPassword(_password);
-                prefs!.setBool('rememberMe', true);
-              } else {
-                prefs!.remove('email');
-                prefs!.remove('password');
-                prefs!.setBool('rememberMe', false);
-              }
-
-              loginSuccess = true;
-              successfulServer = server;
-
-              // Update selected server in UI
-              setState(() {
-                selectedServer = server;
-              });
-
-
-              break; // Stop trying other servers
-            } catch (e) {
-              continue; // Try next server
-            }
-          } else if (response.statusCode == 401 || response.statusCode == 400) {
-          } else if (response.statusCode == 422) {
-          } else {
-          }
-        } else {
-        }
-      } catch (e) {
+      if (activeServers.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All servers are under maintenance'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
       }
 
-      // Empty line between server attempts
+      // ------------------ TRY EACH SERVER ------------------
+      for (final server in activeServers) {
+        try {
+          final response =
+          await APIService.login(server['url'], _email, _password);
+
+          if (response == null) continue;
+
+          lastStatusCode = response.statusCode;
+
+          // ------------------ SUCCESS ------------------
+          if (response.statusCode == 200) {
+            final user = UserLogin.fromJson(
+              jsonDecode(response.body.replaceAll("ï»¿", "")),
+            );
+
+            // Save server & auth
+            UserRepository.setServerUrl(server['url']);
+            UserRepository.setHash(user.userApiHash!);
+            prefs?.setString('serverType', server['type'] ?? 'free');
+
+            // Remember Me
+            if (_rememberMe) {
+              UserRepository.setEmail(_email);
+              UserRepository.setPassword(_password);
+              prefs?.setBool('rememberMe', true);
+            } else {
+              prefs?.remove('email');
+              prefs?.remove('password');
+              prefs?.setBool('rememberMe', false);
+            }
+
+            successfulServer = server;
+            loginSuccess = true;
+            break;
+          }
+        } catch (_) {
+          // Try next server silently
+          continue;
+        }
+      }
+    } finally {
+      // ------------------ STOP LOADING ------------------
+      setState(() => isLoading = false);
     }
 
-    setState(() {
-      isLoading = false;
-    });
-
+    // ------------------ RESULT ------------------
     if (loginSuccess && successfulServer != null) {
-      // Login successful
-
       dataController.getDevices();
       updateToken();
-
       await fetchConfigAndProceed();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          backgroundColor: Colors.green,
           content: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 12),
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Login Successful!',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      'Connected to ${successfulServer['name']}',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ],
+                child: Text(
+                  'Login successful (${successfulServer['name'] ?? 'Server'})',
                 ),
               ),
             ],
           ),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
         ),
       );
 
       Get.offAndToNamed('/home');
     } else {
-      // Login failed on all servers
+      String message = 'Login failed. Please check credentials.';
 
-      if (lastStatusCode == 422) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Email and password are required'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      } else if (lastStatusCode == 401 || lastStatusCode == 400) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Login Failed',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Invalid credentials. Checked ${activeServers.length} servers.',
-                  style: TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
-          ),
-        );
-      } else {
-        Fluttertoast.showToast(
-          msg:
-          "Login failed on all ${activeServers.length} servers.\nPlease check your credentials and connection.",
-          toastLength: Toast.LENGTH_LONG,
-          gravity: ToastGravity.CENTER,
-          backgroundColor: Colors.black87,
-          textColor: Colors.white,
-          fontSize: 14.0,
-        );
+      if (lastStatusCode == 401 || lastStatusCode == 400) {
+        message = 'Invalid email or password';
+      } else if (lastStatusCode == 422) {
+        message = 'Email and password are required';
       }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 }

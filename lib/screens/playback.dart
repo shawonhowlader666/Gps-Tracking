@@ -1,1721 +1,1484 @@
-// ignore_for_file: use_build_context_synchronously, unnecessary_null_comparison, duplicate_ignore
-
 import 'dart:async';
-
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:gpspro/arguments/report_args.dart';
-import 'package:gpspro/flutter_flow/flutter_flow_theme.dart';
+import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/services/model/playback_route.dart';
-import 'package:gpspro/screens/common_method.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
 import 'package:gpspro/widgets/bloc/custom_info_widget.dart';
-import 'package:sliding_up_panel/sliding_up_panel.dart';
-import 'package:timelines/timelines.dart';
+import 'package:intl/intl.dart';
 
 class PlaybackScreen extends StatefulWidget {
+  final int? id;
+  final String? name;
+  final DeviceItem? device;
+
+  const PlaybackScreen({
+    super.key,
+    required this.id,
+    required this.name,
+    required this.device,
+  });
+
   @override
-  State<StatefulWidget> createState() => _PlaybackScreenState();
+  State<PlaybackScreen> createState() => _PlaybackScreenState();
 }
 
 class _PlaybackScreenState extends State<PlaybackScreen>
     with TickerProviderStateMixin {
-  static ReportArguments? args;
+  GoogleMapController? _mapController;
+  bool _isMapCreated = false;
+  bool _isDisposed = false;
 
-  bool filter = true;
-
-  String selectStopDuration = ' > 1 min';
-
-  final Completer<GoogleMapController> _controller = Completer();
-  GoogleMapController? mapController;
-
-  DateTime selectedDateFrom = DateTime.now();
-  TimeOfDay selectedTimeFrom = TimeOfDay.now();
-  DateTime selectedDateTo = DateTime.now();
-  TimeOfDay selectedTimeTo = TimeOfDay.now();
-  DateTime dateTimeFrom = DateTime.now();
-  DateTime dateTimeTo = DateTime.now();
-
-  String maxSpeed = "-";
-  String totalDistance = "-";
-  String moveDuration = "-";
-  String stopDuration = "-";
   MapType _currentMapType = MapType.normal;
-
-  final Color _mapTypeBackgroundColor = CustomColor.primaryColor;
-  final Color _mapTypeForegroundColor = CustomColor.secondaryColor;
-
-  bool stopEnabled = false;
-  List<PlayBackRoute> routeList = [];
-  final Map<MarkerId, Marker> _markers = <MarkerId, Marker>{};
   double currentZoom = 14.0;
-  Timer? timerPlayBack;
-  int playbackTime = 200;
+  String? _mapStyle;
+
+  // PLAYBACK VARIABLES
+  bool _isPlaybackLoading = false;
+  List<PlayBackRoute> routeList = [];
   List<PlayBackRoute> bottomRouteList = [];
-  List<LatLng> routePoints = [];
-  Window? window;
-  bool show = false;
-
-  Map<MarkerId, Marker>? _eventMarkers;
-  Map<MarkerId, Marker>? _parkingMarkers;
-  Map<String, dynamic>? result;
-  bool cameraIdle = true;
-
-  AnimationController? animationController;
-  int animationSpeed = 1000;
-
-  LatLng previousLatLng = const LatLng(0.0, 0.0);
-  LatLng currentLatLng = const LatLng(0.0, 0.0);
-  final Set<Polyline> _polyLines = {};
-
-  AnimationController? trafficAnimationController;
-  AnimationController? playButtonAnimationController;
-  AnimationController? fastButtonAnimationController;
-  double rating = 0.0;
-
-  double baseTimeForMapAnimation = 0.0;
-  double deltaTimeForMapAnimation = 5 / 60;
-
-  int upperAnimatingPointsIndex = 1;
-  int lowerAnimatingPointsIndex = 0;
-  BitmapDescriptor? customMarkerIcon;
-
-  String speedText = "Slow";
-  int speedStep = 1;
-  bool isPlay = false;
-  bool isAlertActive = true;
+  List<LatLng> playbackRoutePoints = [];
   List<dynamic> eventsPoints = [];
   List<dynamic> parkingPoints = [];
 
-  bool isPointActive = true;
-  String? _mapStyle;
+  String playbackMaxSpeed = "-";
+  String playbackTotalDistance = "-";
+  String playbackMoveDuration = "-";
+  String playbackStopDuration = "-";
 
-  static const CameraPosition _initialRegion = CameraPosition(
-    target: LatLng(0, 0),
-    zoom: 14,
-  );
+  Map<MarkerId, Marker> _playbackMarkers = <MarkerId, Marker>{};
+  Map<MarkerId, Marker>? _eventMarkers;
+  Map<MarkerId, Marker>? _parkingMarkers;
 
-  void _removeEventsMarkers() async {
-    show = false;
+  final Set<Polyline> _playbackPolyLines = {};
+  final Set<Polyline> _animatedPolyLines = {};
 
-    for (var element in eventsPoints) {
-      _markers.remove(MarkerId('event${element[0]["id"]}'));
-    }
+  // SMOOTH ANIMATION VARIABLES
+  AnimationController? _animationController;
+  Animation<double>? _animation;
 
-    if (mounted) {
-      setState(() {});
-    }
-  }
+  int _currentPointIndex = 0;
+  bool _isPlaying = false;
+  double _playbackProgress = 0.0;
 
-  void _removeParkingMarkers() async {
-    show = false;
+  // Speed control
+  int _speedMultiplier = 1;
+  String _speedText = "1x";
+  int _animationDurationMs = 800;
 
-    for (var element in parkingPoints) {
-      _markers.remove(MarkerId('stop${element[0]["id"]}'));
-    }
+  // Cached marker icon
+  BitmapDescriptor? _cachedCarIcon;
+  LatLng? _currentCarPosition;
+  double _currentCarBearing = 0.0;
 
-    if (mounted) {
-      setState(() {});
-    }
-  }
+  // Date range
+  DateTime _fromDate = DateTime.now().subtract(const Duration(hours: 12));
+  DateTime _toDate = DateTime.now();
+
+  // Marker toggles
+  bool _showParkingMarkers = true;
+  bool _showEventMarkers = true;
+
+  // Info window
+  Window? _infoWindow;
+  bool _showInfoWindow = false;
+
+  final DraggableScrollableController _sheetController =
+  DraggableScrollableController();
+
+  // Camera update throttling
+  DateTime? _lastCameraUpdate;
+  static const int _cameraUpdateIntervalMs = 100;
 
   @override
   void initState() {
+    super.initState();
+
     rootBundle.loadString('assets/map_style.txt').then((string) {
       _mapStyle = string;
+    }).catchError((error) {
+      debugPrint('Error loading map style: $error');
     });
-    trafficAnimationController = AnimationController(
-        duration: const Duration(milliseconds: 150), vsync: this);
-    playButtonAnimationController = AnimationController(
-        duration: const Duration(milliseconds: 150), vsync: this);
-    fastButtonAnimationController = AnimationController(
-        duration: const Duration(milliseconds: 150), vsync: this);
-    super.initState();
-    dateTimeFrom =
-        DateTime(dateTimeFrom.year, dateTimeFrom.month, dateTimeFrom.day);
-    animationController = AnimationController(
-        vsync: this, duration: Duration(milliseconds: animationSpeed));
-    animationController!.addListener(() async {
-      baseTimeForMapAnimation = 0.0;
-      LatLng start = LatLng(
-              routePoints.elementAt(lowerAnimatingPointsIndex).latitude,
-              routePoints.elementAt(lowerAnimatingPointsIndex).longitude),
-          end = LatLng(
-              routePoints.elementAt(upperAnimatingPointsIndex).latitude,
-              routePoints.elementAt(upperAnimatingPointsIndex).longitude);
 
-      if (baseTimeForMapAnimation <= 1) {
-        if (start.latitude != end.latitude &&
-            start.longitude != end.longitude) {
-          double intermediateLat = (end.latitude - start.latitude) *
-                  (baseTimeForMapAnimation *
-                      baseTimeForMapAnimation *
-                      (3.0 - 2.0 * baseTimeForMapAnimation)) +
-              start.latitude;
-          double intermediateLon = (end.longitude - start.longitude) *
-                  (baseTimeForMapAnimation *
-                      baseTimeForMapAnimation *
-                      (3.0 - 2.0 * baseTimeForMapAnimation)) +
-              start.longitude;
-          MarkerId markerId = const MarkerId('animatingMarker');
-          LatLng intermediateLatLng = LatLng(intermediateLat, intermediateLon);
-          double bearing = Geolocator.bearingBetween(
-              intermediateLat, intermediateLon, end.latitude, end.longitude);
+    _initAnimation();
+    _cacheCarIcon();
 
-          Util.fetchAndCacheImages(UserRepository.getServerUrl()! +
-                  "/" +
-                  args!.deviceItem.icon!.path!)
-              .then((_) async {
-            BitmapDescriptor markerIcon;
-            if (args!.deviceItem.iconType == "arrow") {
-              markerIcon =
-                  await Util.getMarkerIcon(args!.deviceItem.icon!.path!);
-            } else {
-              markerIcon =
-                  await Util.getMarkerIcon(args!.deviceItem.icon!.path!);
-            }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showDatePicker();
+    });
+  }
 
-            // customMarkerIcon =
-            // await Util.getMarkerIcon("assets/markers/arrow-blue.png", bearing);
-            Marker startMarker = Marker(
-              markerId: markerId,
-              anchor: const Offset(0.5, 0.5),
-              position: intermediateLatLng,
-              rotation: bearing,
-              icon: markerIcon,
-            );
-            _markers.update(markerId, (value) => startMarker,
-                ifAbsent: () => startMarker);
-            rating = upperAnimatingPointsIndex.toDouble();
-            if (mounted && this.cameraIdle) {
-              _controller.future.then((value) => value.animateCamera(
-                  CameraUpdate.newCameraPosition(CameraPosition(
-                      target: LatLng(intermediateLat, intermediateLon),
-                      zoom: currentZoom))));
-              setState(() {
-                this.cameraIdle = false;
-              });
-              baseTimeForMapAnimation += deltaTimeForMapAnimation;
-            } else if (baseTimeForMapAnimation > 1) {
-              return;
-            }
-          });
-        }
+  void _initAnimation() {
+    _animationController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: _animationDurationMs),
+    );
+
+    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController!,
+        curve: Curves.linear,
+      ),
+    );
+
+    _animation!.addListener(_onAnimationUpdate);
+    _animationController!.addStatusListener(_onAnimationStatus);
+  }
+
+  Future<void> _cacheCarIcon() async {
+    try {
+      if (widget.device?.icon?.path != null) {
+        await Util.fetchAndCacheImages(
+          "${UserRepository.getServerUrl()!}/${widget.device!.icon!.path!}",
+        );
+        _cachedCarIcon = await Util.getMarkerIcon(widget.device!.icon!.path!);
       }
-    });
-    animationController!.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        if (upperAnimatingPointsIndex >= routePoints.length - 1) {
-          animationController!.reset();
-          upperAnimatingPointsIndex = 1;
-          lowerAnimatingPointsIndex = 0;
-          speedStep = 1;
-          speedText = "Slow";
-          isPlay = false;
-          return;
-        } else {
-          lowerAnimatingPointsIndex = upperAnimatingPointsIndex;
-          upperAnimatingPointsIndex = upperAnimatingPointsIndex + speedStep;
-          if (upperAnimatingPointsIndex >= routePoints.length - 1) {
-            upperAnimatingPointsIndex = routePoints.length - 1;
-          }
-          animationController!.reset();
-          animationController!.forward();
-        }
-      } else if (status == AnimationStatus.dismissed) {
-        // animationController.forward();
+    } catch (e) {
+      debugPrint('Error caching car icon: $e');
+    }
+  }
+
+  void _onAnimationUpdate() {
+    if (!mounted || _isDisposed || !_isPlaying) return;
+    if (playbackRoutePoints.isEmpty) return;
+    if (_currentPointIndex >= playbackRoutePoints.length - 1) return;
+
+    final t = _animation!.value;
+    final startIndex = _currentPointIndex;
+    final endIndex = (_currentPointIndex + _speedMultiplier)
+        .clamp(0, playbackRoutePoints.length - 1);
+
+    final start = playbackRoutePoints[startIndex];
+    final end = playbackRoutePoints[endIndex];
+
+    // Smooth interpolation
+    final lat = _lerp(start.latitude, end.latitude, t);
+    final lng = _lerp(start.longitude, end.longitude, t);
+    final interpolatedPosition = LatLng(lat, lng);
+
+    // Calculate bearing
+    final bearing = Geolocator.bearingBetween(
+      start.latitude,
+      start.longitude,
+      end.latitude,
+      end.longitude,
+    );
+
+    _currentCarPosition = interpolatedPosition;
+    _currentCarBearing = bearing;
+
+    // Update marker
+    _updateCarMarker(interpolatedPosition, bearing);
+
+    // Update progress
+    _playbackProgress = startIndex + t * (_speedMultiplier);
+
+    // Update animated polyline (trail)
+    _updateAnimatedPolyline(startIndex);
+
+    // Throttled camera update
+    _updateCameraThrottled(interpolatedPosition);
+
+    if (mounted) setState(() {});
+  }
+
+  void _onAnimationStatus(AnimationStatus status) {
+    if (!mounted || _isDisposed) return;
+
+    if (status == AnimationStatus.completed) {
+      _currentPointIndex += _speedMultiplier;
+
+      if (_currentPointIndex >= playbackRoutePoints.length - 1) {
+        // Animation complete
+        _stopPlayback();
+        _currentPointIndex = 0;
+        _playbackProgress = 0;
+        if (mounted) setState(() {});
+        return;
       }
-    });
+
+      // Continue to next segment
+      _animationController!.reset();
+      _animationController!.forward();
+    }
+  }
+
+  double _lerp(double a, double b, double t) {
+    return a + (b - a) * t;
+  }
+
+  void _updateCarMarker(LatLng position, double bearing) {
+    if (_cachedCarIcon == null) return;
+
+    final marker = Marker(
+      markerId: const MarkerId('playback_car'),
+      position: position,
+      rotation: bearing,
+      icon: _cachedCarIcon!,
+      anchor: const Offset(0.5, 0.5),
+      flat: true,
+      zIndex: 10,
+    );
+
+    _playbackMarkers[const MarkerId('playback_car')] = marker;
+  }
+
+  void _updateAnimatedPolyline(int currentIndex) {
+    if (currentIndex < 0 || playbackRoutePoints.isEmpty) return;
+
+    final trailPoints = playbackRoutePoints.sublist(
+      0,
+      (currentIndex + 1).clamp(0, playbackRoutePoints.length),
+    );
+
+    _animatedPolyLines.clear();
+    _animatedPolyLines.add(Polyline(
+      polylineId: const PolylineId('animated_trail'),
+      points: trailPoints,
+      width: 5,
+      color: Colors.green,
+      geodesic: true,
+      startCap: Cap.roundCap,
+      endCap: Cap.roundCap,
+    ));
+  }
+
+  void _updateCameraThrottled(LatLng position) {
+    final now = DateTime.now();
+    if (_lastCameraUpdate != null &&
+        now.difference(_lastCameraUpdate!).inMilliseconds < _cameraUpdateIntervalMs) {
+      return;
+    }
+    _lastCameraUpdate = now;
+
+    _safeAnimateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: position, zoom: currentZoom),
+      ),
+    );
+  }
+
+  Future<void> _safeAnimateCamera(CameraUpdate update) async {
+    if (!mounted || _isDisposed || _mapController == null || !_isMapCreated) {
+      return;
+    }
+    try {
+      await _mapController!.animateCamera(update);
+    } catch (e) {
+      debugPrint('Camera error: $e');
+    }
   }
 
   @override
   void dispose() {
-    //timerPlayBack!.cancel();
-    animationController!.dispose();
-    trafficAnimationController!.dispose();
-    playButtonAnimationController!.dispose();
-    fastButtonAnimationController!.dispose();
+    _isDisposed = true;
+    _animationController?.dispose();
+    _sheetController.dispose();
+    _isMapCreated = false;
+    _mapController = null;
     super.dispose();
   }
 
-  void getReport() {
-    routeList.clear();
-    routePoints.clear();
-    parkingPoints.clear();
-    eventsPoints.clear();
-    bottomRouteList.clear();
-    _markers.clear();
-    _polyLines.clear();
-    _parkingMarkers = null;
-    _eventMarkers = null;
+  // ==================== DATE PICKER ====================
 
-    rating = 0;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      showDialog(
-          barrierDismissible: false,
-          context: context,
-          builder: (context) => SpinKitRing(
-              lineWidth: 3.0, color: CustomColor.primaryColor, size: 35.0));
-    });
-    APIService.getHistory(
-            args!.id.toString(),
-            Util.formatReportDate(dateTimeFrom),
-            Util.formatReportTime(dateTimeFrom),
-            Util.formatReportDate(dateTimeTo),
-            Util.formatReportTime(dateTimeTo))
-        .then((value) async {
-      if (value!.items!.isNotEmpty) {
-        if (value.distance_sum != null) {
-          totalDistance = value.distance_sum!;
-        } else {
-          totalDistance = " 0 km";
-        }
-
-        if (value.top_speed != null) {
-          maxSpeed = value.top_speed!;
-        } else {
-          maxSpeed = value.top_speed!;
-        }
-
-        if (value.move_duration != null) {
-          moveDuration = value.move_duration!;
-        } else {
-          moveDuration = value.move_duration!;
-        }
-
-        if (value.stop_duration != null) {
-          stopDuration = value.stop_duration!;
-        } else {
-          stopDuration = value.stop_duration!;
-        }
-        if (value.items!.isNotEmpty) {
-          for (var el in value.items!) {
-            if (el['time'] != null) {
-              PlayBackRoute rt = PlayBackRoute();
-              rt.time = el['time'];
-              rt.show = el['show'];
-              rt.left = el['left'];
-              rt.distance = el['distance'];
-              rt.engine_hours = el['engine_hours'];
-              rt.fuel_consumption = el['fuel_consumption'];
-              rt.top_speed = el['top_speed'];
-              rt.average_speed = el['average_speed'];
-              //rt.engine_idle = el['engine_idle'];
-              rt.status = el['status'];
-
-              var element = el['items'].first;
-              if (element['latitude'] != null) {
-                rt.device_id = element['device_id'].toString();
-                rt.longitude = element['longitude'].toString();
-                rt.latitude = element['latitude'].toString();
-                rt.speed = element['speed'];
-                rt.course = element['course'].toString();
-                rt.raw_time = element['raw_time'].toString();
-                rt.speedType = "kph";
-                rt.id = element["id"].toString();
-              }
-              bottomRouteList.add(rt);
-            }
-
-            if (el["status"] == 1) {
-              parkingPoints.add(el['items']);
-            }
-
-            if (el["status"] == 5) {
-              eventsPoints.add(el['items']);
-            }
-
-            el['items'].forEach((element) {
-              if (element['latitude'] != null) {
-                PlayBackRoute blackRoute = PlayBackRoute();
-                blackRoute.device_id = element['device_id'].toString();
-                blackRoute.longitude = element['longitude'].toString();
-                blackRoute.latitude = element['latitude'].toString();
-                blackRoute.speed = element['speed'];
-                blackRoute.course = element['course'].toString();
-                blackRoute.raw_time = element['raw_time'].toString();
-                blackRoute.speedType = "kph";
-                routePoints.add(LatLng(
-                    double.parse(element['latitude'].toString()),
-                    double.parse(element['longitude'].toString())));
-                routeList.add(blackRoute);
-                routePoints.removeLast();
-                _polyLines.add(Polyline(
-                  polylineId: const PolylineId('polyline_one'),
-                  visible: true,
-                  points: routePoints,
-                  width: 4,
-                  color: const Color(0xFFF26611),
-                ));
-              }
-            });
-          }
-        }
-        await addToView();
-        _setParkingMarkers();
-        _setEventsMarkers();
-      } else {
-        setState(() {});
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('No Records...!')));
-        Navigator.pop(context);
-      }
-    });
-  }
-
-  Future<void> addToView() async {
-    double? x0, x1, y0, y1;
-    LatLngBounds? bounds;
-    for (int i = 0; i < routeList.length; i++) {
-      LatLng latLng = LatLng(
-          double.parse(routeList.elementAt(i).latitude as String),
-          double.parse(routeList.elementAt(i).longitude as String));
-      if (x0 == null) {
-        x0 = x1 = latLng.latitude;
-        y0 = y1 = latLng.longitude;
-      } else {
-        if (latLng.latitude > x1!) x1 = latLng.latitude;
-        if (latLng.latitude < x0) x0 = latLng.latitude;
-        if (latLng.longitude > y1!) y1 = latLng.longitude;
-        if (latLng.longitude < y0!) y0 = latLng.longitude;
-      }
-      if (i > 0 && routePoints.elementAt(routePoints.length - 1) == latLng) {
-        continue;
-      }
-      routePoints.add(latLng);
-      bounds = LatLngBounds(
-          northeast: LatLng(x1 == null ? 0 : x1, y1 == null ? 0 : y1),
-          southwest: LatLng(x0 == null ? 0 : x0, y0 == null ? 0 : y0));
-    }
-    _setStartEndMarkers(
-        LatLng(double.parse(routeList.first.latitude!),
-            double.parse(routeList.first.longitude!)),
-        LatLng(double.parse(routeList.last.latitude!),
-            double.parse(routeList.last.longitude!)),
-        bounds!);
-
-    setState(() {
-      Navigator.pop(context);
-    });
-  }
-
-  void _setParkingMarkers() async {
-    if (_parkingMarkers == null) {
-      _parkingMarkers = <MarkerId, Marker>{};
-      final Uint8List? parkingIcon =
-          await Util.getBytesFromAsset('assets/images/map-point.png', 30);
-      for (var element in parkingPoints) {
-        Map<String, String> data = <String, String>{};
-        data.putIfAbsent("Object", () => args!.name);
-        data.putIfAbsent("Position",
-            () => "${element[0]["latitude"]}${element[0]["longitude"]}");
-        data.putIfAbsent("Altitude", () => element[0]["altitude"].toString());
-        data.putIfAbsent("Angle", () => element[0]["course"].toString());
-        data.putIfAbsent("Came", () => "-");
-        data.putIfAbsent("Left", () => "-");
-        data.putIfAbsent("Duration", () => element[0]["time"]);
-        var markerId = MarkerId('stop${element[0]["id"]}');
-        Marker marker = Marker(
-          markerId: markerId,
-          onTap: () => _onTap(
-              LatLng(element[0]["latitude"], element[0]["longitude"]), data),
-          position: LatLng(element[0]["latitude"], element[0]["longitude"]),
-          icon: BitmapDescriptor.bytes(
-              parkingIcon!) /*BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue)*/,
-        );
-        _parkingMarkers!.putIfAbsent(markerId, () {
-          return marker;
-        });
-        _markers.putIfAbsent(markerId, () {
-          return marker;
-        });
-      }
-    } else {
-      _markers.addAll(_parkingMarkers!);
-    }
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _setEventsMarkers() async {
-    if (_eventMarkers == null) {
-      _eventMarkers = <MarkerId, Marker>{};
-      final Uint8List? eventIcon =
-          await Util.getBytesFromAsset('assets/images/map-alert-point.png', 30);
-      for (var element in eventsPoints) {
-        var markerId = MarkerId('event${element[0]["id"]}');
-        Map<String, String> data = Map<String, String>();
-        data.putIfAbsent("Object", () => args!.name);
-        data.putIfAbsent("Event", () => "");
-        data.putIfAbsent(
-            "Position", () => "${element[0]["lat"]}${element[0]["lng"]}");
-        data.putIfAbsent("Altitude", () => element[0]["altitude"].toString());
-        data.putIfAbsent("Angle", () => element[0]["course"].toString());
-        data.putIfAbsent(
-            "Speed", () => element[0]["speed"].toString() + " kph");
-        data.putIfAbsent("Time", () => element[0]["time"]);
-        var marker = Marker(
-          markerId: markerId,
-          onTap: () => _onTap(
-              LatLng(double.parse(element[0]["lat"].toString()),
-                  double.parse(element[0]["lng"].toString())),
-              data),
-          position: LatLng(double.parse(element[0]["lat"].toString()),
-              double.parse(element[0]["lng"].toString())),
-          icon: BitmapDescriptor.bytes(
-              eventIcon!) /*BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue)*/,
-        );
-        _eventMarkers!.putIfAbsent(markerId, () {
-          return marker;
-        });
-        _markers.putIfAbsent(markerId, () {
-          return marker;
-        });
-      }
-    } else {
-      _markers.addAll(_eventMarkers!);
-    }
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _setStartEndMarkers(
-      LatLng start, LatLng end, LatLngBounds bounds) async {
-    var stopIconPath = "assets/images/map-end-point.png";
-    final Uint8List? stopIcon = await Util.getBytesFromAsset(stopIconPath, 30);
-
-    var startIconPath = "assets/images/map-start-point.png";
-    final Uint8List? startIcon =
-        await Util.getBytesFromAsset(startIconPath, 30);
-
-    Marker startMarker = Marker(
-      markerId: const MarkerId('start'),
-      position: start,
-      icon: BitmapDescriptor.bytes(stopIcon!),
-    );
-    _markers.putIfAbsent(const MarkerId('start'), () => startMarker);
-    Marker endMarker = Marker(
-      markerId: const MarkerId('end'),
-      position: end,
-      icon: BitmapDescriptor.bytes(startIcon!),
-    );
-    _markers.putIfAbsent(const MarkerId('end'), () => endMarker);
-    if (mounted) {
-      _controller.future.then((value) =>
-          value.animateCamera(CameraUpdate.newLatLngBounds(bounds, 120)));
-      setState(() {});
-    }
-  }
-
-  _onTap(LatLng location, Map<String, String> data) async {
-    CameraPosition _kLake = CameraPosition(target: location, zoom: currentZoom);
-    _controller.future.then(
-        (value) => value.animateCamera(CameraUpdate.newCameraPosition(_kLake)));
-    previousLatLng = currentLatLng;
-    currentLatLng = location;
-    //await _onChange();
-    window = Window(offsetX: 65, offsetY: 220, data: data);
-    setState(() {
-      if (currentLatLng == previousLatLng) {
-        show = !show;
-      } else {
-        show = true;
-      }
-    });
-  }
-
-  _onChange() async {
-    // if (window == null) {
-    //   return;
-    // }
-    // ScreenCoordinate coordinate = await _controller.future.then((
-    //     value) => value.getScreenCoordinate(currentLatLng));
-    // BlocProvider.of<WindowBloc>(context).add(
-    //     ChangePositionEvent(context: context, screenCoordinate: coordinate));
-    // ScreenCoordinate coordinate = await _controller.future.then((
-    //     value) => value.getScreenCoordinate(currentLatLng));
-    // window = Window(offsetX: coordinate.x.toDouble(), offsetY: coordinate.y.toDouble(), data: data);
-  }
-
-  pauseAnimation() {
-    animationController!.stop(canceled: true);
-  }
-
-  // Select for From Date
-  Future<DateTime> _selectFromDate(BuildContext context) async {
-    final selected = await showDatePicker(
+  void _showDatePicker() {
+    showModalBottomSheet(
       context: context,
-      initialDate: selectedDateFrom,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2050),
+      isScrollControlled: true,
+      isDismissible: playbackRoutePoints.isNotEmpty,
+      enableDrag: playbackRoutePoints.isNotEmpty,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildSimpleDatePicker(),
     );
-    if (selected != null && selected != selectedDateFrom) {
-      setState(() {
-        selectedDateFrom = selected;
-      });
-    }
-    return selectedDateFrom;
   }
 
-  Future<TimeOfDay> _selectFromTime(BuildContext context) async {
-    final selected = await showTimePicker(
-      context: context,
-      initialTime: selectedTimeFrom,
-    );
-    if (selected != null && selected != selectedTimeFrom) {
-      setState(() {
-        selectedTimeFrom = selected;
-      });
-    }
-    return selectedTimeFrom;
-  }
-
-  Future _selectFromDateTime(BuildContext context) async {
-    final date = await _selectFromDate(context);
-    if (date == null) return;
-
-    final time = await _selectFromTime(context);
-
-    if (time == null) return;
-    setState(() {
-      dateTimeFrom = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
-  }
-
-  // ignore: duplicate_ignore
-  Future _selectToDateTime(BuildContext context) async {
-    final date = await _selectFromDate(context);
-    // ignore: unnecessary_null_comparison
-    if (date == null) return;
-
-    final time = await _selectFromTime(context);
-
-    if (time == null) return;
-    setState(() {
-      dateTimeTo = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
-  }
-
-  void _onMapTypeButtonPressed() {
-    setState(() {
-      _currentMapType =
-          _currentMapType == MapType.normal ? MapType.hybrid : MapType.normal;
-    });
-  }
-
-  void showReportDialog(BuildContext context) {
-    Dialog simpleDialog = Dialog(
-      child: StatefulBuilder(
-        builder: (BuildContext context, StateSetter setState) {
-          return SizedBox(
-            height: 160,
-            width: 300.0,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: <Widget>[
-                Column(
-                  children: <Widget>[
-                    Padding(
-                      padding:
-                          const EdgeInsets.only(left: 10, right: 10, top: 20),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: <Widget>[
-                          InkWell(
-                              onTap: () {
-                                dateTimeFrom = DateTime.now().subtract(Duration(
-                                  hours: DateTime.now().hour,
-                                  minutes: DateTime.now().minute,
-                                  seconds: DateTime.now().second,
-                                  milliseconds: DateTime.now().millisecond,
-                                  microseconds: DateTime.now().microsecond,
-                                ));
-                                dateTimeTo = DateTime.now();
-                                getReport();
-                                Navigator.pop(context);
-                              },
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.start,
-                                children: <Widget>[
-                                  Image.asset("assets/icons/today.png",
-                                      width: 30),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 20)),
-                                  Text(
-                                    ('reportToday').tr,
-                                    style: const TextStyle(fontSize: 16.0),
-                                  ),
-                                ],
-                              )),
-                          const Divider(),
-                          InkWell(
-                              onTap: () {
-                                dateTimeFrom = DateTime.now().subtract(Duration(
-                                  days: 1,
-                                  hours: DateTime.now().hour,
-                                  minutes: DateTime.now().minute,
-                                  seconds: DateTime.now().second,
-                                  milliseconds: DateTime.now().millisecond,
-                                  microseconds: DateTime.now().microsecond,
-                                ));
-                                dateTimeTo = DateTime.now().subtract(Duration(
-                                  hours: DateTime.now().hour,
-                                  minutes: DateTime.now().minute,
-                                  seconds: DateTime.now().second,
-                                  milliseconds: DateTime.now().millisecond,
-                                  microseconds: DateTime.now().microsecond,
-                                ));
-                                getReport();
-                                Navigator.pop(context);
-                              },
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.start,
-                                children: <Widget>[
-                                  Image.asset("assets/icons/yesterday.png",
-                                      width: 30),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 20)),
-                                  Text(
-                                    ('reportYesterday').tr,
-                                    style: const TextStyle(fontSize: 16.0),
-                                  ),
-                                ],
-                              )),
-                          const Divider(),
-                          InkWell(
-                              onTap: () {
-                                dateTimeFrom = DateTime.now().subtract(Duration(
-                                  days: 7,
-                                  hours: DateTime.now().hour,
-                                  minutes: DateTime.now().minute,
-                                  seconds: DateTime.now().second,
-                                  milliseconds: DateTime.now().millisecond,
-                                  microseconds: DateTime.now().microsecond,
-                                ));
-                                dateTimeTo = DateTime.now().subtract(Duration(
-                                  hours: DateTime.now().hour,
-                                  minutes: DateTime.now().minute,
-                                  seconds: DateTime.now().second,
-                                  milliseconds: DateTime.now().millisecond,
-                                  microseconds: DateTime.now().microsecond,
-                                ));
-                                getReport();
-                                Navigator.pop(context);
-                              },
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.start,
-                                children: <Widget>[
-                                  Image.asset("assets/icons/thisWeek.png",
-                                      width: 30),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 20)),
-                                  Text(
-                                    ('reportThisWeek').tr,
-                                    style: const TextStyle(fontSize: 16.0),
-                                  ),
-                                ],
-                              )),
-                          const Divider(),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-    showDialog(
-        context: context, builder: (BuildContext context) => simpleDialog);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.white,
-      statusBarBrightness: Brightness.dark,
-      statusBarIconBrightness: Brightness.dark,
-    ));
-
-    args = ModalRoute.of(context)!.settings.arguments as ReportArguments;
-
-    return Scaffold(
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          automaticallyImplyLeading: true,
-          iconTheme: IconThemeData(color: CustomColor.cssBlack),
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'playback'.tr,
-                style: FlutterFlowTheme.of(context).headlineMedium,
-              ),
-            ],
+  Widget _buildSimpleDatePicker() {
+    return StatefulBuilder(
+      builder: (context, setModalState) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
-          centerTitle: false,
-          elevation: 0,
-          actions: [
-            InkWell(
-                onTap: () {
-                  if (filter) {
-                    setState(() {
-                      filter = false;
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              // Title
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Select Date Range',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  if (playbackRoutePoints.isNotEmpty)
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // Quick Select Buttons
+              Row(
+                children: [
+                  _quickButton('Today', Colors.blue, () {
+                    setModalState(() {
+                      _fromDate = DateTime(
+                        DateTime.now().year,
+                        DateTime.now().month,
+                        DateTime.now().day,
+                      );
+                      _toDate = DateTime.now();
                     });
-                  } else {
-                    setState(() {
-                      filter = true;
+                  }),
+                  const SizedBox(width: 8),
+                  _quickButton('Yesterday', Colors.orange, () {
+                    setModalState(() {
+                      final yesterday = DateTime.now().subtract(const Duration(days: 1));
+                      _fromDate = DateTime(yesterday.year, yesterday.month, yesterday.day);
+                      _toDate = DateTime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59);
                     });
+                  }),
+                  const SizedBox(width: 8),
+                  _quickButton('Week', Colors.green, () {
+                    setModalState(() {
+                      _fromDate = DateTime.now().subtract(const Duration(days: 7));
+                      _toDate = DateTime.now();
+                    });
+                  }),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // From Date
+              _dateField(
+                label: 'From',
+                date: _fromDate,
+                color: Colors.green,
+                onTap: () async {
+                  final result = await _pickDateTime(_fromDate);
+                  if (result != null) {
+                    setModalState(() => _fromDate = result);
                   }
                 },
-                child: const Padding(
-                    padding: EdgeInsets.all(10), child: Icon(Icons.date_range)))
-          ],
-        ),
-        body: slidingPanel());
-  }
-
-  Widget slidingPanel() {
-    return SlidingUpPanel(
-      minHeight: 170,
-      parallaxEnabled: true,
-      parallaxOffset: .0,
-      maxHeight: 800,
-      borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(18.0), topRight: Radius.circular(18.0)),
-      panel: bottomPanelView(),
-      body: mainView(),
-    );
-  }
-
-  Widget mainView() {
-    return Stack(
-      children: [
-        mapView(),
-        show
-            ? window!
-            : const SizedBox(
-                height: 0,
-                width: 0,
               ),
-        Column(
+
+              const SizedBox(height: 12),
+
+              // To Date
+              _dateField(
+                label: 'To',
+                date: _toDate,
+                color: Colors.red,
+                onTap: () async {
+                  final result = await _pickDateTime(_toDate);
+                  if (result != null) {
+                    setModalState(() => _toDate = result);
+                  }
+                },
+              ),
+
+              const SizedBox(height: 24),
+
+              // Load Button
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _loadPlaybackData();
+                  },
+                  icon: const Icon(Icons.play_circle_outline),
+                  label: const Text('Load Playback', style: TextStyle(fontSize: 16)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CustomColor.primaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+
+              SizedBox(height: MediaQuery.of(context).padding.bottom + 10),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _quickButton(String label, Color color, VoidCallback onTap) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dateField({
+    required String label,
+    required DateTime date,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Row(
           children: [
-            filter ? topView() : Container(),
             Container(
-                padding: const EdgeInsets.only(left: 10, bottom: 10),
-                color: Colors.white,
-                child: topDataView())
-          ],
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(0, 230, 7, 0),
-          child: Align(
-            alignment: Alignment.topRight,
-            child: Column(
-              children: <Widget>[
-                FloatingActionButton(
-                  heroTag: "mapLayer",
-                  mini: true,
-                  onPressed: _onMapTypeButtonPressed,
-                  materialTapTargetSize: MaterialTapTargetSize.padded,
-                  backgroundColor: _mapTypeBackgroundColor,
-                  foregroundColor: _mapTypeForegroundColor,
-                  child: const Icon(Icons.layers, size: 25.0),
-                ),
-              ],
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                label == 'From' ? Icons.play_arrow : Icons.stop,
+                color: color,
+                size: 18,
+              ),
             ),
-          ),
-        ),
-        Positioned(
-          bottom: 290.0,
-          left: 5.0,
-          child: Container(
-            padding: const EdgeInsets.only(
-                top: 13.0, bottom: 10, left: 15, right: 15),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(23.0),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(.3),
-                    blurRadius: 3.0,
-                    offset: const Offset(0, 2))
-              ],
-            ),
-            child: Row(
-              children: [
-                InkWell(
-                    onTap: () {
-                      isPointActive = !isPointActive;
-                      if (!isPointActive) {
-                        _removeParkingMarkers();
-                      } else {
-                        _setParkingMarkers();
-                      }
-                    },
-                    child: Image.asset(
-                      isPointActive
-                          ? 'assets/images/map-point.png'
-                          : 'assets/images/point-inactive.png',
-                      height: 22,
-                      width: 22,
-                    )),
-                const SizedBox(
-                  width: 15,
-                ),
-                InkWell(
-                    onTap: () {
-                      isAlertActive = !isAlertActive;
-                      if (!isAlertActive) {
-                        _removeEventsMarkers();
-                      } else {
-                        _setEventsMarkers();
-                      }
-                    },
-                    child: Image.asset(
-                      isAlertActive
-                          ? 'assets/images/map-alert-point.png'
-                          : 'assets/images/error-inactive.png',
-                      height: 22,
-                      width: 22,
-                    )),
-              ],
-            ),
-          ),
-        )
-      ],
-    );
-  }
-
-  Widget mapView() {
-    return GoogleMap(
-      mapType: _currentMapType,
-      initialCameraPosition: _initialRegion,
-      onMapCreated: (GoogleMapController controller) {
-        _controller.complete(controller);
-        mapController = controller;
-        //mapController!.setMapStyle(_mapStyle);
-        getReport();
-      },
-      onCameraMove: (cameraPosition) {
-        currentZoom = cameraPosition.zoom;
-        _onChange();
-      },
-      onCameraIdle: () {
-        this.cameraIdle = true;
-      },
-      onTap: (latLng) {
-        previousLatLng = currentLatLng;
-        currentLatLng = latLng;
-        setState(() {
-          show = false;
-        });
-      },
-      markers: Set<Marker>.of(_markers.values),
-      polylines: _polyLines,
-    );
-  }
-
-  Widget topView() {
-    return Container(
-        width: MediaQuery.of(context).size.width / 1,
-        height: MediaQuery.of(context).size.height / 7.5,
-        color: Colors.white,
-        padding: const EdgeInsets.all(10),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-            SingleChildScrollView(
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(padding: EdgeInsets.only(top: 5)),
-                  Row(
-                    children: [
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          InkWell(
-                              onTap: () {
-                                _selectFromDateTime(context);
-                              },
-                              child: Container(
-                                  width: MediaQuery.of(context).size.width / 1.2,
-                                  padding: const EdgeInsets.all(5),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: Colors.grey, // Border color
-                                      width: 1.0, // Border width
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Padding(
-                                          padding: EdgeInsets.only(left: 10)),
-                                      Image.asset(
-                                          "assets/icons/hourglass-start.png",
-                                          width: 25,
-                                          height: 25),
-                                      const Padding(
-                                          padding: EdgeInsets.only(left: 20)),
-                                      Text(
-                                          "${Util.formatReportDate(dateTimeFrom)} ${Util.formatReportTime(dateTimeFrom)}"),
-                                    ],
-                                  ))),
-                        ],
-                      ),
-                      const Padding(padding: EdgeInsets.only(left: 10)),
-                      InkWell(
-                          onTap: () {
-                            showReportDialog(context);
-                          },
-                          child: Image.asset("assets/icons/funnel.png")),
-                    ],
+                  Text(
+                    label,
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                   ),
-                  const Padding(padding: EdgeInsets.only(top: 10)),
-                  Row(
-                    children: [
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          InkWell(
-                              onTap: () {
-                                _selectToDateTime(context);
-                              },
-                              child: Container(
-                                  width: MediaQuery.of(context).size.width / 1.2,
-                                  padding: const EdgeInsets.all(5),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: Colors.grey, // Border color
-                                      width: 1.0, // Border width
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Padding(
-                                          padding: EdgeInsets.only(left: 10)),
-                                      Image.asset(
-                                          "assets/icons/hourglass-start.png",
-                                          width: 25,
-                                          height: 25),
-                                      const Padding(
-                                          padding: EdgeInsets.only(left: 20)),
-                                      Text(
-                                          "${Util.formatReportDate(dateTimeTo)} ${Util.formatReportTime(dateTimeTo)}"),
-                                    ],
-                                  ))),
-                        ],
-                      ),
-                      const Padding(padding: EdgeInsets.only(left: 10)),
-                      InkWell(
-                          onTap: () {
-                            getReport();
-                          },
-                          child: Image.asset(
-                            "assets/icons/send.png",
-                            width: 30,
-                          ))
-                    ],
-                  )
+                  Text(
+                    DateFormat('dd MMM yyyy, HH:mm').format(date),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
-          ]),
-        ));
-  }
-
-  Widget topDataView() {
-    double width = 100;
-    double height = 50;
-    double fontSize = 12;
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          Container(
-              width: width,
-              height: height,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(5.0), // Rounded corners
-                color: Colors.blue.shade100, // Background color of the card
-              ),
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      ('routeLength').tr,
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                    Text(
-                      totalDistance,
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                  ])),
-          const Padding(padding: EdgeInsets.only(left: 5)),
-          Container(
-              width: width,
-              height: height,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(5.0), // Rounded corners
-                color: Colors.green.shade100, // Background color of the card
-              ),
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      ('moveDuration').tr,
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                    Text(
-                      moveDuration,
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                  ])),
-          const Padding(padding: EdgeInsets.only(left: 5)),
-          Container(
-              width: width,
-              height: height,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(5.0), // Rounded corners
-                color: Colors.blue.shade100, // Background color of the card
-              ),
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      ('stopsDuration').tr,
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                    Text(
-                      stopDuration,
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                  ])),
-          const Padding(padding: EdgeInsets.only(left: 5)),
-          Container(
-              width: width,
-              height: height,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(5.0), // Rounded corners
-                color: Colors.red.shade100, // Background color of the card
-              ),
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      ('averageSpeed').tr,
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                    Text(
-                      '0 km',
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                  ])),
-          const Padding(padding: EdgeInsets.only(left: 5)),
-          Container(
-              width: width,
-              height: height,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(5.0), // Rounded corners
-                color: Colors.green.shade100, // Background color of the card
-              ),
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      ('maxSpeed').tr,
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                    Text(
-                      maxSpeed,
-                      style: TextStyle(fontSize: fontSize),
-                    ),
-                  ])),
-          const Padding(padding: EdgeInsets.only(left: 5)),
-        ],
+            Icon(Icons.edit, size: 18, color: Colors.grey[400]),
+          ],
+        ),
       ),
     );
   }
 
-  Widget bottomPanelView() {
-    return Container(
-      color: Colors.white,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: <Widget>[
-          const Padding(padding: EdgeInsets.only(top: 10)),
-          Container(
-            width: 40,
-            height: 5,
-            decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: const BorderRadius.all(Radius.circular(12.0))),
+  Future<DateTime?> _pickDateTime(DateTime initial) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+
+    if (date == null) return null;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+
+    if (time == null) return null;
+
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  // ==================== DATA LOADING ====================
+
+  void _clearData() {
+    routeList.clear();
+    playbackRoutePoints.clear();
+    bottomRouteList.clear();
+    parkingPoints.clear();
+    eventsPoints.clear();
+    _playbackMarkers.clear();
+    _playbackPolyLines.clear();
+    _animatedPolyLines.clear();
+    _parkingMarkers = null;
+    _eventMarkers = null;
+    _currentPointIndex = 0;
+    _playbackProgress = 0;
+    _isPlaying = false;
+  }
+
+  void _loadPlaybackData() {
+    _clearData();
+    setState(() => _isPlaybackLoading = true);
+
+    // Show loading dialog
+    showDialog(
+      barrierDismissible: false,
+      context: context,
+      builder: (context) => Center(
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
           ),
-          playerView()
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SpinKitRing(
+                lineWidth: 3.0,
+                color: CustomColor.primaryColor,
+                size: 40.0,
+              ),
+              const SizedBox(height: 16),
+              const Text('Loading playback...'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    APIService.getHistory(
+      widget.id.toString(),
+      Util.formatReportDate(_fromDate),
+      Util.formatReportTime(_fromDate),
+      Util.formatReportDate(_toDate),
+      Util.formatReportTime(_toDate),
+    ).then((value) async {
+      if (!mounted || _isDisposed) {
+        if (Navigator.canPop(context)) Navigator.pop(context);
+        return;
+      }
+
+      Navigator.pop(context); // Close loading dialog
+
+      if (value != null && value.items != null && value.items!.isNotEmpty) {
+        playbackTotalDistance = value.distance_sum ?? "0 km";
+        playbackMaxSpeed = value.top_speed ?? "0 km/h";
+        playbackMoveDuration = value.move_duration ?? "0";
+        playbackStopDuration = value.stop_duration ?? "0";
+
+        // Parse data
+        for (var el in value.items!) {
+          if (el['time'] != null) {
+            PlayBackRoute rt = PlayBackRoute();
+            rt.time = el['time'];
+            rt.show = el['show'];
+            rt.left = el['left'];
+            rt.distance = el['distance'];
+            rt.engine_hours = el['engine_hours'];
+            rt.fuel_consumption = el['fuel_consumption'];
+            rt.top_speed = el['top_speed'];
+            rt.average_speed = el['average_speed'];
+            rt.status = el['status'];
+
+            var element = el['items'].first;
+            if (element['latitude'] != null) {
+              rt.device_id = element['device_id'].toString();
+              rt.longitude = element['longitude'].toString();
+              rt.latitude = element['latitude'].toString();
+              rt.speed = element['speed'];
+              rt.course = element['course'].toString();
+              rt.raw_time = element['raw_time'].toString();
+              rt.speedType = "kph";
+              rt.id = element["id"].toString();
+            }
+            bottomRouteList.add(rt);
+          }
+
+          if (el["status"] == 1) parkingPoints.add(el['items']);
+          if (el["status"] == 5) eventsPoints.add(el['items']);
+
+          el['items'].forEach((element) {
+            if (element['latitude'] != null) {
+              PlayBackRoute blackRoute = PlayBackRoute();
+              blackRoute.device_id = element['device_id'].toString();
+              blackRoute.longitude = element['longitude'].toString();
+              blackRoute.latitude = element['latitude'].toString();
+              blackRoute.speed = element['speed'];
+              blackRoute.course = element['course'].toString();
+              blackRoute.raw_time = element['raw_time'].toString();
+              blackRoute.speedType = "kph";
+
+              playbackRoutePoints.add(LatLng(
+                double.parse(element['latitude'].toString()),
+                double.parse(element['longitude'].toString()),
+              ));
+              routeList.add(blackRoute);
+            }
+          });
+        }
+
+        // Add main polyline
+        _playbackPolyLines.add(Polyline(
+          polylineId: const PolylineId('playback_route'),
+          visible: true,
+          points: playbackRoutePoints,
+          width: 4,
+          color: Colors.orange.withValues(alpha: 0.6),
+          geodesic: true,
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
+        ));
+
+        await _addStartEndMarkers();
+        _addParkingMarkers();
+        _addEventMarkers();
+
+        // Set initial car position
+        if (playbackRoutePoints.isNotEmpty) {
+          _currentCarPosition = playbackRoutePoints.first;
+          _updateCarMarker(playbackRoutePoints.first, 0);
+        }
+
+        setState(() => _isPlaybackLoading = false);
+      } else {
+        setState(() => _isPlaybackLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No records found for selected period'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }).catchError((error) {
+      if (Navigator.canPop(context)) Navigator.pop(context);
+      setState(() => _isPlaybackLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    });
+  }
+
+  Future<void> _addStartEndMarkers() async {
+    if (routeList.isEmpty || !mounted) return;
+
+    try {
+      final startIcon = await Util.getBytesFromAsset('assets/images/map-start-point.png', 40);
+      final endIcon = await Util.getBytesFromAsset('assets/images/map-end-point.png', 40);
+
+      if (!mounted) return;
+
+      final startPos = playbackRoutePoints.first;
+      final endPos = playbackRoutePoints.last;
+
+      _playbackMarkers[const MarkerId('start')] = Marker(
+        markerId: const MarkerId('start'),
+        position: startPos,
+        icon: BitmapDescriptor.bytes(startIcon!),
+        infoWindow: const InfoWindow(title: 'Start'),
+        zIndex: 1,
+      );
+
+      _playbackMarkers[const MarkerId('end')] = Marker(
+        markerId: const MarkerId('end'),
+        position: endPos,
+        icon: BitmapDescriptor.bytes(endIcon!),
+        infoWindow: const InfoWindow(title: 'End'),
+        zIndex: 1,
+      );
+
+      // Fit bounds
+      double minLat = startPos.latitude, maxLat = startPos.latitude;
+      double minLng = startPos.longitude, maxLng = startPos.longitude;
+
+      for (var point in playbackRoutePoints) {
+        if (point.latitude < minLat) minLat = point.latitude;
+        if (point.latitude > maxLat) maxLat = point.latitude;
+        if (point.longitude < minLng) minLng = point.longitude;
+        if (point.longitude > maxLng) maxLng = point.longitude;
+      }
+
+      final bounds = LatLngBounds(
+        southwest: LatLng(minLat, minLng),
+        northeast: LatLng(maxLat, maxLng),
+      );
+
+      await _safeAnimateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+      setState(() {});
+    } catch (e) {
+      debugPrint('Error adding markers: $e');
+    }
+  }
+
+  Future<BitmapDescriptor> _createCircleMarker(String text, Color color) async {
+    const size = 40.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final center = const Offset(size / 2, size / 2);
+
+    // Shadow
+    canvas.drawCircle(
+      Offset(center.dx + 1, center.dy + 1),
+      size / 2 - 4,
+      Paint()..color = Colors.black26,
+    );
+
+    // Circle
+    canvas.drawCircle(center, size / 2 - 4, Paint()..color = color);
+
+    // Border
+    canvas.drawCircle(
+      center,
+      size / 2 - 4,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+
+    // Text
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    );
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(center.dx - textPainter.width / 2, center.dy - textPainter.height / 2),
+    );
+
+    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+
+    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
+  }
+
+  void _addParkingMarkers() async {
+    if (!mounted || parkingPoints.isEmpty) return;
+
+    _parkingMarkers = {};
+    int index = 1;
+
+    for (var element in parkingPoints) {
+      if (!mounted) return;
+
+      final id = MarkerId('parking_$index');
+      final lat = double.tryParse(element[0]["latitude"].toString()) ?? 0;
+      final lng = double.tryParse(element[0]["longitude"].toString()) ?? 0;
+
+      final icon = await _createCircleMarker('P$index', Colors.blue);
+
+      _parkingMarkers![id] = Marker(
+        markerId: id,
+        position: LatLng(lat, lng),
+        icon: icon,
+        anchor: const Offset(0.5, 0.5),
+        zIndex: 2,
+      );
+
+      if (_showParkingMarkers) {
+        _playbackMarkers[id] = _parkingMarkers![id]!;
+      }
+
+      index++;
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  void _addEventMarkers() async {
+    if (!mounted || eventsPoints.isEmpty) return;
+
+    _eventMarkers = {};
+    int index = 1;
+
+    for (var element in eventsPoints) {
+      if (!mounted) return;
+
+      final id = MarkerId('event_$index');
+      final lat = double.tryParse(element[0]["lat"].toString()) ?? 0;
+      final lng = double.tryParse(element[0]["lng"].toString()) ?? 0;
+
+      final icon = await _createCircleMarker('A$index', Colors.red);
+
+      _eventMarkers![id] = Marker(
+        markerId: id,
+        position: LatLng(lat, lng),
+        icon: icon,
+        anchor: const Offset(0.5, 0.5),
+        zIndex: 2,
+      );
+
+      if (_showEventMarkers) {
+        _playbackMarkers[id] = _eventMarkers![id]!;
+      }
+
+      index++;
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  // ==================== PLAYBACK CONTROLS ====================
+
+  void _togglePlayPause() {
+    if (playbackRoutePoints.isEmpty) return;
+
+    setState(() => _isPlaying = !_isPlaying);
+
+    if (_isPlaying) {
+      if (_currentPointIndex >= playbackRoutePoints.length - 1) {
+        _currentPointIndex = 0;
+        _playbackProgress = 0;
+      }
+      _animationController!.forward();
+    } else {
+      _animationController!.stop();
+    }
+  }
+
+  void _stopPlayback() {
+    _animationController?.stop();
+    _animationController?.reset();
+    setState(() => _isPlaying = false);
+  }
+
+  void _changeSpeed() {
+    setState(() {
+      if (_speedMultiplier == 1) {
+        _speedMultiplier = 2;
+        _speedText = "2x";
+        _animationDurationMs = 600;
+      } else if (_speedMultiplier == 2) {
+        _speedMultiplier = 4;
+        _speedText = "4x";
+        _animationDurationMs = 400;
+      } else if (_speedMultiplier == 4) {
+        _speedMultiplier = 8;
+        _speedText = "8x";
+        _animationDurationMs = 200;
+      } else {
+        _speedMultiplier = 1;
+        _speedText = "1x";
+        _animationDurationMs = 800;
+      }
+    });
+
+    _animationController!.duration = Duration(milliseconds: _animationDurationMs);
+  }
+
+  void _seekTo(double value) {
+    final index = value.toInt().clamp(0, playbackRoutePoints.length - 1);
+    _currentPointIndex = index;
+    _playbackProgress = value;
+
+    if (index < playbackRoutePoints.length) {
+      final pos = playbackRoutePoints[index];
+      _currentCarPosition = pos;
+      _updateCarMarker(pos, _currentCarBearing);
+      _updateAnimatedPolyline(index);
+      _safeAnimateCamera(CameraUpdate.newLatLng(pos));
+    }
+
+    setState(() {});
+  }
+
+  void _toggleParkingMarkers() {
+    setState(() {
+      _showParkingMarkers = !_showParkingMarkers;
+
+      if (_showParkingMarkers && _parkingMarkers != null) {
+        _playbackMarkers.addAll(_parkingMarkers!);
+      } else {
+        _parkingMarkers?.forEach((id, _) => _playbackMarkers.remove(id));
+      }
+    });
+  }
+
+  void _toggleEventMarkers() {
+    setState(() {
+      _showEventMarkers = !_showEventMarkers;
+
+      if (_showEventMarkers && _eventMarkers != null) {
+        _playbackMarkers.addAll(_eventMarkers!);
+      } else {
+        _eventMarkers?.forEach((id, _) => _playbackMarkers.remove(id));
+      }
+    });
+  }
+
+  // ==================== BUILD ====================
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.play_circle, color: Colors.orange, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Playback',
+                    style: TextStyle(
+                      color: Colors.orange[700],
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                widget.name ?? '',
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.date_range, color: Colors.black54),
+            onPressed: _showDatePicker,
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // Map
+          GoogleMap(
+            mapType: _currentMapType,
+            initialCameraPosition: CameraPosition(
+              target: LatLng(
+                double.parse(widget.device!.lat.toString()),
+                double.parse(widget.device!.lng.toString()),
+              ),
+              zoom: 14,
+            ),
+            onMapCreated: (controller) {
+              _mapController = controller;
+              _isMapCreated = true;
+              if (_mapStyle != null) {
+                controller.setMapStyle(_mapStyle);
+              }
+            },
+            onCameraMove: (pos) => currentZoom = pos.zoom,
+            markers: Set<Marker>.of(_playbackMarkers.values),
+            polylines: {..._playbackPolyLines, ..._animatedPolyLines},
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: false,
+            mapToolbarEnabled: false,
+            padding: const EdgeInsets.only(bottom: 120),
+          ),
+
+          // Map Controls
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Column(
+              children: [
+                _mapButton(Icons.layers, () {
+                  setState(() {
+                    _currentMapType = _currentMapType == MapType.normal
+                        ? MapType.hybrid
+                        : MapType.normal;
+                  });
+                }),
+                const SizedBox(height: 8),
+                _mapButton(Icons.add, () => _safeAnimateCamera(CameraUpdate.zoomIn())),
+                const SizedBox(height: 4),
+                _mapButton(Icons.remove, () => _safeAnimateCamera(CameraUpdate.zoomOut())),
+              ],
+            ),
+          ),
+
+          // Marker Toggle Buttons
+          if (playbackRoutePoints.isNotEmpty)
+            Positioned(
+              bottom: 140,
+              left: 10,
+              child: _buildMarkerToggles(),
+            ),
+
+          // Bottom Sheet
+          _buildBottomSheet(),
         ],
       ),
     );
   }
 
-  Widget playerView() {
-    return Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                  width: MediaQuery.of(context).size.width / 2,
-                  padding: const EdgeInsets.only(top: 5, bottom: 0, left: 5),
-                  color: Colors.white,
-                  child: Text(args!.name,
-                      style: FlutterFlowTheme.of(context).headlineSmall)),
-              SizedBox(
-                  height: MediaQuery.of(context).size.height / 8,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            routePoints.length - 1 > rating.toInt()
-                                ? Row(
-                                    children: [
-                                      Text(
-                                          routeList[rating.toInt()]
-                                              .speed
-                                              .toString(),
-                                          style: const TextStyle(
-                                              fontSize: 40,
-                                              fontWeight: FontWeight.bold)),
-                                      const Text(
-                                        "kph",
-                                        style: TextStyle(fontSize: 15),
-                                      ),
-                                    ],
-                                  )
-                                : Container(),
-                            routePoints.length - 1 > rating.toInt()
-                                ? Column(
-                                    children: [
-                                      const Padding(
-                                          padding: EdgeInsets.only(top: 7)),
-                                      Text(
-                                        Util.formatReportTime(DateTime.parse(
-                                            routeList[rating.toInt()].raw_time!)),
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12),
-                                      ),
-                                      Text(
-                                        Util.formatReportDate(DateTime.parse(
-                                            routeList[rating.toInt()].raw_time!)),
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ],
-                                  )
-                                : Container()
-                          ],
-                        ),
-                        const IntrinsicHeight(
-                          child: Row(
-                            children: [
-                              VerticalDivider(
-                                color: Colors.black,
-                                thickness: 2,
-                              ),
-                            ],
-                          ),
-                        ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    isPlay = !isPlay;
-                                    playButtonAnimationController!.forward();
-                                  });
-                                  if (animationController!.isAnimating) {
-                                    pauseAnimation();
-                                    return;
-                                  }
-                                  animationController!.forward();
-                                },
-                                child: ScaleTransition(
-                                    scale: Tween(begin: 1.0, end: .8).animate(
-                                        CurvedAnimation(
-                                            parent:
-                                                playButtonAnimationController!,
-                                            curve: Curves.bounceIn))
-                                      ..addStatusListener((status) {
-                                        if (status == AnimationStatus.completed) {
-                                          playButtonAnimationController!
-                                              .reverse();
-                                        }
-                                      }),
-                                    child: Icon(
-                                      !isPlay
-                                          ? Icons.play_circle
-                                          : Icons.pause_circle,
-                                      size: 50,
-                                    ))),
-                            Container(
-                              width: MediaQuery.of(context).size.width / 2,
-                              padding: const EdgeInsets.only(top: 3.0),
-                              child: SliderTheme(
-                                data: const SliderThemeData(
-                                    trackHeight: 1,
-                                    thumbShape: RoundSliderThumbShape(
-                                        enabledThumbRadius: 6,
-                                        disabledThumbRadius: 6)),
-                                child: Slider(
-                                  value: rating,
-                                  onChanged: (newRating) {
-                                    if (routePoints.length - 1 > newRating) {
-                                      setState(() {
-                                        rating = newRating;
-                                        lowerAnimatingPointsIndex =
-                                            rating.toInt();
-                                        upperAnimatingPointsIndex =
-                                            rating.toInt() + speedStep;
-                                      });
-                                    }
-                                  },
-                                  activeColor: CustomColor.primaryColor,
-                                  inactiveColor: const Color(0xFFF1F1F1),
-                                  min: 0,
-                                  max: routePoints.length.toDouble(),
-                                ),
-                              ),
-                            ),
-                            InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    fastButtonAnimationController!.forward();
-                                    if (speedStep == 1) {
-                                      speedStep = 3;
-                                      speedText = "Medium";
-                                      animationSpeed = 700;
-                                    } else if (speedStep == 3) {
-                                      speedStep = 5;
-                                      speedText = "Fast";
-                                      animationSpeed = 200;
-                                    } else if (speedStep == 5) {
-                                      speedStep = 1;
-                                      speedText = "Slow";
-                                      animationSpeed = 1000;
-                                    }
-                                  });
-                                  animationController!.duration =
-                                      Duration(milliseconds: this.animationSpeed);
-                                },
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    ScaleTransition(
-                                        scale: Tween(begin: 1.0, end: .8).animate(
-                                            CurvedAnimation(
-                                                parent:
-                                                    fastButtonAnimationController!,
-                                                curve: Curves.bounceIn))
-                                          ..addStatusListener((status) {
-                                            if (status ==
-                                                AnimationStatus.completed) {
-                                              fastButtonAnimationController!
-                                                  .reverse();
-                                            }
-                                          }),
-                                        child: Image.asset(
-                                          'assets/images/double-right-arrow.png',
-                                          height: 30.0,
-                                        )),
-                                    Text(
-                                      speedText,
-                                      style: const TextStyle(
-                                          color: Color(0xFF0060A4), fontSize: 11),
-                                    )
-                                  ],
-                                )),
-                          ],
-                        ),
-                      ],
-                    ),
-                  )),
-              Container(
-                height: MediaQuery.of(context).size.height / 1.5,
-                color: Colors.white,
-                child: loadReport(),
-              ),
-            ]));
+  Widget _mapButton(IconData icon, VoidCallback onTap) {
+    return Material(
+      color: Colors.white,
+      elevation: 2,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Icon(icon, size: 20, color: Colors.grey[700]),
+        ),
+      ),
+    );
   }
 
-  Widget loadReport() {
-    return ListView.builder(
-      itemCount: bottomRouteList.length,
-      itemBuilder: (context, index) {
-        final trip = bottomRouteList[index];
-        return GestureDetector(
-          onTap: () {
-            // String fromDate = formatInvalidDate(trip.show.toString());
-            // String toDate = formatInvalidDate(trip.left.toString());
-            // String fromTime = formatInvalidTime(trip.show.toString());
-            // String toTime = formatInvalidTime(trip.left.toString());
-            //
-            // Navigator.pushNamed(context, "/playback",
-            //     arguments: ReportArguments(
-            //         int.parse(trip.device_id),
-            //         fromDate,
-            //         fromTime,
-            //         toDate,
-            //         toTime,
-            //         args.name,
-            //         0));
-            // setState(() {
-            //   _markers.add(
-            //       MonumentMarker(
-            //         monument: Monument(
-            //             name: "",
-            //             imagePath:
-            //             'assets/images/arrow-red.png',
-            //             lat: double.parse(bottomRouteList[index].latitude.toString()),
-            //             long:  double.parse(bottomRouteList[index].longitude.toString()),
-            //             course: double.parse(bottomRouteList[index].course.toString()).toInt(),
-            //             speed: bottomRouteList[index].speed.toString()+" kmp",
-            //             message: addressLoad(bottomRouteList[index].latitude.toString(), bottomRouteList[index].longitude.toString()),
-            //             altitude: "0",
-            //             duration: bottomRouteList[index].raw_time.toString(),
-            //             event: ''
-            //         ),
-            //       ));
-            // });
-          },
-          child: reportRow(trip, index),
+  Widget _buildMarkerToggles() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 6,
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _toggleChip('P', parkingPoints.length, Colors.blue, _showParkingMarkers, _toggleParkingMarkers),
+          const SizedBox(width: 8),
+          _toggleChip('A', eventsPoints.length, Colors.red, _showEventMarkers, _toggleEventMarkers),
+        ],
+      ),
+    );
+  }
+
+  Widget _toggleChip(String label, int count, Color color, bool active, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? color.withValues(alpha: 0.15) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: active ? color : Colors.grey[300]!),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: active ? color : Colors.grey,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '$count',
+              style: TextStyle(
+                color: active ? color : Colors.grey,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomSheet() {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.15,
+      minChildSize: 0.08,
+      maxChildSize: 0.6,
+      controller: _sheetController,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: EdgeInsets.zero,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Controls
+              _buildControls(),
+
+              if (playbackRoutePoints.isNotEmpty) ...[
+                const Divider(),
+
+                // Stats
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      _statChip(Icons.route, playbackTotalDistance, Colors.blue),
+                      _statChip(Icons.timer, playbackMoveDuration, Colors.green),
+                      _statChip(Icons.pause_circle, playbackStopDuration, Colors.orange),
+                      _statChip(Icons.speed, playbackMaxSpeed, Colors.red),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // Timeline
+              if (bottomRouteList.isNotEmpty)
+                ...bottomRouteList.asMap().entries.map((e) => _buildTimelineItem(e.value, e.key))
+              else
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: Text(
+                      _isPlaybackLoading ? 'Loading...' : 'Select date range to load',
+                      style: TextStyle(color: Colors.grey[500]),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
   }
 
-  Widget reportRow(PlayBackRoute t, int index) {
-    return Card(
-        child: Container(
-            padding: const EdgeInsets.all(5),
-            child: Column(
-              children: <Widget>[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    const Padding(padding: EdgeInsets.only(left: 10)),
-                    index == 0
-                        ? const SizedBox(
-                            height: 50.0,
-                            child: TimelineNode(
-                              indicator: Card(
-                                color: Colors.grey,
-                                margin: EdgeInsets.zero,
-                                child: Padding(
-                                  padding: EdgeInsets.all(11.0),
-                                  child: Text(
-                                    'P',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12),
-                                  ),
-                                ),
-                              ),
-                              endConnector: SolidLineConnector(
-                                color: Colors.grey,
-                              ),
-                            ),
-                          )
-                        : t.status == 1
-                            ? const SizedBox(
-                                height: 50.0,
-                                child: TimelineNode(
-                                  indicator: Card(
-                                    color: Colors.blue,
-                                    margin: EdgeInsets.zero,
-                                    child: Padding(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: Icon(
-                                          Icons.route,
-                                          size: 12,
-                                          color: Colors.white,
-                                        )),
-                                  ),
-                                  startConnector: SolidLineConnector(
-                                    color: Colors.blue,
-                                  ),
-                                  endConnector: SolidLineConnector(
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                              )
-                            : const SizedBox(
-                                height: 50.0,
-                                child: TimelineNode(
-                                  indicator: Card(
-                                    color: Colors.grey,
-                                    margin: EdgeInsets.zero,
-                                    child: Padding(
-                                      padding: EdgeInsets.all(11.0),
-                                      child: Text(
-                                        'P',
-                                        style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12),
-                                      ),
-                                    ),
-                                  ),
-                                  startConnector: SolidLineConnector(
-                                    color: Colors.grey,
-                                  ),
-                                  endConnector: SolidLineConnector(
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ),
-                    t.status == 1
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 14)),
-                                  Row(
-                                    children: [
-                                      Text(
-                                        Util.formatOnlyTime(t.show!),
-                                        style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                      const Padding(
-                                          padding: EdgeInsets.only(
-                                              left: 10, bottom: 20)),
-                                      //Text(t.latitude.toString()+" "+t.longitude.toString(), style: TextStyle(fontSize: 13,color: Colors.grey),)
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 14)),
-                                  const Icon(
-                                    Icons.timelapse_sharp,
-                                    size: 18,
-                                    color: Colors.grey,
-                                  ),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 5)),
-                                  Text(
-                                    t.time!,
-                                    style: const TextStyle(
-                                        fontSize: 12, color: Colors.grey),
-                                  ),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 5)),
-                                  const Icon(
-                                    Icons.route,
-                                    size: 18,
-                                    color: Colors.grey,
-                                  ),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 5)),
-                                  Text(
-                                    "${t.distance} km",
-                                    style: const TextStyle(
-                                        fontSize: 12, color: Colors.grey),
-                                  ),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 5)),
-                                  const Icon(
-                                    Icons.speed,
-                                    size: 18,
-                                    color: Colors.grey,
-                                  ),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 5)),
-                                  Text(
-                                    "${t.top_speed} km/h",
-                                    style: const TextStyle(
-                                        fontSize: 12, color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Row(
-                                children: [
-                                  Padding(padding: EdgeInsets.only(left: 12)),
-                                  Padding(padding: EdgeInsets.only(left: 5)),
-                                  //Text(t.latitude.toString()+" "+t.longitude.toString(), style: TextStyle(color: Colors.grey, fontSize: 13),)
-                                ],
-                              ),
-                              const Padding(padding: EdgeInsets.only(top: 10)),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Padding(
-                                          padding: EdgeInsets.only(left: 14)),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            Util.formatOnlyTime(t.show!),
-                                            style: const TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.bold),
-                                          ),
-                                          const Padding(
-                                              padding: EdgeInsets.only(
-                                                  left: 10, bottom: 20)),
-                                          //Text(t.latitude.toString()+" "+t.longitude.toString(), style: TextStyle(fontSize: 13,color: Colors.grey),)
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  const Padding(
-                                      padding: EdgeInsets.only(left: 8)),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Icon(
-                                        Icons.timelapse_sharp,
-                                        size: 18,
-                                        color: Colors.blue,
-                                      ),
-                                      const Padding(
-                                          padding: EdgeInsets.only(left: 5)),
-                                      Row(children: [
-                                        Text(t.time!,
-                                            style: const TextStyle(
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.bold)),
-                                      ]),
-                                      const Padding(
-                                          padding: EdgeInsets.only(left: 5)),
-                                      const Icon(
-                                        Icons.key,
-                                        size: 18,
-                                        color: Colors.blue,
-                                      ),
-                                      const Padding(
-                                          padding: EdgeInsets.only(left: 5)),
-                                      Row(children: [
-                                        Text(t.engine_hours.toString(),
-                                            style: const TextStyle(
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.bold)),
-                                        const Text(" min",
-                                            style: TextStyle(fontSize: 13))
-                                      ]),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Padding(
-                                      padding:
-                                          EdgeInsets.only(left: 14, top: 1)),
-                                  Row(
-                                    children: [
-                                      // Text(Util.formatOnlyTime(t.show!), style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),),
-                                      //Padding(padding: EdgeInsets.only(left: 10)),
-                                      SizedBox(
-                                          width: MediaQuery.of(context)
-                                                  .size
-                                                  .width /
-                                              1.7,
-                                          child: addressLoad(
-                                              t.latitude!, t.longitude!))
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ],
-                          )
-                  ],
-                )
+  Widget _buildControls() {
+    final maxValue = (playbackRoutePoints.length - 1).toDouble().clamp(0.0, double.infinity);
+    final currentValue = _playbackProgress.clamp(0.0, maxValue);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          // Date range
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                DateFormat('dd/MM HH:mm').format(_fromDate),
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+              if (playbackRoutePoints.isNotEmpty && _playbackProgress < routeList.length)
+                Text(
+                  '${routeList[_playbackProgress.toInt().clamp(0, routeList.length - 1)].speed ?? 0} kph',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              Text(
+                DateFormat('dd/MM HH:mm').format(_toDate),
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+
+          if (playbackRoutePoints.isNotEmpty) ...[
+            // Slider
+            SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                activeTrackColor: CustomColor.primaryColor,
+                inactiveTrackColor: Colors.grey[300],
+                thumbColor: CustomColor.primaryColor,
+              ),
+              child: Slider(
+                value: currentValue,
+                min: 0,
+                max: maxValue > 0 ? maxValue : 1,
+                onChanged: _seekTo,
+              ),
+            ),
+
+            // Playback buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  onPressed: () => _seekTo((_playbackProgress - 10).clamp(0, maxValue)),
+                  icon: const Icon(Icons.replay_10),
+                  color: Colors.grey[700],
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _togglePlayPause,
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: CustomColor.primaryColor,
+                    ),
+                    child: Icon(
+                      _isPlaying ? Icons.pause : Icons.play_arrow,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () => _seekTo((_playbackProgress + 10).clamp(0, maxValue)),
+                  icon: const Icon(Icons.forward_10),
+                  color: Colors.grey[700],
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _changeSpeed,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange),
+                    ),
+                    child: Text(
+                      _speedText,
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
               ],
-            )));
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
-  Widget addressLoad(String lat, lng) {
-    return FutureBuilder<String>(
-        future: APIService.getGeocoderAddress(lat, lng),
-        builder: (context, AsyncSnapshot<String> snapshot) {
-          if (snapshot.hasData) {
-            return Text(
-              snapshot.data!.replaceAll('"', ''),
-              style: const TextStyle(color: Colors.black, fontSize: 11),
-              overflow: TextOverflow.ellipsis,
-            );
-          } else {
-            return const Text("...");
-          }
-        });
+  Widget _statChip(IconData icon, String value, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 4),
+          Text(
+            value,
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineItem(PlayBackRoute trip, int index) {
+    final isStopped = trip.status == 1;
+    int parkingNum = 0;
+    if (isStopped) {
+      for (int i = 0; i <= index; i++) {
+        if (bottomRouteList[i].status == 1) parkingNum++;
+      }
+    }
+
+    return InkWell(
+      onTap: () {
+        if (trip.latitude != null && trip.longitude != null) {
+          _safeAnimateCamera(CameraUpdate.newLatLngZoom(
+            LatLng(double.parse(trip.latitude!), double.parse(trip.longitude!)),
+            16,
+          ));
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 44,
+              child: Column(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isStopped ? Colors.blue : Colors.green,
+                    ),
+                    child: Center(
+                      child: isStopped
+                          ? Text(
+                        'P$parkingNum',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                          : const Icon(Icons.directions_car, color: Colors.white, size: 14),
+                    ),
+                  ),
+                  if (index < bottomRouteList.length - 1)
+                    Container(width: 2, height: 30, color: Colors.grey[300]),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: (isStopped ? Colors.blue : Colors.green).withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: (isStopped ? Colors.blue : Colors.green).withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isStopped ? 'P$parkingNum - Stopped' : 'Moving',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: isStopped ? Colors.blue : Colors.green,
+                          ),
+                        ),
+                        Text(
+                          Util.formatOnlyTime(trip.show ?? ""),
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        _infoChip(Icons.timer, trip.time ?? "0"),
+                        if (!isStopped) ...[
+                          _infoChip(Icons.route, "${trip.distance ?? 0} km"),
+                          _infoChip(Icons.speed, "${trip.top_speed ?? 0} kph"),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoChip(IconData icon, String value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 11, color: Colors.grey[600]),
+        const SizedBox(width: 2),
+        Text(value, style: TextStyle(fontSize: 10, color: Colors.grey[700])),
+      ],
+    );
   }
 }

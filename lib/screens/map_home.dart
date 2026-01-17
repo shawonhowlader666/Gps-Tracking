@@ -545,31 +545,6 @@ class _MapPageState extends State<MapPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        key: _drawerKey,
-        drawer: SizedBox(width: 250, child: navDrawer()),
-        appBar: AppBar(
-          // title: Text(device != null ? device!.name! : ("map").tr,
-          //     style: TextStyle(color: CustomColor.secondaryColor)),
-          backgroundColor: Colors.white,
-          iconTheme: IconThemeData(
-            color: Colors.grey[700], //change your color here
-          ),
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Padding(padding: EdgeInsets.only(bottom: 5),child:Image.asset("images/logo-icon.png", width: 40, height: 40)),
-              Gap(10),
-              // Padding(padding: EdgeInsets.only(bottom: 7),child:Text("Bharat GPS",
-              //   style: FlutterFlowTheme.of(context).headlineMedium)),
-              Padding(
-                  padding: EdgeInsets.only(bottom: 0),
-                  child: Text("map".tr,
-                      style: FlutterFlowTheme.of(context).headlineMedium))
-            ],
-          ),
-          centerTitle: true,
-        ),
         body: GetX<DataController>(
             init: DataController(),
             builder: (controller) {
@@ -804,7 +779,7 @@ class _MapPageState extends State<MapPage> {
           },
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(0, 10, 7, 0),
+          padding: const EdgeInsets.fromLTRB(0, 100, 7, 0),
           child: Align(
             alignment: Alignment.topRight,
             child: Column(

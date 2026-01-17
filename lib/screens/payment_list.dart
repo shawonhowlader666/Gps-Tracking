@@ -3,13 +3,19 @@ import 'package:gpspro/services/model/bill.dart';
 import 'package:gpspro/services/model/payment_stats.dart';
 import 'package:gpspro/services/payment_service.dart';
 import 'package:gpspro/screens/web_view.dart';
+import 'package:open_file/open_file.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+import '../services/pdf_generator.dart';
 
 class PaymentListScreen extends StatefulWidget {
   @override
   _PaymentListScreenState createState() => _PaymentListScreenState();
 }
 
+
 class _PaymentListScreenState extends State<PaymentListScreen> {
+  // ... (keep existing variables)
   PaymentStats? _stats;
   List<Bill> _bills = [];
   bool _isLoading = true;
@@ -17,6 +23,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
   int _currentPage = 1;
   String? _errorMessage;
   final ScrollController _scrollController = ScrollController();
+
+  // ... (keep existing initState, dispose, _scrollListener methods)
 
   @override
   void initState() {
@@ -37,6 +45,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       _loadMoreBills();
     }
   }
+
+  // ... (keep existing _loadData, _loadMoreBills, _initiatePayment methods)
 
   Future<void> _loadData() async {
     if (!mounted) return;
@@ -116,7 +126,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       return;
     }
 
-    // Show loading dialog
     if (!mounted) return;
     _showLoadingDialog();
 
@@ -125,7 +134,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
 
       if (!mounted) return;
 
-      // Hide loading dialog
       Navigator.of(context).pop();
 
       if (gatewayUrl != null) {
@@ -150,12 +158,121 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
 
       if (!mounted) return;
 
-      // Hide loading dialog if showing
       Navigator.of(context).pop();
 
       _showErrorSnackBar(_getErrorMessage(e));
     }
   }
+
+  // NEW: Download individual bill PDF
+  Future<void> _downloadBillPDF(Bill bill) async {
+    try {
+      // Request storage permission
+      if (await _requestStoragePermission()) {
+        if (!mounted) return;
+
+        // Show loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+                SizedBox(width: 16),
+                Text('Generating PDF...'),
+              ],
+            ),
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        final file = await PDFGenerator.generateBillPDF(bill);
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PDF saved to ${file.path}'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'Open',
+              textColor: Colors.white,
+              onPressed: () => OpenFile.open(file.path),
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else {
+        if (!mounted) return;
+        _showErrorSnackBar('Storage permission denied');
+      }
+    } catch (e) {
+      debugPrint('Error generating PDF: $e');
+      if (!mounted) return;
+      _showErrorSnackBar('Failed to generate PDF');
+    }
+  }
+
+  // NEW: Download all transactions PDF
+  Future<void> _downloadAllTransactionsPDF() async {
+    if (_bills.isEmpty) {
+      _showErrorSnackBar('No transactions to export');
+      return;
+    }
+
+    try {
+      if (await _requestStoragePermission()) {
+        if (!mounted) return;
+
+        _showLoadingDialog();
+
+        final file = await PDFGenerator.generateAllTransactionsPDF(_bills);
+
+        if (!mounted) return;
+
+        Navigator.of(context).pop();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PDF saved to ${file.path}'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'Open',
+              textColor: Colors.white,
+              onPressed: () => OpenFile.open(file.path),
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else {
+        if (!mounted) return;
+        _showErrorSnackBar('Storage permission denied');
+      }
+    } catch (e) {
+      debugPrint('Error generating PDF: $e');
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      _showErrorSnackBar('Failed to generate PDF');
+    }
+  }
+
+  // NEW: Request storage permission
+  Future<bool> _requestStoragePermission() async {
+    if (await Permission.storage.isGranted) {
+      return true;
+    }
+
+    final result = await Permission.storage.request();
+    return result.isGranted;
+  }
+
+  // ... (keep existing helper methods)
 
   String _getErrorMessage(dynamic error) {
     String errorString = error.toString().toLowerCase();
@@ -197,7 +314,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               children: [
                 CircularProgressIndicator(),
                 SizedBox(height: 16),
-                Text('Initiating payment...'),
+                Text('Processing...'),
               ],
             ),
           ),
@@ -214,10 +331,21 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         title: const Text('Payment & Invoices'),
         backgroundColor: const Color(0xFF3E6FB8),
         foregroundColor: Colors.white,
+        actions: [
+          // NEW: Download all button
+          if (_bills.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.download),
+              tooltip: 'Download All Transactions',
+              onPressed: _downloadAllTransactionsPDF,
+            ),
+        ],
       ),
       body: _buildBody(),
     );
   }
+
+  // ... (keep existing _buildBody, _buildErrorWidget, _buildStatsCard, _buildStatItem methods)
 
   Widget _buildBody() {
     if (_isLoading) {
@@ -458,6 +586,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
     );
   }
 
+  // UPDATED: Added download button
   Widget _buildBillItem(Bill bill) {
     Color statusColor;
     Color statusBgColor;
@@ -527,6 +656,19 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
                   color: Colors.grey[600],
                 ),
               ),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // NEW: Download button
+              IconButton(
+                icon: const Icon(Icons.download, size: 20),
+                color: const Color(0xFF3E6FB8),
+                tooltip: 'Download PDF',
+                onPressed: () => _downloadBillPDF(bill),
+              ),
+              const Icon(Icons.expand_more),
             ],
           ),
           children: [

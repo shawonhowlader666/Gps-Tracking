@@ -1,9 +1,12 @@
+// lib/screens/home/home_controller.dart
+
+import 'dart:async';
+import 'dart:developer';
 import 'package:get/get.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/screens/report/get_today_report.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/services/model/device_item.dart';
-import 'dart:developer';
 
 class HomeController extends GetxController {
   final DataController dataController = Get.find<DataController>();
@@ -15,18 +18,20 @@ class HomeController extends GetxController {
   RxBool isLoadingSubscription = true.obs;
   var isDummyMileageData = false.obs;
 
-  // Vehicle Summary
+  // Vehicle Summary - REACTIVE VARIABLES
   RxInt selectedDeviceId = 0.obs;
   Rx<TodayReportData?> todayReport = Rx<TodayReportData?>(null);
   RxBool isLoadingReport = false.obs;
+  RxString reportError = ''.obs;
 
   // Mileage Chart Data
   RxList<MileageData> mileageData = <MileageData>[].obs;
   RxBool isLoadingMileage = false.obs;
-  Rx<DateTime> selectedStartDate = DateTime.now().subtract(Duration(days: 6)).obs;
+  Rx<DateTime> selectedStartDate = DateTime.now().subtract(const Duration(days: 6)).obs;
   Rx<DateTime> selectedEndDate = DateTime.now().obs;
 
-  // Helper to get current device
+  Timer? _refreshTimer;
+
   DeviceItem? get selectedDevice {
     if (selectedDeviceId.value == 0) return null;
     try {
@@ -41,111 +46,167 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    log('🏠 [HomeController] onInit');
     _initializeData();
+    _startAutoRefresh();
+  }
+
+  @override
+  void onClose() {
+    _refreshTimer?.cancel();
+    super.onClose();
+  }
+
+  void _startAutoRefresh() {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      if (selectedDeviceId.value != 0) {
+        log('🔄 [HomeController] Auto refresh...');
+        loadTodayReport(selectedDeviceId.value, forceRefresh: true);
+      }
+    });
   }
 
   void _initializeData() {
-    // Listen to device changes
-    dataController.onlyDevices.listen((devices) {
+    // Listen for device list changes
+    ever(dataController.onlyDevices, (List<DeviceItem> devices) {
+      log('🏠 [HomeController] Devices changed: ${devices.length}');
+
       if (devices.isNotEmpty) {
         updateSubscriptionStatus(devices);
 
+        // Auto-select first device if none selected
         if (selectedDeviceId.value == 0) {
-          selectedDeviceId.value = devices.first.id!;
-          loadTodayReport(devices.first.id!);
-          loadMileageData(devices.first.id!);
+          final first = devices.first;
+          if (first.id != null) {
+            log('🏠 [HomeController] Auto-selecting device: ${first.id}');
+            selectedDeviceId.value = first.id!;
+            loadTodayReport(first.id!);
+            loadMileageData(first.id!);
+          }
         }
       }
     });
 
-    // Initial load
+    // Initial load if devices already exist
     if (dataController.onlyDevices.isNotEmpty) {
+      log('🏠 [HomeController] Initial devices: ${dataController.onlyDevices.length}');
       updateSubscriptionStatus(dataController.onlyDevices);
-      selectedDeviceId.value = dataController.onlyDevices.first.id!;
-      loadTodayReport(selectedDeviceId.value);
-      loadMileageData(selectedDeviceId.value);
+
+      final first = dataController.onlyDevices.first;
+      if (first.id != null) {
+        selectedDeviceId.value = first.id!;
+        loadTodayReport(first.id!);
+        loadMileageData(first.id!);
+      }
     }
   }
 
   Future<void> refreshData() async {
-    try {
-      await dataController.getDevices();
-      if (selectedDeviceId.value != 0) {
-        await Future.wait([
-          loadTodayReport(selectedDeviceId.value),
-          loadMileageData(selectedDeviceId.value),
-        ]);
-      }
-    } catch (e) {
-      log("Error refreshing data: $e");
+    log('🔄 [HomeController] Manual refresh');
+    ReportService.clearCache();
+
+    await dataController.getDevices();
+
+    if (selectedDeviceId.value != 0) {
+      await loadTodayReport(selectedDeviceId.value, forceRefresh: true);
+      await loadMileageData(selectedDeviceId.value);
     }
   }
 
   void updateSubscriptionStatus(List<DeviceItem> devices) {
     totalVehicles.value = devices.length;
-
-    paidVehicles.value = devices.where((device) {
-      return device.iconColor == "green" || device.iconColor == "yellow";
+    paidVehicles.value = devices.where((d) {
+      final c = d.iconColor?.toLowerCase() ?? '';
+      return c == "green" || c == "yellow";
     }).length;
-
-    dueVehicles.value = devices.where((device) {
-      return device.iconColor == "red";
+    dueVehicles.value = devices.where((d) {
+      final c = d.iconColor?.toLowerCase() ?? '';
+      return c == "red";
     }).length;
-
     isLoadingSubscription.value = false;
   }
 
-  Future<void> loadTodayReport(int deviceId) async {
+  /// MAIN METHOD: Load today's report
+  Future<void> loadTodayReport(int deviceId, {bool forceRefresh = false}) async {
+    if (deviceId == 0) {
+      log('⚠️ [HomeController] loadTodayReport: deviceId is 0');
+      return;
+    }
+
+    log('📊 [HomeController] loadTodayReport for device: $deviceId');
+
+    // Set loading state
+    isLoadingReport.value = true;
+    reportError.value = '';
+
     try {
-      isLoadingReport.value = true;
-      final report = await ReportService.getTodayReportData(deviceId: deviceId);
+      // Call ReportService
+      final report = await ReportService.getTodayReportData(
+        deviceId: deviceId,
+        forceRefresh: forceRefresh,
+      );
+
+      log('📊 [HomeController] Report received:');
+      log('   isEmpty: ${report.isEmpty}');
+      log('   routeLength: ${report.routeLength}');
+      log('   moveDuration: ${report.moveDuration}');
+      log('   stopDuration: ${report.stopDuration}');
+      log('   topSpeed: ${report.topSpeed}');
+      log('   engineHours: ${report.engineHours}');
+
+      // UPDATE THE REACTIVE VARIABLE - THIS IS KEY!
       todayReport.value = report;
-      log("Today's report loaded: ${report.toJson()}");
+
+      // Trigger update notification
+      todayReport.refresh();
+
+      if (report.isEmpty) {
+        reportError.value = 'No data for today';
+        log('⚠️ [HomeController] Report is empty');
+      } else {
+        log('✅ [HomeController] Report loaded successfully');
+      }
     } catch (e) {
-      log("Error loading today's report: $e");
+      log('❌ [HomeController] Error: $e');
       todayReport.value = TodayReportData();
+      reportError.value = 'Failed to load report';
     } finally {
       isLoadingReport.value = false;
+      log('📊 [HomeController] isLoadingReport = false');
     }
   }
 
+  void onVehicleChanged(int deviceId) {
+    if (deviceId == selectedDeviceId.value) return;
+
+    log('🚗 [HomeController] Vehicle changed: $deviceId');
+    selectedDeviceId.value = deviceId;
+
+    // Clear previous data
+    todayReport.value = null;
+    reportError.value = '';
+
+    // Load new data
+    loadTodayReport(deviceId);
+    loadMileageData(deviceId);
+  }
+
   Future<void> loadMileageData(int deviceId) async {
+    if (deviceId == 0) return;
+
+    isLoadingMileage.value = true;
+    mileageData.clear();
+    isDummyMileageData.value = false;
+
     try {
-      isLoadingMileage.value = true;
-      mileageData.clear();
-      isDummyMileageData.value = false; // Reset flag, assume real data
-
-      log("🔄 Loading mileage data for device: $deviceId");
-
-      bool hasAnyRealData = false;
-
-      // Load data for last 7 days
       for (int i = 6; i >= 0; i--) {
         final date = DateTime.now().subtract(Duration(days: i));
-        final mileage = await _fetchDayMileage(deviceId, date);
-        mileageData.add(mileage);
-
-        // Check if we got any real data (not generated)
-        if (mileage.isRealData) {
-          hasAnyRealData = true;
-        }
-      }
-
-      // If no real data was found for any day, mark as dummy
-      if (!hasAnyRealData) {
-        isDummyMileageData.value = true;
-        log("⚠️ No real data found, using dummy data");
-      } else {
-        isDummyMileageData.value = false;
-        log("✅ Real mileage data loaded");
-      }
-
-      log("✅ Mileage data loaded: ${mileageData.length} days");
-      for (var data in mileageData) {
-        log("  ${data.dayLabel}/${data.date.month}: ${data.distance} km ${data.isRealData ? '(Real)' : '(Dummy)'}");
+        final m = await _fetchDayMileage(deviceId, date);
+        mileageData.add(m);
+        if (m.isRealData && m.distance > 0) isDummyMileageData.value = false;
       }
     } catch (e) {
-      log("❌ Error loading mileage data: $e");
+      log('❌ [HomeController] Mileage error: $e');
       _addDummyMileageData();
     } finally {
       isLoadingMileage.value = false;
@@ -154,123 +215,53 @@ class HomeController extends GetxController {
 
   Future<MileageData> _fetchDayMileage(int deviceId, DateTime date) async {
     try {
-      final dateStr = _formatDateForApi(date);
-      final nextDateStr = _formatDateForApi(date.add(Duration(days: 1)));
+      final d = _formatDate(date);
+      final d2 = _formatDate(date.add(const Duration(days: 1)));
 
-      log("📊 Fetching mileage for $dateStr");
+      final h = await APIService.getHistory(deviceId.toString(), d, "00:00", d2, "00:00");
 
-      // Try to get real data from API
-      final history = await APIService.getHistory(
-        deviceId.toString(),
-        dateStr,
-        "00:00",
-        nextDateStr,
-        "00:00",
-      );
+      double dist = 0.0;
+      bool real = false;
 
-      double distance = 0.0;
-      bool isReal = false;
-
-      if (history?.items != null && history!.items!.isNotEmpty) {
-        // Calculate distance from history
-        distance = _calculateDistanceFromHistory(history);
-        isReal = true; // Mark as real data if we got response from API
-        log("  ✓ Real distance for ${date.day}/${date.month}: $distance km");
-      } else {
-        // No data from API, use 0 (not dummy random data)
-        distance = 0.0;
-        isReal = true; // It's real data, just 0 distance
-        log("  ✓ No movement for ${date.day}/${date.month}: 0 km");
+      if (h != null && h.distance_sum != null) {
+        dist = _parseDistance(h.distance_sum);
+        real = true;
       }
 
-      return MileageData(
-        date: date,
-        distance: distance,
-        isRealData: isReal,
-      );
+      return MileageData(date: date, distance: dist, isRealData: real);
     } catch (e) {
-      log("  ✗ Error for ${date.day}/${date.month}: $e");
-      // API error - use dummy data
-      return MileageData(
-        date: date,
-        distance: _generateRandomDistance(date),
-        isRealData: false,
-      );
+      return MileageData(date: date, distance: 0, isRealData: false);
     }
   }
 
-  double _calculateDistanceFromHistory(dynamic history) {
-    try {
-      // Adjust based on your actual PositionHistory structure
-      if (history.items != null && history.items!.isNotEmpty) {
-        // If your history has distance field
-        // return history.totalDistance ?? 0.0;
-
-        // Estimate based on position count
-        return history.items!.length * 2.0; // Approximate
-      }
-      return 0.0;
-    } catch (e) {
-      return 0.0;
-    }
-  }
-
-  double _parseDistance(String? routeLength) {
-    if (routeLength == null || routeLength.isEmpty) return 0.0;
-
-    try {
-      // Extract number from string like "150.5 Km" or "150 km"
-      final numStr = routeLength.replaceAll(RegExp(r'[^0-9.]'), '');
-      return double.tryParse(numStr) ?? 0.0;
-    } catch (e) {
-      return 0.0;
-    }
-  }
-
-  double _generateRandomDistance(DateTime date) {
-    // Generate realistic random distances for demo
-    final seed = date.day + date.month * 31;
-    final base = (seed * 17) % 200;
-    return (base + 50).toDouble();
+  double _parseDistance(String? s) {
+    if (s == null) return 0;
+    final n = s.replaceAll(RegExp(r'[^0-9.]'), '');
+    return double.tryParse(n) ?? 0;
   }
 
   void _addDummyMileageData() {
     mileageData.clear();
     isDummyMileageData.value = true;
-
     for (int i = 6; i >= 0; i--) {
-      final date = DateTime.now().subtract(Duration(days: i));
       mileageData.add(MileageData(
-        date: date,
-        distance: _generateRandomDistance(date),
+        date: DateTime.now().subtract(Duration(days: i)),
+        distance: 0,
         isRealData: false,
       ));
     }
-    log("📝 Added dummy mileage data for demo");
   }
 
-  String _formatDateForApi(DateTime date) {
-    String month = date.month < 10 ? "0${date.month}" : date.month.toString();
-    String day = date.day < 10 ? "0${date.day}" : date.day.toString();
-    return "${date.year}-$month-$day";
-  }
-
-  void onVehicleChanged(int deviceId) {
-    selectedDeviceId.value = deviceId;
-    loadTodayReport(deviceId);
-    loadMileageData(deviceId);
+  String _formatDate(DateTime d) {
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return "${d.year}-$m-$day";
   }
 
   String getFormattedDateRange() {
-    final start = selectedStartDate.value;
-    final end = selectedEndDate.value;
-    return "${_formatDateDisplay(start)} - ${_formatDateDisplay(end)}";
-  }
-
-  String _formatDateDisplay(DateTime date) {
-    String day = date.day < 10 ? "0${date.day}" : date.day.toString();
-    String month = date.month < 10 ? "0${date.month}" : date.month.toString();
-    return "$day/$month/${date.year}";
+    final s = selectedStartDate.value;
+    final e = selectedEndDate.value;
+    return "${s.day}/${s.month} - ${e.day}/${e.month}";
   }
 }
 
@@ -279,14 +270,10 @@ class MileageData {
   final double distance;
   final bool isRealData;
 
-  MileageData({
-    required this.date,
-    required this.distance,
-    this.isRealData = true, // Default to true
-  });
+  MileageData({required this.date, required this.distance, this.isRealData = true});
 
   String get dayLabel {
-    String day = date.day < 10 ? "0${date.day}" : date.day.toString();
-    return day;
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days[date.weekday - 1];
   }
 }

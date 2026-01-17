@@ -13,7 +13,6 @@ import 'package:gpspro/screens/main_bottom_nav.dart';
 import 'package:gpspro/screens/login.dart';
 import 'package:gpspro/screens/notification_map.dart';
 import 'package:gpspro/screens/notifications.dart';
-import 'package:gpspro/screens/playback.dart';
 import 'package:gpspro/screens/report/recent_events.dart';
 import 'package:gpspro/screens/report/report_fuel.dart';
 import 'package:gpspro/screens/report/report_route.dart';
@@ -43,7 +42,6 @@ final Map<String, WidgetBuilder> routes = {
   '/reportStopView': (context) => ReportStopViewPage(),
   '/reportStop': (context) => ReportStopPage(),
   '/reportSummary': (context) => ReportSummaryPage(),
-  '/playback': (context) => PlaybackScreen(),
   '/notificationType': (context) => NotificationTypePage(),
   '/eventMap': (context) => EventMapPage(),
   '/notificationMap': (context) => NotificationMapPage(),
@@ -51,10 +49,9 @@ final Map<String, WidgetBuilder> routes = {
   '/geofenceList': (context) => GeofenceListPage(),
   '/geofenceAdd': (context) => GeofenceAddPage(),
   '/alertList': (context) => AlertListPage(),
-  // '/addAlert': (context) => AddAlertsPage(),
   '/notification': (context) => NotificationTypePage(),
   '/stopMap': (context) => StopMapPage(),
   '/deviceEvent': (context) => DeviceEventPage(),
   '/engineLock': (context) => const EngineLockScreen(),
-  '/event': (context) =>  EventsPage()
+  '/event': (context) => EventsPage(),
 };
