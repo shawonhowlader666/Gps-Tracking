@@ -9,6 +9,7 @@ import 'package:gpspro/arguments/report_args.dart';
 import 'package:gpspro/screens/lock_unlock_screen.dart';
 import 'package:gpspro/screens/playback.dart';
 import 'package:gpspro/screens/report/get_today_report.dart';
+import 'package:gpspro/screens/report/report_screen.dart';
 import 'package:gpspro/screens/street_view_screen.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/screens/data_controller/data_controller.dart';
@@ -19,6 +20,9 @@ import 'package:gpspro/util/util.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'common_method.dart';
+
+// Status enum matching other screens
+enum DeviceStatus { running, idle, stop, offline }
 
 class TrackDevicePage extends StatefulWidget {
   final int? id;
@@ -79,18 +83,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
   double? _pendingBearing;
   BitmapDescriptor? _cachedMarkerIcon;
 
-  // Blinking/Pulse Animation
-  AnimationController? _pulseController;
-  Animation<double>? _pulseAnimation;
-  Set<Circle> _pulseCircles = {};
-
   // Debounce control
   DateTime? _lastUpdateTime;
-  static const int _minUpdateIntervalMs = 800;
+  static const int _minUpdateIntervalMs = 800; // Increased for smoother updates
 
   // Animation frame counter for camera updates
   int _animationFrameCount = 0;
-  static const int _cameraUpdateInterval = 5;
+  static const int _cameraUpdateInterval = 5; // Less frequent camera updates
 
   // Colors
   static const _successColor = Color(0xFF22C55E);
@@ -127,9 +126,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     super.initState();
     device = widget.device;
 
-    // Initialize pulse animation controller
-    _initPulseAnimation();
-
     rootBundle.loadString('assets/map_style.txt').then((string) {
       _mapStyle = string;
     }).catchError((error) {
@@ -137,67 +133,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     });
 
     _initTrackingData();
-  }
-
-  void _initPulseAnimation() {
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    );
-
-    _pulseAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseController!, curve: Curves.easeInOut),
-    );
-
-    _pulseController!.repeat(reverse: true);
-
-    _pulseAnimation!.addListener(() {
-      if (mounted && !_isDisposed && _currentCarPosition != null) {
-        _updatePulseCircles();
-      }
-    });
-  }
-
-  void _updatePulseCircles() {
-    if (_currentCarPosition == null) return;
-
-    final statusColor = _getStatusColor();
-    final pulseValue = _pulseAnimation?.value ?? 0.5;
-
-    // Create blinking circles
-    _pulseCircles = {
-      // Outer blinking circle
-      Circle(
-        circleId: const CircleId('pulse_outer'),
-        center: _currentCarPosition!,
-        radius: 25 + (pulseValue * 25),
-        // 25-50 meters
-        fillColor: statusColor.withValues(alpha: 0.08 + (pulseValue * 0.12)),
-        strokeColor: statusColor.withValues(alpha: 0.2 + (pulseValue * 0.3)),
-        strokeWidth: 2,
-      ),
-      // Middle blinking circle
-      Circle(
-        circleId: const CircleId('pulse_middle'),
-        center: _currentCarPosition!,
-        radius: 15 + (pulseValue * 10),
-        // 15-25 meters
-        fillColor: statusColor.withValues(alpha: 0.12 + (pulseValue * 0.1)),
-        strokeColor: statusColor.withValues(alpha: 0.3 + (pulseValue * 0.2)),
-        strokeWidth: 2,
-      ),
-      // Inner solid circle
-      Circle(
-        circleId: const CircleId('pulse_inner'),
-        center: _currentCarPosition!,
-        radius: 10,
-        fillColor: statusColor.withValues(alpha: 0.2),
-        strokeColor: statusColor.withValues(alpha: 0.5),
-        strokeWidth: 2,
-      ),
-    };
-
-    if (mounted) setState(() {});
   }
 
   void _initTrackingData() {
@@ -352,14 +287,15 @@ class _TrackDeviceState extends State<TrackDevicePage>
       );
 
       double targetBearing =
-          rotation ? double.parse(element.course.toString()) : 0;
+      rotation ? double.parse(element.course.toString()) : 0;
 
       if (first) {
         await _initializeFirstMarker(newPosition, targetBearing);
       } else if (_currentCarPosition != null) {
         double distance = _calculateDistance(_currentCarPosition!, newPosition);
 
-        if (distance > 2) {
+        // Only animate if distance is significant (> 5 meters)
+        if (distance > 5) {
           if (_isAnimatingCar) {
             _pendingPosition = newPosition;
             _pendingBearing = targetBearing;
@@ -371,11 +307,39 @@ class _TrackDeviceState extends State<TrackDevicePage>
               _cachedMarkerIcon!,
             );
           }
+        } else {
+          // Small movement, just update position without animation
+          _updateMarkerDirectly(newPosition, targetBearing);
         }
       }
     } catch (e) {
       debugPrint('Error updating marker: $e');
     }
+  }
+
+  void _updateMarkerDirectly(LatLng position, double bearing) {
+    if (!mounted || _isDisposed || _mapMarkerSC.isClosed) return;
+
+    _currentCarPosition = position;
+    _currentCarBearing = bearing;
+
+    final carMarker = Marker(
+      markerId: const MarkerId("driverMarker"),
+      position: position,
+      rotation: _currentCarBearing,
+      icon: _cachedMarkerIcon!,
+      anchor: const Offset(0.5, 0.5),
+      flat: true,
+    );
+
+    _markers.clear();
+    _markers.add(carMarker);
+
+    if (!_mapMarkerSC.isClosed) {
+      _mapMarkerSink.add(_markers);
+    }
+
+    if (mounted) setState(() {});
   }
 
   Future<void> _initializeFirstMarker(LatLng position, double bearing) async {
@@ -403,9 +367,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
       _mapMarkerSink.add(_markers);
     }
 
-    // Initialize pulse circles
-    _updatePulseCircles();
-
     oldPin = position;
 
     await Future.delayed(const Duration(milliseconds: 300));
@@ -419,11 +380,11 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   void _startSmoothAnimation(
-    LatLng fromPosition,
-    LatLng toPosition,
-    double targetBearing,
-    BitmapDescriptor markerIcon,
-  ) {
+      LatLng fromPosition,
+      LatLng toPosition,
+      double targetBearing,
+      BitmapDescriptor markerIcon,
+      ) {
     if (!mounted || _isDisposed || _mapMarkerSC.isClosed) return;
 
     _isAnimatingCar = true;
@@ -452,7 +413,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     final Animation<double> animation = CurvedAnimation(
       parent: _carAnimationController!,
-      curve: Curves.easeInOutCubic,
+      curve: Curves.linear, // Changed to linear for smoother movement
     );
 
     animation.addListener(() {
@@ -478,10 +439,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
       final carMarker = Marker(
         markerId: const MarkerId("driverMarker"),
         position: interpolatedPosition,
+        rotation: interpolatedBearing,
         icon: markerIcon,
         anchor: const Offset(0.5, 0.5),
         flat: true,
-        rotation: interpolatedBearing,
       );
 
       _markers.clear();
@@ -491,12 +452,14 @@ class _TrackDeviceState extends State<TrackDevicePage>
         _mapMarkerSink.add(_markers);
       }
 
+      // Add to polyline less frequently
       if (newPolylinesData.isEmpty ||
           _calculateDistance(newPolylinesData.last, interpolatedPosition) >
-              10) {
+              15) {
         newPolylinesData.add(interpolatedPosition);
       }
 
+      // Update camera less frequently for smoother experience
       if (_animationFrameCount % _cameraUpdateInterval == 0) {
         _updateCameraSmoothly(interpolatedPosition);
       }
@@ -525,8 +488,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   int _calculateAnimationDuration(double distanceMeters) {
-    int duration = 2000 + (distanceMeters / 10 * 100).toInt();
-    return duration.clamp(2000, 5000);
+    // Smoother duration calculation
+    int duration = 1500 + (distanceMeters / 15 * 100).toInt();
+    return duration.clamp(1500, 4000);
   }
 
   void _finishAnimation(LatLng finalPosition) {
@@ -560,7 +524,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       _pendingPosition = null;
       _pendingBearing = null;
 
-      Future.delayed(const Duration(milliseconds: 150), () {
+      Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted && !_isDisposed && _currentCarPosition != null) {
           _startSmoothAnimation(
             _currentCarPosition!,
@@ -598,22 +562,183 @@ class _TrackDeviceState extends State<TrackDevicePage>
     return bearing;
   }
 
+  // ==================== MASTER STATUS DETECTION (Same as DevicePage) ====================
+
+  /// MASTER STATUS DETERMINATION
+  DeviceStatus _getDeviceStatus(DeviceItem? device) {
+    if (device == null) return DeviceStatus.offline;
+
+    // STEP 1: Check if device is online first
+    final isOnline = _isDeviceOnline(device);
+
+    if (!isOnline) {
+      return DeviceStatus.offline;
+    }
+
+    // STEP 2: Device is online, check speed
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+
+    // STEP 3: Check engine status
+    final isEngineOn = _isEngineOn(device);
+
+    // STEP 4: Determine status based on online + speed + engine
+    if (speed > 0) {
+      // Moving = Running (engine must be on if moving)
+      return DeviceStatus.running;
+    } else {
+      // Not moving (speed = 0)
+      if (isEngineOn) {
+        // Engine on but not moving = Idle
+        return DeviceStatus.idle;
+      } else {
+        // Engine off and not moving = Stop/Parking
+        return DeviceStatus.stop;
+      }
+    }
+  }
+
+  /// Check if device is online
+  bool _isDeviceOnline(DeviceItem device) {
+    final online = device.online?.toLowerCase().trim() ?? '';
+
+    if (online.contains('offline')) {
+      return false;
+    }
+
+    if (online.contains('online')) {
+      return true;
+    }
+
+    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
+    if (iconColor == 'green' || iconColor == 'yellow') {
+      return true;
+    }
+
+    if (device.timestamp != null && device.timestamp! > 0) {
+      try {
+        final lastUpdate =
+        DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
+        final difference = DateTime.now().difference(lastUpdate);
+        return difference.inMinutes < 5;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+    if (speed > 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Check if engine is ON
+  bool _isEngineOn(DeviceItem device) {
+    // 1. Check engineStatus field
+    if (device.engineStatus != null) {
+      final status = device.engineStatus;
+      if (status is bool) return status;
+      if (status is int) return status == 1;
+      if (status is String) {
+        final s = status.toLowerCase().trim();
+        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s)) {
+          return true;
+        }
+        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
+            .contains(s)) {
+          return false;
+        }
+      }
+    }
+
+    // 2. Check sensors
+    if (device.sensors != null && device.sensors!.isNotEmpty) {
+      for (var sensor in device.sensors!) {
+        try {
+          final type = (sensor['type'] ?? '').toString().toLowerCase();
+          final name = (sensor['name'] ?? '').toString().toLowerCase();
+          final value = sensor['value'];
+
+          if (type == 'acc' ||
+              type == 'ignition' ||
+              type == 'engine' ||
+              name.contains('ignition') ||
+              name.contains('acc') ||
+              name.contains('engine')) {
+            if (value == null) continue;
+
+            if (value is bool) return value;
+            if (value is int) return value == 1;
+            if (value is String) {
+              final v = value.toLowerCase().trim();
+              if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
+                  .contains(v)) return true;
+              if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
+                  .contains(v)) return false;
+            }
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+    }
+
+    // 3. Check speed
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+    if (speed > 0) {
+      return true;
+    }
+
+    // 4. Check iconColor
+    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
+    if (iconColor == 'yellow') {
+      return true;
+    }
+    if (iconColor == 'green') {
+      return true;
+    }
+
+    return false;
+  }
+
   Color _getStatusColor() {
-    if (device?.iconColor == "green") return _successColor;
-    if (device?.iconColor == "yellow") return _warningColor;
-    return _dangerColor;
+    switch (_getDeviceStatus(device)) {
+      case DeviceStatus.running:
+        return _successColor;
+      case DeviceStatus.idle:
+        return _warningColor;
+      case DeviceStatus.stop:
+        return _neutralColor;
+      case DeviceStatus.offline:
+        return _dangerColor;
+    }
   }
 
   String _getStatusText() {
-    if (device?.iconColor == "green") return "Running";
-    if (device?.iconColor == "yellow") return "Idle";
-    return "Stopped";
+    switch (_getDeviceStatus(device)) {
+      case DeviceStatus.running:
+        return "Running";
+      case DeviceStatus.idle:
+        return "Idle";
+      case DeviceStatus.stop:
+        return "Parking";
+      case DeviceStatus.offline:
+        return "Offline";
+    }
   }
 
   IconData _getStatusIcon() {
-    if (device?.iconColor == "green") return Icons.directions_car;
-    if (device?.iconColor == "yellow") return Icons.pause_circle;
-    return Icons.local_parking;
+    switch (_getDeviceStatus(device)) {
+      case DeviceStatus.running:
+        return Icons.directions_car;
+      case DeviceStatus.idle:
+        return Icons.pause_circle;
+      case DeviceStatus.stop:
+        return Icons.local_parking;
+      case DeviceStatus.offline:
+        return Icons.signal_wifi_off;
+    }
   }
 
   // ============ ACTION METHODS ============
@@ -621,35 +746,24 @@ class _TrackDeviceState extends State<TrackDevicePage>
   void _openReport() {
     if (device == null) return;
 
-    DateTime current = DateTime.now();
-    String month =
-        current.month < 10 ? "0${current.month}" : current.month.toString();
-    int dayCon = current.day + 1;
-    String today = dayCon < 10 ? "0$dayCon" : dayCon.toString();
-    var date = DateTime.parse("${current.year}-$month-$today 00:00:00");
-
-    Navigator.pushNamed(
+    Navigator.push(
       context,
-      "/reportList",
-      arguments: ReportArguments(
-        device!.id ?? 0,
-        formatDateReport(DateTime.now().toString()),
-        "00:00:00",
-        formatDateReport(date.toString()),
-        "00:00:00",
-        device!.name ?? '',
-        0,
-        device!,
+      MaterialPageRoute(
+        builder: (context) => ReportScreen(
+          deviceId: device!.id ?? 0,
+          deviceName: device!.name ?? '',
+          device: device,
+        ),
       ),
     );
   }
 
   void _openPlayback() {
     Get.to(() => PlaybackScreen(
-          id: widget.id,
-          name: widget.name,
-          device: device,
-        ));
+      id: widget.id,
+      name: widget.name,
+      device: device,
+    ));
   }
 
   void _callDevice() async {
@@ -695,9 +809,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
   void _openStreetView() {
     if (device != null && device!.lat != null && device!.lng != null) {
       Get.to(() => StreetViewScreen(
-            latitude: device!.lat!,
-            longitude: device!.lng!,
-          ));
+        latitude: device!.lat!,
+        longitude: device!.lng!,
+      ));
     }
   }
 
@@ -717,7 +831,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     _todayKmTimer?.cancel();
     _todayDetailsTimer?.cancel();
     _carAnimationController?.dispose();
-    _pulseController?.dispose();
 
     if (!_mapMarkerSC.isClosed) {
       _mapMarkerSC.close();
@@ -750,6 +863,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final statusColor = _getStatusColor();
+    final statusText = _getStatusText();
+
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
@@ -767,63 +883,37 @@ class _TrackDeviceState extends State<TrackDevicePage>
         overflow: TextOverflow.ellipsis,
       ),
       actions: [
-        // Blinking status indicator in app bar
-        AnimatedBuilder(
-          animation: _pulseAnimation!,
-          builder: (context, child) {
-            final color = _getStatusColor();
-            return Container(
-              margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: color.withValues(
-                      alpha: 0.2 + (_pulseAnimation!.value * 0.3)),
-                  width: 1.5,
+        // Simple status indicator (no blinking)
+        Container(
+          margin: const EdgeInsets.only(right: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: statusColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: statusColor.withValues(alpha: 0.3), width: 1.5),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: statusColor,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        color.withValues(alpha: 0.1 * _pulseAnimation!.value),
-                    blurRadius: 6,
-                    spreadRadius: 1,
-                  ),
-                ],
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: color,
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withValues(
-                              alpha: 0.3 + (_pulseAnimation!.value * 0.4)),
-                          blurRadius: 4,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _getStatusText(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: color,
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 6),
+              Text(
+                statusText,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: statusColor,
+                ),
               ),
-            );
-          },
+            ],
+          ),
         ),
       ],
     );
@@ -873,8 +963,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
             }
           },
           markers: Set<Marker>.of(snapshot.data ?? _markers),
-          circles: _pulseCircles,
-          // Blinking circles
           polylines: Set<Polyline>.of(polylines.values),
           padding: const EdgeInsets.only(bottom: 200),
         );
@@ -923,7 +1011,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 
-  // ============ SIMPLE BOTTOM SHEET (No Tap Toggle) ============
   Widget _buildSimpleBottomSheet() {
     _fetchAddress();
 
@@ -948,7 +1035,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
             controller: scrollController,
             padding: EdgeInsets.zero,
             children: [
-              // Simple Handle
               Center(
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 12),
@@ -960,25 +1046,14 @@ class _TrackDeviceState extends State<TrackDevicePage>
                   ),
                 ),
               ),
-
-              // Speed Section
               _buildSpeedSection(),
               const Divider(height: 1),
-
-              // Sensors Section
               _buildSensorsSection(),
-
-              // Info Section
               _buildInfoSection(),
               const Divider(height: 1),
-
-              // Quick Action Buttons
               _buildQuickActions(),
               const Divider(height: 1),
-
-              // Summary Section
               _buildSummarySection(),
-
               const SizedBox(height: 30),
             ],
           ),
@@ -995,7 +1070,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          // Left sensors
           Expanded(
             flex: 2,
             child: Column(
@@ -1014,14 +1088,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
               ],
             ),
           ),
-
-          // Speedometer
           Expanded(
             flex: 3,
-            child: _Speedometer(speed: speed, statusColor: color),
+            child: _Speedometer(speed: speed,),
           ),
-
-          // Right sensors
           Expanded(
             flex: 2,
             child: Column(
@@ -1156,6 +1226,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
   Widget _buildInfoSection() {
     if (device == null) return const SizedBox.shrink();
 
+    final statusColor = _getStatusColor();
+    final statusText = _getStatusText();
+    final isEngineOn = _isEngineOn(device!);
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1163,28 +1237,14 @@ class _TrackDeviceState extends State<TrackDevicePage>
         children: [
           Row(
             children: [
-              // Blinking status dot
-              AnimatedBuilder(
-                animation: _pulseAnimation!,
-                builder: (context, child) {
-                  final color = _getStatusColor();
-                  return Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: color,
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withValues(
-                              alpha: 0.3 + (_pulseAnimation!.value * 0.4)),
-                          blurRadius: 4,
-                          spreadRadius: 1 + (_pulseAnimation!.value * 2),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+              // Simple status dot (no blinking)
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: statusColor,
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1198,18 +1258,29 @@ class _TrackDeviceState extends State<TrackDevicePage>
               ),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _getStatusColor().withValues(alpha: 0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  _getStatusText(),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _getStatusColor(),
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isEngineOn ? Icons.power : Icons.power_off,
+                      size: 12,
+                      color: statusColor,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: statusColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1426,38 +1497,67 @@ class _ActionButton extends StatelessWidget {
 
 class _Speedometer extends StatelessWidget {
   final int speed;
-  final Color statusColor;
+  final int maxSpeed;
 
-  const _Speedometer({required this.speed, required this.statusColor});
+  const _Speedometer({
+    required this.speed,
+    this.maxSpeed = 200,
+  });
+
+  Color get statusColor {
+    if (speed >= 120) return const Color(0xFFE53935); // Dark Red
+    if (speed >= 80) return const Color(0xFFFF5722); // Orange-Red
+    if (speed >= 60) return const Color(0xFFFFA726); // Orange
+    return const Color(0xFF4CAF50); // Green
+  }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 110,
-      width: 110,
+      height: 140,
+      width: 180,
       child: CustomPaint(
         painter: SpeedometerPainter(
           speed: speed.toDouble(),
-          maxSpeed: 200,
-          statusColor: statusColor,
+          maxSpeed: maxSpeed.toDouble(),
         ),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(height: 55),
-              Text(
-                '$speed',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: statusColor,
-                ),
+              const SizedBox(height: 100),
+              // Speed value with glow effect
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '$speed',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                      letterSpacing: 2,
+                      shadows: [
+                        Shadow(
+                          color: statusColor.withValues(alpha: 0.5),
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    'km/h',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[500],
+                      letterSpacing: 1,
+                    ),
+                  ),
+
+                ],
               ),
-              Text(
-                'km/h',
-                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-              ),
+
             ],
           ),
         ),
@@ -1469,90 +1569,310 @@ class _Speedometer extends StatelessWidget {
 class SpeedometerPainter extends CustomPainter {
   final double speed;
   final double maxSpeed;
-  final Color statusColor;
 
   SpeedometerPainter({
     required this.speed,
     required this.maxSpeed,
-    required this.statusColor,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = m.min(size.width, size.height) / 2 - 10;
+    final center = Offset(size.width / 2, size.height * 0.65);
+    final radius = m.min(size.width, size.height) / 2 - 15;
 
-    // Background arc
+    // Start angle: 180° (left), Sweep: 180° (to right) - Perfect semicircle
+    const startAngle = m.pi; // 180 degrees
+    const sweepAngle = m.pi; // 180 degrees
+
+    // Draw outer shadow ring
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius + 2),
+      startAngle,
+      sweepAngle,
+      false,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.1)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 14
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+
+    // Draw background arc (track)
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
-      m.pi * 0.75,
-      m.pi * 1.5,
+      startAngle,
+      sweepAngle,
       false,
       Paint()
         ..color = Colors.grey[200]!
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 8
+        ..strokeWidth = 12
         ..strokeCap = StrokeCap.round,
     );
 
-    // Speed arc
-    final speedAngle = (speed / maxSpeed) * m.pi * 1.5;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      m.pi * 0.75,
-      speedAngle.clamp(0, m.pi * 1.5),
-      false,
-      Paint()
-        ..color = statusColor
+    // Draw colored zones on the arc
+    _drawSpeedZones(canvas, center, radius, startAngle, sweepAngle);
+
+    // Draw speed progress arc with gradient
+    final speedRatio = (speed / maxSpeed).clamp(0.0, 1.0);
+    final progressAngle = speedRatio * sweepAngle;
+
+    if (speed > 0) {
+      final progressPaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 8
-        ..strokeCap = StrokeCap.round,
-    );
+        ..strokeWidth = 12
+        ..strokeCap = StrokeCap.round
+        ..shader = SweepGradient(
+          center: Alignment.center,
+          startAngle: startAngle,
+          endAngle: startAngle + progressAngle,
+          colors: _getGradientColors(speed),
+          stops: _getGradientStops(speed),
+        ).createShader(Rect.fromCircle(center: center, radius: radius));
 
-    // Tick marks
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        progressAngle,
+        false,
+        progressPaint,
+      );
+
+      // Draw glow effect for progress
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        progressAngle,
+        false,
+        Paint()
+          ..color = _getSpeedColor(speed).withValues(alpha: 0.3)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 18
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      );
+    }
+
+    // Draw tick marks and labels
+    _drawTickMarks(canvas, center, radius, startAngle, sweepAngle);
+
+    // Draw needle
+    _drawNeedle(canvas, center, radius, startAngle, speedRatio, sweepAngle);
+
+    // Draw center hub
+    _drawCenterHub(canvas, center);
+  }
+
+  void _drawSpeedZones(Canvas canvas, Offset center, double radius,
+      double startAngle, double sweepAngle) {
+    // Zone indicators (small colored dots)
+    final zoneColors = [
+      const Color(0xFF4CAF50), // 0-60: Green
+      const Color(0xFFFFA726), // 60-80: Orange
+      const Color(0xFFFF5722), // 80-120: Orange-Red
+      const Color(0xFFE53935), // 120+: Red
+    ];
+
+    final zonePositions = [0.0, 0.3, 0.4, 0.6, 1.0];
+
+    for (int i = 0; i < zoneColors.length; i++) {
+      final zoneStart = zonePositions[i];
+      final zoneEnd = zonePositions[i + 1];
+      final zoneAngle = startAngle + (zoneStart + zoneEnd) / 2 * sweepAngle;
+
+      final indicatorPos = Offset(
+        center.dx + (radius + 20) * m.cos(zoneAngle),
+        center.dy + (radius + 20) * m.sin(zoneAngle),
+      );
+
+      canvas.drawCircle(
+        indicatorPos,
+        3,
+        Paint()..color = zoneColors[i].withValues(alpha: 0.6),
+      );
+    }
+  }
+
+  void _drawTickMarks(Canvas canvas, Offset center, double radius,
+      double startAngle, double sweepAngle) {
+    // Major ticks (every 20 km/h)
     for (int i = 0; i <= 10; i++) {
-      final angle = m.pi * 0.75 + (i / 10) * m.pi * 1.5;
+      final angle = startAngle + (i / 10) * sweepAngle;
+      final isMajor = i % 2 == 0;
+      final tickLength = isMajor ? 12 : 6;
+      final tickWidth = isMajor ? 2.0 : 1.0;
+
       final outerPoint = Offset(
-        center.dx + (radius + 5) * m.cos(angle),
-        center.dy + (radius + 5) * m.sin(angle),
+        center.dx + (radius - 8) * m.cos(angle),
+        center.dy + (radius - 8) * m.sin(angle),
       );
       final innerPoint = Offset(
-        center.dx + (radius - 5) * m.cos(angle),
-        center.dy + (radius - 5) * m.sin(angle),
+        center.dx + (radius - 8 - tickLength) * m.cos(angle),
+        center.dy + (radius - 8 - tickLength) * m.sin(angle),
       );
+
+      final speedAtTick = (i / 10) * maxSpeed;
+      Color tickColor = Colors.grey[400]!;
+      if (speedAtTick >= 120) {
+        tickColor = const Color(0xFFE53935);
+      } else if (speedAtTick >= 80) {
+        tickColor = const Color(0xFFFF5722);
+      }
+
       canvas.drawLine(
         innerPoint,
         outerPoint,
         Paint()
-          ..color = Colors.grey[400]!
-          ..strokeWidth = 1,
+          ..color = tickColor
+          ..strokeWidth = tickWidth
+          ..strokeCap = StrokeCap.round,
       );
-    }
 
-    // Needle
-    final needleAngle =
-        m.pi * 0.75 + (speed / maxSpeed).clamp(0, 1) * m.pi * 1.5;
-    final needleEnd = Offset(
-      center.dx + (radius - 15) * m.cos(needleAngle),
-      center.dy + (radius - 15) * m.sin(needleAngle),
+      // Draw speed labels for major ticks
+      if (isMajor && i < 10) {
+        final labelRadius = radius - 28;
+        final labelPos = Offset(
+          center.dx + labelRadius * m.cos(angle),
+          center.dy + labelRadius * m.sin(angle),
+        );
+
+        final textPainter = TextPainter(
+          text: TextSpan(
+            text: '${(speedAtTick).toInt()}',
+            style: TextStyle(
+              color: speedAtTick >= 80 ? const Color(0xFFE53935) : Colors.grey[600],
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+        textPainter.paint(
+          canvas,
+          Offset(
+            labelPos.dx - textPainter.width / 2,
+            labelPos.dy - textPainter.height / 2,
+          ),
+        );
+      }
+    }
+  }
+
+  void _drawNeedle(Canvas canvas, Offset center, double radius,
+      double startAngle, double speedRatio, double sweepAngle) {
+    final needleAngle = startAngle + speedRatio * sweepAngle;
+    final needleLength = radius - 25;
+
+    // Needle shadow
+    final shadowEnd = Offset(
+      center.dx + needleLength * m.cos(needleAngle) + 2,
+      center.dy + needleLength * m.sin(needleAngle) + 2,
     );
     canvas.drawLine(
-      center,
-      needleEnd,
+      Offset(center.dx + 2, center.dy + 2),
+      shadowEnd,
       Paint()
-        ..color = statusColor
-        ..strokeWidth = 2.5
+        ..color = Colors.black.withValues(alpha: 0.2)
+        ..strokeWidth = 4
         ..strokeCap = StrokeCap.round,
     );
 
-    // Center circles
-    canvas.drawCircle(center, 6, Paint()..color = statusColor);
-    canvas.drawCircle(center, 3, Paint()..color = Colors.white);
+    // Main needle
+    final needleEnd = Offset(
+      center.dx + needleLength * m.cos(needleAngle),
+      center.dy + needleLength * m.sin(needleAngle),
+    );
+
+    // Needle body (gradient from center to tip)
+    final needlePaint = Paint()
+      ..color = _getSpeedColor(speed)
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawLine(center, needleEnd, needlePaint);
+
+    // Needle tip (small circle)
+    canvas.drawCircle(
+      needleEnd,
+      4,
+      Paint()..color = _getSpeedColor(speed),
+    );
+    canvas.drawCircle(
+      needleEnd,
+      2,
+      Paint()..color = Colors.white,
+    );
+  }
+
+  void _drawCenterHub(Canvas canvas, Offset center) {
+    // Outer shadow
+    canvas.drawCircle(
+      Offset(center.dx + 1, center.dy + 1),
+      12,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.3)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+
+    // Outer ring
+    canvas.drawCircle(
+      center,
+      12,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF424242), Color(0xFF212121)],
+        ).createShader(Rect.fromCircle(center: center, radius: 12)),
+    );
+
+    // Inner ring
+    canvas.drawCircle(
+      center,
+      8,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.grey[300]!, Colors.grey[500]!],
+        ).createShader(Rect.fromCircle(center: center, radius: 8)),
+    );
+
+    // Center dot
+    canvas.drawCircle(
+      center,
+      4,
+      Paint()..color = _getSpeedColor(speed),
+    );
+  }
+
+  List<Color> _getGradientColors(double speed) {
+    if (speed >= 120) {
+      return [const Color(0xFFFFA726), const Color(0xFFE53935)];
+    } else if (speed >= 80) {
+      return [const Color(0xFF4CAF50), const Color(0xFFFF5722)];
+    } else if (speed >= 60) {
+      return [const Color(0xFF4CAF50), const Color(0xFFFFA726)];
+    }
+    return [const Color(0xFF66BB6A), const Color(0xFF4CAF50)];
+  }
+
+  List<double> _getGradientStops(double speed) {
+    return [0.0, 1.0];
+  }
+
+  Color _getSpeedColor(double speed) {
+    if (speed >= 120) return const Color(0xFFE53935);
+    if (speed >= 80) return const Color(0xFFFF5722);
+    if (speed >= 60) return const Color(0xFFFFA726);
+    return const Color(0xFF4CAF50);
   }
 
   @override
   bool shouldRepaint(covariant SpeedometerPainter oldDelegate) {
-    return oldDelegate.speed != speed || oldDelegate.statusColor != statusColor;
+    return oldDelegate.speed != speed || oldDelegate.maxSpeed != maxSpeed;
   }
 }
 

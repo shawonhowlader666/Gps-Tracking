@@ -1,4 +1,3 @@
-import 'package:get_storage/get_storage.dart';
 import 'package:gpspro/preference.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -43,6 +42,43 @@ class UserRepository {
 
   static void setPassword(String password) {
     prefs!.setString(PREF_PASSWORD, password);
+  }
+
+  // NEW: Phone number
+  static String? getPhone() {
+    return prefs!.getString(PREF_USER_PHONE);
+  }
+
+  static void setPhone(String phone) {
+    prefs!.setString(PREF_USER_PHONE, phone);
+  }
+
+  // NEW: Company name
+  static String? getCompanyName() {
+    return prefs!.getString(PREF_COMPANY_NAME);
+  }
+
+  static void setCompanyName(String companyName) {
+    prefs!.setString(PREF_COMPANY_NAME, companyName);
+  }
+
+  // NEW: User ID
+  static String? getUserId() {
+    return prefs!.getString(PREF_USER_ID);
+  }
+
+  static void setUserId(String userId) {
+    prefs!.setString(PREF_USER_ID, userId);
+  }
+
+  // NEW: Get all user details for PDF
+  static Map<String, String?> getAllUserDetails() {
+    return {
+      'email': getEmail(),
+      'name': getName(),
+      'phone': getPhone(),
+      'company': getCompanyName(),
+    };
   }
 
   static void doLogout() {

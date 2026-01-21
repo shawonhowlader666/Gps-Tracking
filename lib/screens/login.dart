@@ -13,16 +13,13 @@ import 'package:lottie/lottie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
-// Import your other necessary files
 import 'package:gpspro/services/model/login.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/config.dart';
-
 import 'package:gpspro/constants/app_constants.dart';
 
-// Define custom colors
 const Color kPrimaryOrange = Color(0xFF3E6FB8);
 const Color kLightGrey = Color(0xFFE0E0E0);
 
@@ -60,7 +57,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   bool isLoading = false;
   int _selectedLanguageIndex = 0;
 
-  // Server selection variables
   List<dynamic> availableServers = [];
   Map<String, dynamic>? selectedServer;
   bool isLoadingServers = true;
@@ -69,7 +65,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
 
-    // Initialize animations
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -148,7 +143,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       _rememberMe = prefs!.getBool('rememberMe') ?? false;
     }
 
-    // Set initial language based on preferences
     String? langCode = prefs!.getString('language_code');
     if (langCode == 'bn') {
       _selectedLanguageIndex = 1;
@@ -166,7 +160,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       prefs = await SharedPreferences.getInstance();
       var serverType = prefs!.getString('serverType') ?? 'free';
 
-
       final doc = await FirebaseFirestore.instance
           .collection('configs')
           .doc('urls')
@@ -183,16 +176,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
             List<dynamic> serverList = [];
 
-            // Handle different data types
             if (urlData is List) {
               serverList = urlData;
-              for (int i = 0; i < serverList.length; i++) {
-              }
             } else if (urlData is String) {
               try {
                 serverList = jsonDecode(urlData) as List;
-              } catch (e) {
-              }
+              } catch (e) {}
             }
 
             SERVER_URL = serverList;
@@ -214,7 +203,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             setState(() {
               availableServers = serverList;
 
-              // Set default selected server
               if (availableServers.isNotEmpty) {
                 String? savedServerUrl = UserRepository.getServerUrl();
 
@@ -269,7 +257,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       return;
     }
 
-    // Remove spaces, +, -
     final cleanNumber = WHATS_APP.replaceAll(RegExp(r'[^0-9]'), '');
     final Uri uri = Uri.parse('https://wa.me/$cleanNumber');
 
@@ -283,7 +270,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       Get.snackbar("Error", "Failed to open WhatsApp");
     }
   }
-
 
   Future<void> fetchConfigAndProceed() async {
     try {
@@ -335,7 +321,214 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       if (SHOW_ADS) {
         await AdMobService().initialize();
       }
+    } catch (e) {}
+  }
+
+  // ==================== ADD NEW SERVER DIALOG ====================
+  void _showAddServerDialog() {
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController urlController = TextEditingController();
+    final TextEditingController typeController = TextEditingController(text: 'free');
+    bool showBannerAds = false;
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.add_circle_outline, color: kPrimaryOrange),
+              const SizedBox(width: 10),
+              const Text(
+                'Add New Server',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Server Name
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: 'Server Name',
+                    hintText: 'e.g., Main Server',
+                    prefixIcon: Icon(Icons.dns, color: Colors.grey[600]),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Server URL
+                TextField(
+                  controller: urlController,
+                  decoration: InputDecoration(
+                    labelText: 'Server URL',
+                    hintText: 'https://example.com',
+                    prefixIcon: Icon(Icons.link, color: Colors.grey[600]),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  keyboardType: TextInputType.url,
+                ),
+                const SizedBox(height: 16),
+
+                // Server Type
+                DropdownButtonFormField<String>(
+                  value: typeController.text,
+                  decoration: InputDecoration(
+                    labelText: 'Server Type',
+                    prefixIcon: Icon(Icons.category, color: Colors.grey[600]),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  items: ['free', 'paid'].map((type) {
+                    return DropdownMenuItem(
+                      value: type,
+                      child: Text(type.toUpperCase()),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      typeController.text = value;
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Show Banner Ads
+                Row(
+                  children: [
+                    Checkbox(
+                      value: showBannerAds,
+                      activeColor: kPrimaryOrange,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          showBannerAds = value ?? false;
+                        });
+                      },
+                    ),
+                    const Text('Show Banner Ads'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                if (nameController.text.trim().isEmpty ||
+                    urlController.text.trim().isEmpty) {
+                  Get.snackbar(
+                    'Error',
+                    'Please fill all required fields',
+                    backgroundColor: Colors.red,
+                    colorText: Colors.white,
+                  );
+                  return;
+                }
+
+                setDialogState(() => isSaving = true);
+
+                await _addServerToFirebase(
+                  name: nameController.text.trim(),
+                  url: urlController.text.trim(),
+                  type: typeController.text.trim(),
+                  showBannerAds: showBannerAds,
+                );
+
+                setDialogState(() => isSaving = false);
+
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+
+                await fetchServersFromFirebase();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimaryOrange,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: isSaving
+                  ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+                  : const Text(
+                'Add Server',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addServerToFirebase({
+    required String name,
+    required String url,
+    required String type,
+    required bool showBannerAds,
+  }) async {
+    try {
+      final docRef = FirebaseFirestore.instance.collection('configs').doc('urls');
+
+      final newServer = {
+        'name': name,
+        'url': url,
+        'type': type,
+        'showBannerAds': showBannerAds,
+        'message': '',
+      };
+
+      await docRef.update({
+        'spytrack.url': FieldValue.arrayUnion([newServer])
+      });
+
+      Get.snackbar(
+        'Success',
+        'Server added successfully!',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+        icon: const Icon(Icons.check_circle, color: Colors.white),
+      );
     } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to add server: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 
@@ -360,11 +553,27 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header: Language selector and chat icon
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          SizedBox(width: 15),
+                          // Admin Button (Add Server)
+                          GestureDetector(
+                            // onTap: _showAddServerDialog,
+                            onTap: (){},
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: kLightGrey, width: 1),
+                              ),
+                              child: const Icon(
+                                Icons.settings,
+                                size: 20,
+                                color: kPrimaryOrange,
+                              ),
+                            ),
+                          ),
+
                           // Language Toggle
                           Container(
                             decoration: BoxDecoration(
@@ -432,7 +641,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               ],
                             ),
                           ),
-                          // Chat Icon
+
+                          // Support Button
                           GestureDetector(
                             onTap: () async {
                               if (WHATS_APP.isNotEmpty) {
@@ -450,7 +660,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                 shape: BoxShape.circle,
                                 border: Border.all(color: kLightGrey, width: 1),
                               ),
-                              child: Center(
+                              child: const Center(
                                 child: Icon(
                                   Icons.support_agent_outlined,
                                   size: 20,
@@ -459,7 +669,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               ),
                             ),
                           ),
-
                         ],
                       ),
 
@@ -474,24 +683,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         ),
                       ),
 
-                      // SPYTRACK Logo
-                      // Center(
-                      //   child: Image.asset(
-                      //     AppConstants.logoPath,
-                      //     width: 250,
-                      //   ),
-                      // ),
-
                       Center(child: _buildAppTitle()),
-
-                      // const Gap(40),
-                      //
-                      // // Server Selector
-                      // _buildServerSelector(),
 
                       const Gap(20),
 
-                      // "Sign in" title
                       Text(
                         'Sign in',
                         style: TextStyle(
@@ -503,12 +698,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
                       const Gap(24),
 
-                      // Login form
                       _buildLoginForm(),
 
                       const Gap(20),
 
-                      // "Keep me sign in" checkbox
                       Row(
                         children: [
                           GestureDetector(
@@ -521,8 +714,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               width: 20,
                               height: 20,
                               decoration: BoxDecoration(
-                                color:
-                                _rememberMe ? kPrimaryOrange : Colors.white,
+                                color: _rememberMe ? kPrimaryOrange : Colors.white,
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
                                   color: kLightGrey,
@@ -551,17 +743,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
                       const Gap(40),
 
-                      // Login button
                       _buildLoginButton(),
 
                       const Gap(10),
 
-                      // Forgot Password link
                       Center(
                         child: TextButton(
-                          onPressed: () {
-                            // Handle forgot password
-                          },
+                          onPressed: () {},
                           child: Text(
                             'Forgot Password',
                             style: TextStyle(
@@ -606,6 +794,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       ),
     );
   }
+
   Widget _buildAppTitle() {
     return AnimatedBuilder(
       animation: _shimmerAnimation,
@@ -642,7 +831,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   Widget _buildLoginForm() {
     return Column(
       children: [
-        // Email field
         TextField(
           controller: _emailFilter,
           focusNode: emailAddressFocusNode,
@@ -652,8 +840,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             labelStyle: const TextStyle(color: Colors.grey, fontSize: 14),
             hintText: 'User ID or Email',
             hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
-            prefixIcon:
-            const Icon(Icons.mail_outline, color: Colors.grey, size: 20),
+            prefixIcon: const Icon(Icons.mail_outline, color: Colors.grey, size: 20),
             filled: true,
             fillColor: Colors.white,
             enabledBorder: OutlineInputBorder(
@@ -672,8 +859,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.red),
             ),
-            contentPadding:
-            const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           ),
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
@@ -682,7 +868,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
         const Gap(16),
 
-        // Password field
         TextField(
           controller: _passwordFilter,
           focusNode: passwordFocusNode,
@@ -700,8 +885,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 color: Colors.grey,
                 size: 20,
               ),
-              onPressed: () =>
-                  setState(() => passwordVisibility = !passwordVisibility),
+              onPressed: () => setState(() => passwordVisibility = !passwordVisibility),
             ),
             filled: true,
             fillColor: Colors.white,
@@ -721,8 +905,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.red),
             ),
-            contentPadding:
-            const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           ),
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _loginPressed(),
@@ -738,8 +921,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       child: ElevatedButton(
         onPressed: isLoading ? null : _loginPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor:
-          isLoading ? Colors.grey.shade400 : kPrimaryOrange,
+          backgroundColor: isLoading ? Colors.grey.shade400 : kPrimaryOrange,
           disabledBackgroundColor: Colors.grey.shade400,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -767,17 +949,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-
-
   void updateToken() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     await messaging.getToken().then((value) => {_notificationToken = value!});
-    APIService.getUserData()
-        .then((value) => {APIService.activateFCM(_notificationToken)});
+    APIService.getUserData().then((value) => {APIService.activateFCM(_notificationToken)});
   }
 
   void _loginPressed() async {
-    // ------------------ BASIC VALIDATION ------------------
     if (_email.trim().isEmpty || _password.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -798,7 +976,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       return;
     }
 
-    // ------------------ START LOADING ------------------
     setState(() => isLoading = true);
 
     bool loginSuccess = false;
@@ -806,7 +983,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     int? lastStatusCode;
 
     try {
-      // Filter active servers (not under maintenance)
       final List<dynamic> activeServers = availableServers
           .where((s) => s['message'] == null || s['message'].toString().isEmpty)
           .toList();
@@ -821,28 +997,23 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         return;
       }
 
-      // ------------------ TRY EACH SERVER ------------------
       for (final server in activeServers) {
         try {
-          final response =
-          await APIService.login(server['url'], _email, _password);
+          final response = await APIService.login(server['url'], _email, _password);
 
           if (response == null) continue;
 
           lastStatusCode = response.statusCode;
 
-          // ------------------ SUCCESS ------------------
           if (response.statusCode == 200) {
             final user = UserLogin.fromJson(
               jsonDecode(response.body.replaceAll("ï»¿", "")),
             );
 
-            // Save server & auth
             UserRepository.setServerUrl(server['url']);
             UserRepository.setHash(user.userApiHash!);
             prefs?.setString('serverType', server['type'] ?? 'free');
 
-            // Remember Me
             if (_rememberMe) {
               UserRepository.setEmail(_email);
               UserRepository.setPassword(_password);
@@ -858,16 +1029,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             break;
           }
         } catch (_) {
-          // Try next server silently
           continue;
         }
       }
     } finally {
-      // ------------------ STOP LOADING ------------------
       setState(() => isLoading = false);
     }
 
-    // ------------------ RESULT ------------------
     if (loginSuccess && successfulServer != null) {
       dataController.getDevices();
       updateToken();

@@ -11,6 +11,7 @@ import 'package:gpspro/screens/common_method.dart';
 import 'package:gpspro/screens/lock_unlock_screen.dart';
 import 'package:gpspro/screens/payment_list.dart';
 import 'package:gpspro/screens/playback.dart';
+import 'package:gpspro/screens/report/report_screen.dart';
 import 'package:gpspro/screens/street_view_screen.dart';
 import 'package:gpspro/screens/track_device.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
@@ -400,13 +401,13 @@ class _DevicePageState extends State<DevicePage> {
   String _getStatusText(DeviceStatus status) {
     switch (status) {
       case DeviceStatus.running:
-        return 'Running';
+        return 'RUNNING';
       case DeviceStatus.idle:
-        return 'Idle';
+        return 'IDLE';
       case DeviceStatus.stop:
-        return 'Parking';
+        return 'PARKING';
       case DeviceStatus.offline:
-        return 'Offline';
+        return 'OFFLINE';
     }
   }
 
@@ -798,15 +799,15 @@ class _DevicePageState extends State<DevicePage> {
                             Icon(
                               isEngineOn ? Icons.power : Icons.power_off,
                               size: 14,
-                              color: isEngineOn ? _greenColor : _redColor,
+                              color: isEngineOn ? _greenColor.withValues(alpha: 0.4) : _redColor.withValues(alpha: 0.4),
                             ),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
                                 isEngineOn ? 'Engine On' : 'Engine Off',
                                 style: TextStyle(
-                                  color: isEngineOn ? _greenColor : _redColor,
-                                  fontSize: 14,
+                                  color: Colors.grey,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                 ),
                                 overflow: TextOverflow.ellipsis,
@@ -819,55 +820,58 @@ class _DevicePageState extends State<DevicePage> {
                   ),
                   IntrinsicWidth(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: statusColor),
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            _getStatusInfoTime(device, status),
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 12,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
+                          // 🔹 Top part with status color background
                           Container(
-                            height: 2,
-                            color: statusColor.withValues(alpha: 0.3),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: statusColor,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(2),
+                                topRight: Radius.circular(2),
+                              ),
+                            ),
+                            child: Text(
+                              _getStatusInfoTime(device, status),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _getStatusIcon(status),
-                                size: 12,
-                                color: statusColor,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _getStatusText(status),
-                                style: TextStyle(
-                                  color: statusColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  _getStatusText(status),
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
+
                 ],
               ),
             ),
@@ -2627,27 +2631,41 @@ class _DevicePageState extends State<DevicePage> {
     );
   }
 
+  // void _showReport(DeviceItem device) {
+  //   AdMobService().showInterstitialAd(ignoreFrequency: true);
+  //   DateTime current = DateTime.now();
+  //   String month =
+  //   current.month < 10 ? "0${current.month}" : current.month.toString();
+  //   int dayCon = current.day + 1;
+  //   String today = dayCon < 10 ? "0$dayCon" : dayCon.toString();
+  //   var date = DateTime.parse("${current.year}-$month-$today 00:00:00");
+  //
+  //   Navigator.pushNamed(
+  //     context,
+  //     "/reportList",
+  //     arguments: ReportArguments(
+  //       device.id ?? 0,
+  //       formatDateReport(DateTime.now().toString()),
+  //       "00:00:00",
+  //       formatDateReport(date.toString()),
+  //       "00:00:00",
+  //       device.name ?? '',
+  //       0,
+  //       device,
+  //     ),
+  //   );
+  // }
+
   void _showReport(DeviceItem device) {
     AdMobService().showInterstitialAd(ignoreFrequency: true);
-    DateTime current = DateTime.now();
-    String month =
-    current.month < 10 ? "0${current.month}" : current.month.toString();
-    int dayCon = current.day + 1;
-    String today = dayCon < 10 ? "0$dayCon" : dayCon.toString();
-    var date = DateTime.parse("${current.year}-$month-$today 00:00:00");
 
-    Navigator.pushNamed(
+    Navigator.push(
       context,
-      "/reportList",
-      arguments: ReportArguments(
-        device.id ?? 0,
-        formatDateReport(DateTime.now().toString()),
-        "00:00:00",
-        formatDateReport(date.toString()),
-        "00:00:00",
-        device.name ?? '',
-        0,
-        device,
+      MaterialPageRoute(
+        builder: (context) => ReportScreen(
+          deviceId: device.id ?? 0,
+          deviceName: device.name ?? '',
+        ),
       ),
     );
   }

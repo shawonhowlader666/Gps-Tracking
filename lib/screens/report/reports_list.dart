@@ -49,6 +49,15 @@ class _ReportListPageState extends State<ReportListPage> {
           const SizedBox(height: 12),
 
           // NEW: Multi-Period Report
+
+          _buildReportItem(
+            icon: Icons.auto_graph_outlined,
+            title: 'Multi-Period Report',
+            subtitle: 'Today, Yesterday, Week & Month',
+            color: const Color(0xFFEC4899),
+            onTap: () => _navigateToMultiPeriodReport(),
+            isFeatured: true,
+          ),
           _buildReportItem(
             icon: Icons.auto_graph_outlined,
             title: 'Multi-Period Report',

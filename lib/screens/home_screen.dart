@@ -223,52 +223,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   // ==================== STATUS DETECTION METHODS ====================
+  // SAME LOGIC AS DevicePage for consistency
 
-  /// PRIMARY: Use iconColor from server (most reliable source)
-  /// FALLBACK: Calculate based on online status, speed, and engine
+  /// MASTER STATUS DETERMINATION - Same as DevicePage
   VehicleStatus _getVehicleStatus(DeviceItem device) {
-    // 1. PRIMARY: Check iconColor from server
-    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
+    // STEP 1: Check if device is online first
+    final isOnline = _isDeviceOnline(device);
 
-    if (iconColor == 'green') {
-      return VehicleStatus.running;
-    } else if (iconColor == 'yellow') {
-      return VehicleStatus.idle;
-    } else if (iconColor == 'red') {
-      // Red can mean stopped OR offline - check online status
-      if (_isDeviceOnline(device)) {
-        return VehicleStatus.stop;
-      } else {
-        return VehicleStatus.offline;
-      }
-    }
-
-    // 2. FALLBACK: Calculate status manually if iconColor is not available
-
-    // Check if device is online first
-    if (!_isDeviceOnline(device)) {
+    if (!isOnline) {
       return VehicleStatus.offline;
     }
 
-    // Check speed
+    // STEP 2: Device is online, check speed
     final speed = double.tryParse(device.speed.toString()) ?? 0;
 
-    // If moving, it's running
+    // STEP 3: Check engine status
+    final isEngineOn = _isEngineOn(device);
+
+    // STEP 4: Determine status based on online + speed + engine
     if (speed > 0) {
+      // Moving = Running (engine must be on if moving)
       return VehicleStatus.running;
+    } else {
+      // Not moving (speed = 0)
+      if (isEngineOn) {
+        // Engine on but not moving = Idle
+        return VehicleStatus.idle;
+      } else {
+        // Engine off and not moving = Stop/Parking
+        return VehicleStatus.stop;
+      }
     }
-
-    // Speed is 0, check engine status
-    if (_isEngineOn(device)) {
-      return VehicleStatus.idle;
-    }
-
-    // Speed is 0, engine is off, but device is online = stopped
-    return VehicleStatus.stop;
   }
 
-  /// Check if device is online/connected to server
+  /// Check if device is online - SAME AS DevicePage (unchanged)
   bool _isDeviceOnline(DeviceItem device) {
+    // Check the online field first
     final online = device.online?.toLowerCase().trim() ?? '';
 
     // Explicitly offline
@@ -308,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return false;
   }
 
-  /// Check if engine/ignition is ON
+  /// MASTER ENGINE CHECK - Same as DevicePage
   bool _isEngineOn(DeviceItem device) {
     // 1. Check engineStatus field directly
     if (device.engineStatus != null) {
@@ -359,21 +349,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
-    // 3. Check iconColor as indicator
-    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
-    if (iconColor == 'yellow') {
-      return true; // Idle means engine is on but not moving
-    }
-    if (iconColor == 'green') {
-      return true; // Running means engine is definitely on
-    }
-
-    // 4. If speed > 0, engine must be on
+    // 3. If speed > 0, engine must be on
     final speed = double.tryParse(device.speed.toString()) ?? 0;
     if (speed > 0) {
       return true;
     }
 
+    // 4. Check iconColor as indicator
+    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
+    if (iconColor == 'yellow') {
+      return true; // Idle/Yellow = engine on but not moving
+    }
+    if (iconColor == 'green') {
+      return true; // Running/Green = engine on and moving
+    }
+
+    // Default: engine is off
     return false;
   }
 
@@ -770,8 +761,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     const SizedBox(height: 16),
                     RepaintBoundary(child: _buildVehicleSelector()),
                     const SizedBox(height: 16),
-                    // RepaintBoundary(child: _buildLiveStatus()),
-                    // const SizedBox(height: 16),
                     RepaintBoundary(child: _buildMileageChart()),
                     const SizedBox(height: 16),
                     RepaintBoundary(child: _buildVehicleSummary()),
@@ -978,7 +967,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   Icons.notifications_outlined,
                       () {
                     // Navigate to events page
-                    // Get.toNamed('/events');
                   },
                   badge: dataController.events.length,
                 )),
@@ -1311,7 +1299,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     required int count,
     required int total,
   }) {
-    final percentage = total > 0 ? (count / total * 100).toStringAsFixed(0) : '0';
+    final percentage =
+    total > 0 ? (count / total * 100).toStringAsFixed(0) : '0';
 
     return Row(
       children: [
@@ -1433,8 +1422,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     'Choose vehicle...',
                     style: TextStyle(color: Colors.grey[500], fontSize: 13),
                   ),
-                  icon:
-                  Icon(Icons.keyboard_arrow_down, color: Colors.grey[600]),
+                  icon: Icon(Icons.keyboard_arrow_down,
+                      color: Colors.grey[600]),
                   items: vehicleList.map((device) {
                     final statusColor = _getStatusColor(device);
                     return DropdownMenuItem<int>(
@@ -1483,7 +1472,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
     });
   }
-
 
   Widget _buildLiveStatus() {
     return Obx(() {
@@ -1562,7 +1550,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   'Engine',
                 ),
                 _buildLiveDivider(),
-                _buildLiveStat(Icons.timer, device.stopDuration ?? '-', 'Parking'),
+                _buildLiveStat(
+                    Icons.timer, device.stopDuration ?? '-', 'Parking'),
               ],
             ),
           ],
@@ -1661,7 +1650,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       const SizedBox(height: 8),
                       Text(
                         'No data available',
-                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                        style:
+                        TextStyle(color: Colors.grey[500], fontSize: 12),
                       ),
                     ],
                   ),
@@ -1699,8 +1689,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         reservedSize: 32,
                         getTitlesWidget: (value, _) => Text(
                           '${value.toInt()}',
-                          style:
-                          TextStyle(fontSize: 10, color: Colors.grey[500]),
+                          style: TextStyle(
+                              fontSize: 10, color: Colors.grey[500]),
                         ),
                       ),
                     ),
@@ -1790,14 +1780,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final device = homeController.selectedDevice;
       final error = homeController.reportError.value;
 
-      // Debug log
-      debugPrint('🎨 [UI] Building summary:');
-      debugPrint('   isLoading: $isLoading');
-      debugPrint('   device: ${device?.id}');
-      debugPrint('   report: ${report != null ? "exists" : "null"}');
-      debugPrint('   report.isEmpty: ${report?.isEmpty}');
-      debugPrint('   routeLength: ${report?.routeLength}');
-
       return Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -1833,7 +1815,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   GestureDetector(
                     onTap: () {
                       if (device != null && device.id != null) {
-                        homeController.loadTodayReport(device.id!, forceRefresh: true);
+                        homeController.loadTodayReport(device.id!,
+                            forceRefresh: true);
                       }
                     },
                     child: Container(
@@ -1842,7 +1825,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         color: Colors.grey[100],
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Icon(Icons.refresh, size: 16, color: Colors.grey[600]),
+                      child: Icon(Icons.refresh,
+                          size: 16, color: Colors.grey[600]),
                     ),
                   )
                 else
@@ -1864,7 +1848,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             else if (device == null)
               _buildEmptyState('Select a vehicle to view summary')
             else if (report == null || report.isEmpty)
-                _buildEmptyState(error.isNotEmpty ? error : 'No data available for today')
+                _buildEmptyState(
+                    error.isNotEmpty ? error : 'No data available for today')
               else
               // DATA AVAILABLE - Show Grid
                 GridView.count(
@@ -1932,13 +1917,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     _buildSummaryItem(
                       Icons.local_gas_station,
                       'Fuel',
-                      report.fuelConsumption ?? device.deviceData?.fuelQuantity ?? '0 L',
+                      report.fuelConsumption ??
+                          device.deviceData?.fuelQuantity ??
+                          '0 L',
                       successColor,
                     ),
                     _buildSummaryItem(
                       Icons.straighten,
                       'Odometer',
-                      report.odometer ?? '${device.totalDistance?.toStringAsFixed(1) ?? '0'} Km',
+                      report.odometer ??
+                          '${device.totalDistance?.toStringAsFixed(1) ?? '0'} Km',
                       primaryColor,
                     ),
                     _buildSummaryItem(
@@ -1955,7 +1943,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  Widget _buildSummaryItem(IconData icon, String label, String value, Color color) {
+  Widget _buildSummaryItem(
+      IconData icon, String label, String value, Color color) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -2008,7 +1997,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.insert_chart_outlined, size: 40, color: Colors.grey[300]),
+            Icon(Icons.insert_chart_outlined,
+                size: 40, color: Colors.grey[300]),
             const SizedBox(height: 8),
             Text(
               message,
@@ -2225,7 +2215,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 padding: const EdgeInsets.all(14),
                 decoration: const BoxDecoration(
                   color: primaryColor,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                  borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(12)),
                 ),
                 child: Row(
                   children: [
@@ -2277,8 +2268,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               color: color.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child:
-                            Icon(_getStatusIcon(v), color: color, size: 16),
+                            child: Icon(_getStatusIcon(v),
+                                color: color, size: 16),
                           ),
                           const SizedBox(width: 10),
                           Expanded(

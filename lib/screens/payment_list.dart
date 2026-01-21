@@ -5,6 +5,8 @@ import 'package:gpspro/services/payment_service.dart';
 import 'package:gpspro/screens/web_view.dart';
 import 'package:open_file/open_file.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:intl/intl.dart';
+import 'dart:io';
 
 import '../services/pdf_generator.dart';
 
@@ -13,9 +15,7 @@ class PaymentListScreen extends StatefulWidget {
   _PaymentListScreenState createState() => _PaymentListScreenState();
 }
 
-
 class _PaymentListScreenState extends State<PaymentListScreen> {
-  // ... (keep existing variables)
   PaymentStats? _stats;
   List<Bill> _bills = [];
   bool _isLoading = true;
@@ -23,8 +23,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
   int _currentPage = 1;
   String? _errorMessage;
   final ScrollController _scrollController = ScrollController();
-
-  // ... (keep existing initState, dispose, _scrollListener methods)
 
   @override
   void initState() {
@@ -45,8 +43,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       _loadMoreBills();
     }
   }
-
-  // ... (keep existing _loadData, _loadMoreBills, _initiatePayment methods)
 
   Future<void> _loadData() async {
     if (!mounted) return;
@@ -164,7 +160,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
     }
   }
 
-  // NEW: Download individual bill PDF
   Future<void> _downloadBillPDF(Bill bill) async {
     try {
       // Request storage permission
@@ -196,6 +191,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
 
         if (!mounted) return;
 
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('PDF saved to ${file.path}'),
@@ -205,21 +201,21 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               textColor: Colors.white,
               onPressed: () => OpenFile.open(file.path),
             ),
-            duration: const Duration(seconds: 4),
+            duration: const Duration(seconds: 5),
           ),
         );
       } else {
         if (!mounted) return;
-        _showErrorSnackBar('Storage permission denied');
+        _showErrorSnackBar('Storage permission denied. Please enable it in settings.');
       }
     } catch (e) {
       debugPrint('Error generating PDF: $e');
       if (!mounted) return;
-      _showErrorSnackBar('Failed to generate PDF');
+      ScaffoldMessenger.of(context).clearSnackBars();
+      _showErrorSnackBar('Failed to generate PDF: ${e.toString()}');
     }
   }
 
-  // NEW: Download all transactions PDF
   Future<void> _downloadAllTransactionsPDF() async {
     if (_bills.isEmpty) {
       _showErrorSnackBar('No transactions to export');
@@ -247,32 +243,83 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               textColor: Colors.white,
               onPressed: () => OpenFile.open(file.path),
             ),
-            duration: const Duration(seconds: 4),
+            duration: const Duration(seconds: 5),
           ),
         );
       } else {
         if (!mounted) return;
-        _showErrorSnackBar('Storage permission denied');
+        _showErrorSnackBar('Storage permission denied. Please enable it in settings.');
       }
     } catch (e) {
       debugPrint('Error generating PDF: $e');
       if (!mounted) return;
       Navigator.of(context).pop();
-      _showErrorSnackBar('Failed to generate PDF');
+      _showErrorSnackBar('Failed to generate PDF: ${e.toString()}');
     }
   }
 
-  // NEW: Request storage permission
   Future<bool> _requestStoragePermission() async {
-    if (await Permission.storage.isGranted) {
-      return true;
+    if (Platform.isAndroid) {
+      // For Android 13+ (API 33+)
+      if (await Permission.manageExternalStorage.isGranted) {
+        return true;
+      }
+
+      // For Android 10-12 (API 29-32)
+      if (await Permission.storage.isGranted) {
+        return true;
+      }
+
+      // Request appropriate permission based on Android version
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.storage,
+        Permission.manageExternalStorage,
+      ].request();
+
+      // Check if any permission is granted
+      if (statuses[Permission.storage]?.isGranted == true ||
+          statuses[Permission.manageExternalStorage]?.isGranted == true) {
+        return true;
+      }
+
+      // If permanently denied, show settings dialog
+      if (statuses[Permission.storage]?.isPermanentlyDenied == true ||
+          statuses[Permission.manageExternalStorage]?.isPermanentlyDenied == true) {
+        return await _showPermissionDialog();
+      }
+
+      return false;
     }
 
-    final result = await Permission.storage.request();
-    return result.isGranted;
+    // iOS doesn't need storage permission for app documents
+    return true;
   }
 
-  // ... (keep existing helper methods)
+  Future<bool> _showPermissionDialog() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Storage Permission Required'),
+        content: const Text(
+          'This app needs storage permission to save PDF files. '
+              'Please enable it in app settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context, false);
+              await openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
 
   String _getErrorMessage(dynamic error) {
     String errorString = error.toString().toLowerCase();
@@ -293,10 +340,11 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
         action: SnackBarAction(
-          label: 'Retry',
+          label: 'OK',
           textColor: Colors.white,
-          onPressed: _loadData,
+          onPressed: () {},
         ),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -323,6 +371,24 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
     );
   }
 
+  String _extractMonthFromDate(String dateString) {
+    try {
+      DateTime date;
+
+      if (dateString.contains('T')) {
+        date = DateTime.parse(dateString);
+      } else if (dateString.contains('-')) {
+        date = DateFormat('yyyy-MM-dd').parse(dateString);
+      } else {
+        date = DateFormat('dd/MM/yyyy').parse(dateString);
+      }
+
+      return DateFormat('MMMM yyyy').format(date);
+    } catch (e) {
+      return dateString.split(' ').first;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -332,7 +398,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         backgroundColor: const Color(0xFF3E6FB8),
         foregroundColor: Colors.white,
         actions: [
-          // NEW: Download all button
           if (_bills.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.download),
@@ -344,8 +409,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       body: _buildBody(),
     );
   }
-
-  // ... (keep existing _buildBody, _buildErrorWidget, _buildStatsCard, _buildStatItem methods)
 
   Widget _buildBody() {
     if (_isLoading) {
@@ -445,7 +508,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF3E6FB8).withValues(alpha: 0.3),
+            color: const Color(0xFF3E6FB8).withOpacity(0.3),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -463,9 +526,9 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            hasStats ? 'BDT :  ${due.toStringAsFixed(0)}৳' : 'BDT --',
+            hasStats ? 'BDT ${due.toStringAsFixed(0)}৳' : 'BDT --',
             style: const TextStyle(
-              color: Colors.red,
+              color: Colors.white,
               fontSize: 32,
               fontWeight: FontWeight.bold,
             ),
@@ -502,8 +565,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: const Color(0xFF3E6FB8),
-                disabledBackgroundColor: Colors.white.withValues(alpha: 0.5),
-                disabledForegroundColor: const Color(0xFF3E6FB8).withValues(alpha: 0.5),
+                disabledBackgroundColor: Colors.white.withOpacity(0.5),
+                disabledForegroundColor: const Color(0xFF3E6FB8).withOpacity(0.5),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -586,7 +649,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
     );
   }
 
-  // UPDATED: Added download button
   Widget _buildBillItem(Bill bill) {
     Color statusColor;
     Color statusBgColor;
@@ -615,7 +677,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -661,13 +723,15 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // NEW: Download button
               IconButton(
                 icon: const Icon(Icons.download, size: 20),
                 color: const Color(0xFF3E6FB8),
                 tooltip: 'Download PDF',
                 onPressed: () => _downloadBillPDF(bill),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
+              const SizedBox(width: 8),
               const Icon(Icons.expand_more),
             ],
           ),
@@ -680,7 +744,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
                   const Divider(),
                   if (bill.payments.isNotEmpty) ...[
                     const Text(
-                      'Payments',
+                      'Payment History',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -710,38 +774,79 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
   }
 
   Widget _buildPaymentRow(payment) {
+    final paymentMonth = _extractMonthFromDate(payment.paidAt);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                payment.method ?? 'Unknown Method',
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_month,
+                        size: 16,
+                        color: Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        paymentMonth,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    payment.method ?? 'Unknown Method',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    payment.paidAt,
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDCFCE7),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                'BDT ${payment.amount.toStringAsFixed(2)}',
                 style: const TextStyle(
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF22C55E),
                   fontSize: 14,
                 ),
               ),
-              Text(
-                payment.paidAt,
-                style: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          Text(
-            'BDT ${payment.amount.toStringAsFixed(2)}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF22C55E),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

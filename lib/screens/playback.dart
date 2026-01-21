@@ -1,3 +1,5 @@
+// lib/screens/playback/playback_screen.dart
+
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -13,19 +15,22 @@ import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
-import 'package:gpspro/widgets/bloc/custom_info_widget.dart';
 import 'package:intl/intl.dart';
 
 class PlaybackScreen extends StatefulWidget {
   final int? id;
   final String? name;
   final DeviceItem? device;
+  final DateTime? initialFromDate;
+  final DateTime? initialToDate;
 
   const PlaybackScreen({
     super.key,
     required this.id,
     required this.name,
-    required this.device,
+    this.device,
+    this.initialFromDate,
+    this.initialToDate,
   });
 
   @override
@@ -81,16 +86,12 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   double _currentCarBearing = 0.0;
 
   // Date range
-  DateTime _fromDate = DateTime.now().subtract(const Duration(hours: 12));
-  DateTime _toDate = DateTime.now();
+  late DateTime _fromDate;
+  late DateTime _toDate;
 
   // Marker toggles
   bool _showParkingMarkers = true;
   bool _showEventMarkers = true;
-
-  // Info window
-  Window? _infoWindow;
-  bool _showInfoWindow = false;
 
   final DraggableScrollableController _sheetController =
   DraggableScrollableController();
@@ -99,9 +100,39 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   DateTime? _lastCameraUpdate;
   static const int _cameraUpdateIntervalMs = 100;
 
+  // Default position (Dhaka, Bangladesh - change as needed)
+  static const LatLng _defaultPosition = LatLng(23.8103, 90.4125);
+
+  // Helper to check initial dates
+  bool get _hasInitialDates =>
+      widget.initialFromDate != null && widget.initialToDate != null;
+
+  // Get initial camera position safely
+  LatLng get _initialCameraPosition {
+    if (widget.device != null &&
+        widget.device!.lat != null &&
+        widget.device!.lng != null) {
+      try {
+        final lat = double.tryParse(widget.device!.lat.toString());
+        final lng = double.tryParse(widget.device!.lng.toString());
+        if (lat != null && lng != null) {
+          return LatLng(lat, lng);
+        }
+      } catch (e) {
+        debugPrint('Error parsing device position: $e');
+      }
+    }
+    return _defaultPosition;
+  }
+
   @override
   void initState() {
     super.initState();
+
+    // Initialize dates from widget parameters or defaults
+    _fromDate = widget.initialFromDate ??
+        DateTime.now().subtract(const Duration(hours: 12));
+    _toDate = widget.initialToDate ?? DateTime.now();
 
     rootBundle.loadString('assets/map_style.txt').then((string) {
       _mapStyle = string;
@@ -113,7 +144,11 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     _cacheCarIcon();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showDatePicker();
+      if (_hasInitialDates) {
+        _loadPlaybackData();
+      } else {
+        _showDatePicker();
+      }
     });
   }
 
@@ -138,12 +173,20 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     try {
       if (widget.device?.icon?.path != null) {
         await Util.fetchAndCacheImages(
-          "${UserRepository.getServerUrl()!}/${widget.device!.icon!.path!}",
+          "${UserRepository.getServerUrl() ?? ''}/${widget.device!.icon!.path!}",
         );
         _cachedCarIcon = await Util.getMarkerIcon(widget.device!.icon!.path!);
+      } else {
+        // Use default car icon
+        _cachedCarIcon = BitmapDescriptor.defaultMarkerWithHue(
+          BitmapDescriptor.hueAzure,
+        );
       }
     } catch (e) {
       debugPrint('Error caching car icon: $e');
+      _cachedCarIcon = BitmapDescriptor.defaultMarkerWithHue(
+        BitmapDescriptor.hueAzure,
+      );
     }
   }
 
@@ -160,12 +203,10 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     final start = playbackRoutePoints[startIndex];
     final end = playbackRoutePoints[endIndex];
 
-    // Smooth interpolation
     final lat = _lerp(start.latitude, end.latitude, t);
     final lng = _lerp(start.longitude, end.longitude, t);
     final interpolatedPosition = LatLng(lat, lng);
 
-    // Calculate bearing
     final bearing = Geolocator.bearingBetween(
       start.latitude,
       start.longitude,
@@ -176,16 +217,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     _currentCarPosition = interpolatedPosition;
     _currentCarBearing = bearing;
 
-    // Update marker
     _updateCarMarker(interpolatedPosition, bearing);
-
-    // Update progress
     _playbackProgress = startIndex + t * (_speedMultiplier);
-
-    // Update animated polyline (trail)
     _updateAnimatedPolyline(startIndex);
-
-    // Throttled camera update
     _updateCameraThrottled(interpolatedPosition);
 
     if (mounted) setState(() {});
@@ -198,7 +232,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       _currentPointIndex += _speedMultiplier;
 
       if (_currentPointIndex >= playbackRoutePoints.length - 1) {
-        // Animation complete
         _stopPlayback();
         _currentPointIndex = 0;
         _playbackProgress = 0;
@@ -206,15 +239,12 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         return;
       }
 
-      // Continue to next segment
       _animationController!.reset();
       _animationController!.forward();
     }
   }
 
-  double _lerp(double a, double b, double t) {
-    return a + (b - a) * t;
-  }
+  double _lerp(double a, double b, double t) => a + (b - a) * t;
 
   void _updateCarMarker(LatLng position, double bearing) {
     if (_cachedCarIcon == null) return;
@@ -255,7 +285,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   void _updateCameraThrottled(LatLng position) {
     final now = DateTime.now();
     if (_lastCameraUpdate != null &&
-        now.difference(_lastCameraUpdate!).inMilliseconds < _cameraUpdateIntervalMs) {
+        now.difference(_lastCameraUpdate!).inMilliseconds <
+            _cameraUpdateIntervalMs) {
       return;
     }
     _lastCameraUpdate = now;
@@ -313,7 +344,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Handle
               Container(
                 width: 40,
                 height: 4,
@@ -323,8 +353,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-
-              // Title
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -341,10 +369,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                     ),
                 ],
               ),
-
               const SizedBox(height: 20),
-
-              // Quick Select Buttons
               Row(
                 children: [
                   _quickButton('Today', Colors.blue, () {
@@ -360,24 +385,25 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                   const SizedBox(width: 8),
                   _quickButton('Yesterday', Colors.orange, () {
                     setModalState(() {
-                      final yesterday = DateTime.now().subtract(const Duration(days: 1));
-                      _fromDate = DateTime(yesterday.year, yesterday.month, yesterday.day);
-                      _toDate = DateTime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59);
+                      final yesterday =
+                      DateTime.now().subtract(const Duration(days: 1));
+                      _fromDate = DateTime(
+                          yesterday.year, yesterday.month, yesterday.day);
+                      _toDate = DateTime(yesterday.year, yesterday.month,
+                          yesterday.day, 23, 59, 59);
                     });
                   }),
                   const SizedBox(width: 8),
                   _quickButton('Week', Colors.green, () {
                     setModalState(() {
-                      _fromDate = DateTime.now().subtract(const Duration(days: 7));
+                      _fromDate =
+                          DateTime.now().subtract(const Duration(days: 7));
                       _toDate = DateTime.now();
                     });
                   }),
                 ],
               ),
-
               const SizedBox(height: 20),
-
-              // From Date
               _dateField(
                 label: 'From',
                 date: _fromDate,
@@ -389,10 +415,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                   }
                 },
               ),
-
               const SizedBox(height: 12),
-
-              // To Date
               _dateField(
                 label: 'To',
                 date: _toDate,
@@ -404,10 +427,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                   }
                 },
               ),
-
               const SizedBox(height: 24),
-
-              // Load Button
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -417,7 +437,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                     _loadPlaybackData();
                   },
                   icon: const Icon(Icons.play_circle_outline),
-                  label: const Text('Load Playback', style: TextStyle(fontSize: 16)),
+                  label: const Text('Load Playback',
+                      style: TextStyle(fontSize: 16)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: CustomColor.primaryColor,
                     foregroundColor: Colors.white,
@@ -427,7 +448,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                   ),
                 ),
               ),
-
               SizedBox(height: MediaQuery.of(context).padding.bottom + 10),
             ],
           ),
@@ -444,9 +464,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
+            color: color.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
+            border: Border.all(color: color.withOpacity(0.3)),
           ),
           child: Center(
             child: Text(
@@ -484,7 +504,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
+                color: color.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
@@ -525,6 +545,14 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       initialDate: initial,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(primary: CustomColor.primaryColor),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (date == null) return null;
@@ -532,6 +560,14 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initial),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(primary: CustomColor.primaryColor),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (time == null) return null;
@@ -558,10 +594,19 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   }
 
   void _loadPlaybackData() {
+    if (widget.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Device ID is missing'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     _clearData();
     setState(() => _isPlaybackLoading = true);
 
-    // Show loading dialog
     showDialog(
       barrierDismissible: false,
       context: context,
@@ -581,7 +626,12 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                 size: 40.0,
               ),
               const SizedBox(height: 16),
-              const Text('Loading playback...'),
+              Text('Loading playback...', style: TextStyle(color: Colors.grey[700])),
+              const SizedBox(height: 8),
+              Text(
+                '${DateFormat('dd MMM').format(_fromDate)} - ${DateFormat('dd MMM').format(_toDate)}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
             ],
           ),
         ),
@@ -600,7 +650,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         return;
       }
 
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
 
       if (value != null && value.items != null && value.items!.isNotEmpty) {
         playbackTotalDistance = value.distance_sum ?? "0 km";
@@ -608,7 +658,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         playbackMoveDuration = value.move_duration ?? "0";
         playbackStopDuration = value.stop_duration ?? "0";
 
-        // Parse data
         for (var el in value.items!) {
           if (el['time'] != null) {
             PlayBackRoute rt = PlayBackRoute();
@@ -622,16 +671,18 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             rt.average_speed = el['average_speed'];
             rt.status = el['status'];
 
-            var element = el['items'].first;
-            if (element['latitude'] != null) {
-              rt.device_id = element['device_id'].toString();
-              rt.longitude = element['longitude'].toString();
-              rt.latitude = element['latitude'].toString();
-              rt.speed = element['speed'];
-              rt.course = element['course'].toString();
-              rt.raw_time = element['raw_time'].toString();
-              rt.speedType = "kph";
-              rt.id = element["id"].toString();
+            if (el['items'] != null && (el['items'] as List).isNotEmpty) {
+              var element = el['items'].first;
+              if (element['latitude'] != null) {
+                rt.device_id = element['device_id']?.toString();
+                rt.longitude = element['longitude']?.toString();
+                rt.latitude = element['latitude']?.toString();
+                rt.speed = element['speed'];
+                rt.course = element['course']?.toString();
+                rt.raw_time = element['raw_time']?.toString();
+                rt.speedType = "kph";
+                rt.id = element["id"]?.toString();
+              }
             }
             bottomRouteList.add(rt);
           }
@@ -639,44 +690,45 @@ class _PlaybackScreenState extends State<PlaybackScreen>
           if (el["status"] == 1) parkingPoints.add(el['items']);
           if (el["status"] == 5) eventsPoints.add(el['items']);
 
-          el['items'].forEach((element) {
-            if (element['latitude'] != null) {
-              PlayBackRoute blackRoute = PlayBackRoute();
-              blackRoute.device_id = element['device_id'].toString();
-              blackRoute.longitude = element['longitude'].toString();
-              blackRoute.latitude = element['latitude'].toString();
-              blackRoute.speed = element['speed'];
-              blackRoute.course = element['course'].toString();
-              blackRoute.raw_time = element['raw_time'].toString();
-              blackRoute.speedType = "kph";
+          if (el['items'] != null) {
+            for (var element in el['items']) {
+              if (element['latitude'] != null) {
+                PlayBackRoute blackRoute = PlayBackRoute();
+                blackRoute.device_id = element['device_id']?.toString();
+                blackRoute.longitude = element['longitude']?.toString();
+                blackRoute.latitude = element['latitude']?.toString();
+                blackRoute.speed = element['speed'];
+                blackRoute.course = element['course']?.toString();
+                blackRoute.raw_time = element['raw_time']?.toString();
+                blackRoute.speedType = "kph";
 
-              playbackRoutePoints.add(LatLng(
-                double.parse(element['latitude'].toString()),
-                double.parse(element['longitude'].toString()),
-              ));
-              routeList.add(blackRoute);
+                final lat = double.tryParse(element['latitude'].toString());
+                final lng = double.tryParse(element['longitude'].toString());
+                if (lat != null && lng != null) {
+                  playbackRoutePoints.add(LatLng(lat, lng));
+                  routeList.add(blackRoute);
+                }
+              }
             }
-          });
+          }
         }
 
-        // Add main polyline
-        _playbackPolyLines.add(Polyline(
-          polylineId: const PolylineId('playback_route'),
-          visible: true,
-          points: playbackRoutePoints,
-          width: 4,
-          color: Colors.orange.withValues(alpha: 0.6),
-          geodesic: true,
-          startCap: Cap.roundCap,
-          endCap: Cap.roundCap,
-        ));
-
-        await _addStartEndMarkers();
-        _addParkingMarkers();
-        _addEventMarkers();
-
-        // Set initial car position
         if (playbackRoutePoints.isNotEmpty) {
+          _playbackPolyLines.add(Polyline(
+            polylineId: const PolylineId('playback_route'),
+            visible: true,
+            points: playbackRoutePoints,
+            width: 4,
+            color: Colors.orange.withOpacity(0.6),
+            geodesic: true,
+            startCap: Cap.roundCap,
+            endCap: Cap.roundCap,
+          ));
+
+          await _addStartEndMarkers();
+          _addParkingMarkers();
+          _addEventMarkers();
+
           _currentCarPosition = playbackRoutePoints.first;
           _updateCarMarker(playbackRoutePoints.first, 0);
         }
@@ -685,9 +737,21 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       } else {
         setState(() => _isPlaybackLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No records found for selected period'),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.info_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'No records found for ${DateFormat('dd MMM').format(_fromDate)} - ${DateFormat('dd MMM').format(_toDate)}',
+                  ),
+                ),
+              ],
+            ),
             backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -696,19 +760,34 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       setState(() => _isPlaybackLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $error'),
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Error: $error')),
+            ],
+          ),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     });
   }
 
   Future<void> _addStartEndMarkers() async {
-    if (routeList.isEmpty || !mounted) return;
+    if (playbackRoutePoints.isEmpty || !mounted) return;
 
     try {
-      final startIcon = await Util.getBytesFromAsset('assets/images/map-start-point.png', 40);
-      final endIcon = await Util.getBytesFromAsset('assets/images/map-end-point.png', 40);
+      Uint8List? startIcon;
+      Uint8List? endIcon;
+
+      try {
+        startIcon = await Util.getBytesFromAsset('assets/images/map-start-point.png', 40);
+        endIcon = await Util.getBytesFromAsset('assets/images/map-end-point.png', 40);
+      } catch (e) {
+        debugPrint('Error loading marker assets: $e');
+      }
 
       if (!mounted) return;
 
@@ -718,7 +797,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       _playbackMarkers[const MarkerId('start')] = Marker(
         markerId: const MarkerId('start'),
         position: startPos,
-        icon: BitmapDescriptor.bytes(startIcon!),
+        icon: startIcon != null
+            ? BitmapDescriptor.bytes(startIcon)
+            : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         infoWindow: const InfoWindow(title: 'Start'),
         zIndex: 1,
       );
@@ -726,12 +807,13 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       _playbackMarkers[const MarkerId('end')] = Marker(
         markerId: const MarkerId('end'),
         position: endPos,
-        icon: BitmapDescriptor.bytes(endIcon!),
+        icon: endIcon != null
+            ? BitmapDescriptor.bytes(endIcon)
+            : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         infoWindow: const InfoWindow(title: 'End'),
         zIndex: 1,
       );
 
-      // Fit bounds
       double minLat = startPos.latitude, maxLat = startPos.latitude;
       double minLng = startPos.longitude, maxLng = startPos.longitude;
 
@@ -760,17 +842,14 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     final canvas = Canvas(recorder);
     final center = const Offset(size / 2, size / 2);
 
-    // Shadow
     canvas.drawCircle(
       Offset(center.dx + 1, center.dy + 1),
       size / 2 - 4,
       Paint()..color = Colors.black26,
     );
 
-    // Circle
     canvas.drawCircle(center, size / 2 - 4, Paint()..color = color);
 
-    // Border
     canvas.drawCircle(
       center,
       size / 2 - 4,
@@ -780,7 +859,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         ..strokeWidth = 2,
     );
 
-    // Text
     final textPainter = TextPainter(
       text: TextSpan(
         text: text,
@@ -812,10 +890,13 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
     for (var element in parkingPoints) {
       if (!mounted) return;
+      if (element == null || (element as List).isEmpty) continue;
 
       final id = MarkerId('parking_$index');
-      final lat = double.tryParse(element[0]["latitude"].toString()) ?? 0;
-      final lng = double.tryParse(element[0]["longitude"].toString()) ?? 0;
+      final lat = double.tryParse(element[0]["latitude"]?.toString() ?? '') ?? 0;
+      final lng = double.tryParse(element[0]["longitude"]?.toString() ?? '') ?? 0;
+
+      if (lat == 0 && lng == 0) continue;
 
       final icon = await _createCircleMarker('P$index', Colors.blue);
 
@@ -845,10 +926,13 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
     for (var element in eventsPoints) {
       if (!mounted) return;
+      if (element == null || (element as List).isEmpty) continue;
 
       final id = MarkerId('event_$index');
-      final lat = double.tryParse(element[0]["lat"].toString()) ?? 0;
-      final lng = double.tryParse(element[0]["lng"].toString()) ?? 0;
+      final lat = double.tryParse(element[0]["lat"]?.toString() ?? '') ?? 0;
+      final lng = double.tryParse(element[0]["lng"]?.toString() ?? '') ?? 0;
+
+      if (lat == 0 && lng == 0) continue;
 
       final icon = await _createCircleMarker('A$index', Colors.red);
 
@@ -976,10 +1060,11 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.15),
+                color: Colors.orange.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.play_circle, color: Colors.orange, size: 16),
                   const SizedBox(width: 4),
@@ -997,7 +1082,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                widget.name ?? '',
+                widget.name ?? 'Unknown',
                 style: const TextStyle(
                   color: Colors.black87,
                   fontSize: 16,
@@ -1009,6 +1094,27 @@ class _PlaybackScreenState extends State<PlaybackScreen>
           ],
         ),
         actions: [
+          if (playbackRoutePoints.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    DateFormat('dd MMM').format(_fromDate),
+                    style: const TextStyle(
+                      color: Colors.blue,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.date_range, color: Colors.black54),
             onPressed: _showDatePicker,
@@ -1017,14 +1123,11 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       ),
       body: Stack(
         children: [
-          // Map
+          // Map - USE SAFE INITIAL POSITION
           GoogleMap(
             mapType: _currentMapType,
             initialCameraPosition: CameraPosition(
-              target: LatLng(
-                double.parse(widget.device!.lat.toString()),
-                double.parse(widget.device!.lng.toString()),
-              ),
+              target: _initialCameraPosition, // FIXED: Using safe getter
               zoom: 14,
             ),
             onMapCreated: (controller) {
@@ -1102,12 +1205,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 6,
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6)],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1126,7 +1224,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: active ? color.withValues(alpha: 0.15) : Colors.grey[100],
+          color: active ? color.withOpacity(0.15) : Colors.grey[100],
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: active ? color : Colors.grey[300]!),
         ),
@@ -1135,30 +1233,13 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             Container(
               width: 18,
               height: 18,
-              decoration: BoxDecoration(
-                color: active ? color : Colors.grey,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: active ? color : Colors.grey, shape: BoxShape.circle),
               child: Center(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
               ),
             ),
             const SizedBox(width: 4),
-            Text(
-              '$count',
-              style: TextStyle(
-                color: active ? color : Colors.grey,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Text('$count', style: TextStyle(color: active ? color : Colors.grey, fontSize: 12, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -1182,26 +1263,17 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             controller: scrollController,
             padding: EdgeInsets.zero,
             children: [
-              // Handle
               Center(
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 10),
                   width: 36,
                   height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
                 ),
               ),
-
-              // Controls
               _buildControls(),
-
               if (playbackRoutePoints.isNotEmpty) ...[
                 const Divider(),
-
-                // Stats
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1216,8 +1288,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                 ),
                 const SizedBox(height: 10),
               ],
-
-              // Timeline
               if (bottomRouteList.isNotEmpty)
                 ...bottomRouteList.asMap().entries.map((e) => _buildTimelineItem(e.value, e.key))
               else
@@ -1245,31 +1315,19 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
-          // Date range
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                DateFormat('dd/MM HH:mm').format(_fromDate),
-                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-              ),
-              if (playbackRoutePoints.isNotEmpty && _playbackProgress < routeList.length)
+              Text(DateFormat('dd/MM HH:mm').format(_fromDate), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              if (playbackRoutePoints.isNotEmpty && _playbackProgress.toInt() < routeList.length)
                 Text(
                   '${routeList[_playbackProgress.toInt().clamp(0, routeList.length - 1)].speed ?? 0} kph',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-              Text(
-                DateFormat('dd/MM HH:mm').format(_toDate),
-                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-              ),
+              Text(DateFormat('dd/MM HH:mm').format(_toDate), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
             ],
           ),
-
           if (playbackRoutePoints.isNotEmpty) ...[
-            // Slider
             SliderTheme(
               data: SliderThemeData(
                 trackHeight: 4,
@@ -1285,8 +1343,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                 onChanged: _seekTo,
               ),
             ),
-
-            // Playback buttons
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1301,15 +1357,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                   child: Container(
                     width: 50,
                     height: 50,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: CustomColor.primaryColor,
-                    ),
-                    child: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Colors.white,
-                      size: 28,
-                    ),
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: CustomColor.primaryColor),
+                    child: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 28),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1324,17 +1373,11 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.1),
+                      color: Colors.orange.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.orange),
                     ),
-                    child: Text(
-                      _speedText,
-                      style: const TextStyle(
-                        color: Colors.orange,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    child: Text(_speedText, style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -1350,18 +1393,15 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
         children: [
           Icon(icon, color: color, size: 14),
           const SizedBox(width: 4),
-          Text(
-            value,
-            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
-          ),
+          Text(value, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -1379,10 +1419,11 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     return InkWell(
       onTap: () {
         if (trip.latitude != null && trip.longitude != null) {
-          _safeAnimateCamera(CameraUpdate.newLatLngZoom(
-            LatLng(double.parse(trip.latitude!), double.parse(trip.longitude!)),
-            16,
-          ));
+          final lat = double.tryParse(trip.latitude!);
+          final lng = double.tryParse(trip.longitude!);
+          if (lat != null && lng != null) {
+            _safeAnimateCamera(CameraUpdate.newLatLngZoom(LatLng(lat, lng), 16));
+          }
         }
       },
       child: Container(
@@ -1397,20 +1438,10 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                   Container(
                     width: 32,
                     height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isStopped ? Colors.blue : Colors.green,
-                    ),
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: isStopped ? Colors.blue : Colors.green),
                     child: Center(
                       child: isStopped
-                          ? Text(
-                        'P$parkingNum',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
+                          ? Text('P$parkingNum', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))
                           : const Icon(Icons.directions_car, color: Colors.white, size: 14),
                     ),
                   ),
@@ -1423,11 +1454,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: (isStopped ? Colors.blue : Colors.green).withValues(alpha: 0.05),
+                  color: (isStopped ? Colors.blue : Colors.green).withOpacity(0.05),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: (isStopped ? Colors.blue : Colors.green).withValues(alpha: 0.2),
-                  ),
+                  border: Border.all(color: (isStopped ? Colors.blue : Colors.green).withOpacity(0.2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1437,16 +1466,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                       children: [
                         Text(
                           isStopped ? 'P$parkingNum - Stopped' : 'Moving',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                            color: isStopped ? Colors.blue : Colors.green,
-                          ),
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: isStopped ? Colors.blue : Colors.green),
                         ),
-                        Text(
-                          Util.formatOnlyTime(trip.show ?? ""),
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
-                        ),
+                        Text(Util.formatOnlyTime(trip.show ?? ""), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
                       ],
                     ),
                     const SizedBox(height: 4),
