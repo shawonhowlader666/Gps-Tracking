@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gap/gap.dart';
 import 'package:get/get.dart';
-import 'package:gpspro/arguments/report_args.dart';
 import 'package:gpspro/flutter_flow/flutter_flow_util.dart';
 import 'package:gpspro/screens/common_method.dart';
 import 'package:gpspro/screens/lock_unlock_screen.dart';
@@ -2852,7 +2851,7 @@ class _DevicePageState extends State<DevicePage> {
                             duration: const Duration(milliseconds: 200),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? _primaryBlue.withOpacity(0.08)
+                                  ? _primaryBlue.withValues(alpha: 0.08)
                                   : Colors.grey[50],
                               border: Border.all(
                                 color: isSelected
@@ -2864,7 +2863,7 @@ class _DevicePageState extends State<DevicePage> {
                               boxShadow: isSelected
                                   ? [
                                 BoxShadow(
-                                  color: _primaryBlue.withOpacity(0.2),
+                                  color: _primaryBlue.withValues(alpha: 0.2),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),

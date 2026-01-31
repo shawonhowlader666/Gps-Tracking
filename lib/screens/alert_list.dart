@@ -676,7 +676,7 @@ class _AlertListPageState extends State<AlertListPage> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -799,7 +799,7 @@ class _AlertListPageState extends State<AlertListPage> {
                         onChanged: (value) {
                           value ? activateAlert(alert) : removeAlert(alert);
                         },
-                        activeColor: Colors.green.shade600,
+                        activeThumbColor: Colors.green.shade600,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
@@ -1434,7 +1434,7 @@ class _AlertListPageState extends State<AlertListPage> {
                       color: Colors.white,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, -4),
                         ),

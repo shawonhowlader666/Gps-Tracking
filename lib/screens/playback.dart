@@ -3,18 +3,14 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/services/model/playback_route.dart';
 import 'package:gpspro/services/api_service.dart';
-import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
 import 'package:intl/intl.dart';

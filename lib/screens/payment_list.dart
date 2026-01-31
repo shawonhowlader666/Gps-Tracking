@@ -531,7 +531,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF3E6FB8).withOpacity(0.3),
+            color: const Color(0xFF3E6FB8).withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -588,8 +588,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: const Color(0xFF3E6FB8),
-                disabledBackgroundColor: Colors.white.withOpacity(0.5),
-                disabledForegroundColor: const Color(0xFF3E6FB8).withOpacity(0.5),
+                disabledBackgroundColor: Colors.white.withValues(alpha: 0.5),
+                disabledForegroundColor: const Color(0xFF3E6FB8).withValues(alpha: 0.5),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -700,7 +700,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

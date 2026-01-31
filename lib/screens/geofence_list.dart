@@ -8,7 +8,7 @@ import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/theme/custom_color.dart';
 
 class GeofenceListPage extends StatefulWidget {
-  const GeofenceListPage({Key? key}) : super(key: key);
+  const GeofenceListPage({super.key});
 
   @override
   State<GeofenceListPage> createState() => _GeofenceListPageState();
@@ -818,7 +818,7 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                         child: Switch(
                           value: isActive,
                           onChanged: (value) => _toggleFenceStatus(fence, value),
-                          activeColor: CustomColor.primary,
+                          activeThumbColor: CustomColor.primary,
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),

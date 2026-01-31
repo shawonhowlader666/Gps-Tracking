@@ -322,212 +322,212 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   // ==================== ADD NEW SERVER DIALOG ====================
-  void _showAddServerDialog() {
-    final TextEditingController nameController = TextEditingController();
-    final TextEditingController urlController = TextEditingController();
-    final TextEditingController typeController = TextEditingController(text: 'free');
-    bool showBannerAds = false;
-    bool isSaving = false;
+  // void _showAddServerDialog() {
+  //   final TextEditingController nameController = TextEditingController();
+  //   final TextEditingController urlController = TextEditingController();
+  //   final TextEditingController typeController = TextEditingController(text: 'free');
+  //   bool showBannerAds = false;
+  //   bool isSaving = false;
+  //
+  //   showDialog(
+  //     context: context,
+  //     builder: (dialogContext) => StatefulBuilder(
+  //       builder: (context, setDialogState) => AlertDialog(
+  //         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  //         title: Row(
+  //           children: [
+  //             Icon(Icons.add_circle_outline, color: kPrimaryOrange),
+  //             const SizedBox(width: 10),
+  //             const Text(
+  //               'Add New Server',
+  //               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+  //             ),
+  //           ],
+  //         ),
+  //         content: SingleChildScrollView(
+  //           child: Column(
+  //             mainAxisSize: MainAxisSize.min,
+  //             crossAxisAlignment: CrossAxisAlignment.start,
+  //             children: [
+  //               // Server Name
+  //               TextField(
+  //                 controller: nameController,
+  //                 decoration: InputDecoration(
+  //                   labelText: 'Server Name',
+  //                   hintText: 'e.g., Main Server',
+  //                   prefixIcon: Icon(Icons.dns, color: Colors.grey[600]),
+  //                   border: OutlineInputBorder(
+  //                     borderRadius: BorderRadius.circular(12),
+  //                   ),
+  //                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  //                 ),
+  //               ),
+  //               const SizedBox(height: 16),
+  //
+  //               // Server URL
+  //               TextField(
+  //                 controller: urlController,
+  //                 decoration: InputDecoration(
+  //                   labelText: 'Server URL',
+  //                   hintText: 'https://example.com',
+  //                   prefixIcon: Icon(Icons.link, color: Colors.grey[600]),
+  //                   border: OutlineInputBorder(
+  //                     borderRadius: BorderRadius.circular(12),
+  //                   ),
+  //                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  //                 ),
+  //                 keyboardType: TextInputType.url,
+  //               ),
+  //               const SizedBox(height: 16),
+  //
+  //               // Server Type
+  //               DropdownButtonFormField<String>(
+  //                 value: typeController.text,
+  //                 decoration: InputDecoration(
+  //                   labelText: 'Server Type',
+  //                   prefixIcon: Icon(Icons.category, color: Colors.grey[600]),
+  //                   border: OutlineInputBorder(
+  //                     borderRadius: BorderRadius.circular(12),
+  //                   ),
+  //                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  //                 ),
+  //                 items: ['free', 'paid'].map((type) {
+  //                   return DropdownMenuItem(
+  //                     value: type,
+  //                     child: Text(type.toUpperCase()),
+  //                   );
+  //                 }).toList(),
+  //                 onChanged: (value) {
+  //                   if (value != null) {
+  //                     typeController.text = value;
+  //                   }
+  //                 },
+  //               ),
+  //               const SizedBox(height: 16),
+  //
+  //               // Show Banner Ads
+  //               Row(
+  //                 children: [
+  //                   Checkbox(
+  //                     value: showBannerAds,
+  //                     activeColor: kPrimaryOrange,
+  //                     onChanged: (value) {
+  //                       setDialogState(() {
+  //                         showBannerAds = value ?? false;
+  //                       });
+  //                     },
+  //                   ),
+  //                   const Text('Show Banner Ads'),
+  //                 ],
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //         actions: [
+  //           TextButton(
+  //             onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
+  //             child: Text(
+  //               'Cancel',
+  //               style: TextStyle(color: Colors.grey[600]),
+  //             ),
+  //           ),
+  //           ElevatedButton(
+  //             onPressed: isSaving
+  //                 ? null
+  //                 : () async {
+  //               if (nameController.text.trim().isEmpty ||
+  //                   urlController.text.trim().isEmpty) {
+  //                 Get.snackbar(
+  //                   'Error',
+  //                   'Please fill all required fields',
+  //                   backgroundColor: Colors.red,
+  //                   colorText: Colors.white,
+  //                 );
+  //                 return;
+  //               }
+  //
+  //               setDialogState(() => isSaving = true);
+  //
+  //               await _addServerToFirebase(
+  //                 name: nameController.text.trim(),
+  //                 url: urlController.text.trim(),
+  //                 type: typeController.text.trim(),
+  //                 showBannerAds: showBannerAds,
+  //               );
+  //
+  //               setDialogState(() => isSaving = false);
+  //
+  //               if (dialogContext.mounted) {
+  //                 Navigator.pop(dialogContext);
+  //               }
+  //
+  //               await fetchServersFromFirebase();
+  //             },
+  //             style: ElevatedButton.styleFrom(
+  //               backgroundColor: kPrimaryOrange,
+  //               shape: RoundedRectangleBorder(
+  //                 borderRadius: BorderRadius.circular(12),
+  //               ),
+  //             ),
+  //             child: isSaving
+  //                 ? const SizedBox(
+  //               width: 16,
+  //               height: 16,
+  //               child: CircularProgressIndicator(
+  //                 strokeWidth: 2,
+  //                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+  //               ),
+  //             )
+  //                 : const Text(
+  //               'Add Server',
+  //               style: TextStyle(color: Colors.white),
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Icon(Icons.add_circle_outline, color: kPrimaryOrange),
-              const SizedBox(width: 10),
-              const Text(
-                'Add New Server',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Server Name
-                TextField(
-                  controller: nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Server Name',
-                    hintText: 'e.g., Main Server',
-                    prefixIcon: Icon(Icons.dns, color: Colors.grey[600]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Server URL
-                TextField(
-                  controller: urlController,
-                  decoration: InputDecoration(
-                    labelText: 'Server URL',
-                    hintText: 'https://example.com',
-                    prefixIcon: Icon(Icons.link, color: Colors.grey[600]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  keyboardType: TextInputType.url,
-                ),
-                const SizedBox(height: 16),
-
-                // Server Type
-                DropdownButtonFormField<String>(
-                  value: typeController.text,
-                  decoration: InputDecoration(
-                    labelText: 'Server Type',
-                    prefixIcon: Icon(Icons.category, color: Colors.grey[600]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  items: ['free', 'paid'].map((type) {
-                    return DropdownMenuItem(
-                      value: type,
-                      child: Text(type.toUpperCase()),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      typeController.text = value;
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Show Banner Ads
-                Row(
-                  children: [
-                    Checkbox(
-                      value: showBannerAds,
-                      activeColor: kPrimaryOrange,
-                      onChanged: (value) {
-                        setDialogState(() {
-                          showBannerAds = value ?? false;
-                        });
-                      },
-                    ),
-                    const Text('Show Banner Ads'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
-              child: Text(
-                'Cancel',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: isSaving
-                  ? null
-                  : () async {
-                if (nameController.text.trim().isEmpty ||
-                    urlController.text.trim().isEmpty) {
-                  Get.snackbar(
-                    'Error',
-                    'Please fill all required fields',
-                    backgroundColor: Colors.red,
-                    colorText: Colors.white,
-                  );
-                  return;
-                }
-
-                setDialogState(() => isSaving = true);
-
-                await _addServerToFirebase(
-                  name: nameController.text.trim(),
-                  url: urlController.text.trim(),
-                  type: typeController.text.trim(),
-                  showBannerAds: showBannerAds,
-                );
-
-                setDialogState(() => isSaving = false);
-
-                if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext);
-                }
-
-                await fetchServersFromFirebase();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kPrimaryOrange,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: isSaving
-                  ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-                  : const Text(
-                'Add Server',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _addServerToFirebase({
-    required String name,
-    required String url,
-    required String type,
-    required bool showBannerAds,
-  }) async {
-    try {
-      final docRef = FirebaseFirestore.instance.collection('configs').doc('urls');
-
-      final newServer = {
-        'name': name,
-        'url': url,
-        'type': type,
-        'showBannerAds': showBannerAds,
-        'message': '',
-      };
-
-      await docRef.update({
-        'spytrack.url': FieldValue.arrayUnion([newServer])
-      });
-
-      Get.snackbar(
-        'Success',
-        'Server added successfully!',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-        icon: const Icon(Icons.check_circle, color: Colors.white),
-      );
-    } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to add server: $e',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    }
-  }
+  // Future<void> _addServerToFirebase({
+  //   required String name,
+  //   required String url,
+  //   required String type,
+  //   required bool showBannerAds,
+  // }) async {
+  //   try {
+  //     final docRef = FirebaseFirestore.instance.collection('configs').doc('urls');
+  //
+  //     final newServer = {
+  //       'name': name,
+  //       'url': url,
+  //       'type': type,
+  //       'showBannerAds': showBannerAds,
+  //       'message': '',
+  //     };
+  //
+  //     await docRef.update({
+  //       'spytrack.url': FieldValue.arrayUnion([newServer])
+  //     });
+  //
+  //     Get.snackbar(
+  //       'Success',
+  //       'Server added successfully!',
+  //       backgroundColor: Colors.green,
+  //       colorText: Colors.white,
+  //       snackPosition: SnackPosition.BOTTOM,
+  //       icon: const Icon(Icons.check_circle, color: Colors.white),
+  //     );
+  //   } catch (e) {
+  //     Get.snackbar(
+  //       'Error',
+  //       'Failed to add server: $e',
+  //       backgroundColor: Colors.red,
+  //       colorText: Colors.white,
+  //       snackPosition: SnackPosition.BOTTOM,
+  //     );
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {

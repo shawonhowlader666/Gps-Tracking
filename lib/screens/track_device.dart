@@ -14,7 +14,6 @@ import 'package:gpspro/screens/street_view_screen.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/api_service.dart';
-import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
 import 'package:share_plus/share_plus.dart';
@@ -628,7 +627,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
             x: (MediaQuery.of(context).size.width / 2).toInt(),
             y: (MediaQuery.of(context).size.height / 2).toInt(),
           )).then((centerLatLng) {
-            if (centerLatLng != null && mounted) {
+            if (mounted) {
               final distance = _calculateDistance(
                   _carAnimator!.currentPosition,
                   centerLatLng

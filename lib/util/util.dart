@@ -5,14 +5,12 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:gpspro/config.dart';
 import 'package:gpspro/util/image_fetcher.dart';
 import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/material.dart' as m;
 import 'dart:math';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:xml/xml.dart' as xml;
 import 'package:gpspro/storage/user_repository.dart';
 
