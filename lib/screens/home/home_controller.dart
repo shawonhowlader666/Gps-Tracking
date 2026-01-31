@@ -1,4 +1,3 @@
-// lib/screens/home/home_controller.dart
 
 import 'dart:async';
 import 'dart:developer';
@@ -46,7 +45,7 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    log('🏠 [HomeController] onInit');
+    //log('🏠 [HomeController] onInit');
     _initializeData();
     _startAutoRefresh();
   }
@@ -60,7 +59,7 @@ class HomeController extends GetxController {
   void _startAutoRefresh() {
     _refreshTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
       if (selectedDeviceId.value != 0) {
-        log('🔄 [HomeController] Auto refresh...');
+       // log('🔄 [HomeController] Auto refresh...');
         loadTodayReport(selectedDeviceId.value, forceRefresh: true);
       }
     });
@@ -69,7 +68,7 @@ class HomeController extends GetxController {
   void _initializeData() {
     // Listen for device list changes
     ever(dataController.onlyDevices, (List<DeviceItem> devices) {
-      log('🏠 [HomeController] Devices changed: ${devices.length}');
+     // log('🏠 [HomeController] Devices changed: ${devices.length}');
 
       if (devices.isNotEmpty) {
         updateSubscriptionStatus(devices);
@@ -78,7 +77,7 @@ class HomeController extends GetxController {
         if (selectedDeviceId.value == 0) {
           final first = devices.first;
           if (first.id != null) {
-            log('🏠 [HomeController] Auto-selecting device: ${first.id}');
+          //  log('🏠 [HomeController] Auto-selecting device: ${first.id}');
             selectedDeviceId.value = first.id!;
             loadTodayReport(first.id!);
             loadMileageData(first.id!);
@@ -89,7 +88,7 @@ class HomeController extends GetxController {
 
     // Initial load if devices already exist
     if (dataController.onlyDevices.isNotEmpty) {
-      log('🏠 [HomeController] Initial devices: ${dataController.onlyDevices.length}');
+     // log('🏠 [HomeController] Initial devices: ${dataController.onlyDevices.length}');
       updateSubscriptionStatus(dataController.onlyDevices);
 
       final first = dataController.onlyDevices.first;
@@ -102,7 +101,7 @@ class HomeController extends GetxController {
   }
 
   Future<void> refreshData() async {
-    log('🔄 [HomeController] Manual refresh');
+    //log('🔄 [HomeController] Manual refresh');
     ReportService.clearCache();
 
     await dataController.getDevices();
@@ -133,7 +132,7 @@ class HomeController extends GetxController {
       return;
     }
 
-    log('📊 [HomeController] loadTodayReport for device: $deviceId');
+   // log('📊 [HomeController] loadTodayReport for device: $deviceId');
 
     // Set loading state
     isLoadingReport.value = true;
@@ -145,14 +144,14 @@ class HomeController extends GetxController {
         deviceId: deviceId,
         forceRefresh: forceRefresh,
       );
-
-      log('📊 [HomeController] Report received:');
-      log('   isEmpty: ${report.isEmpty}');
-      log('   routeLength: ${report.routeLength}');
-      log('   moveDuration: ${report.moveDuration}');
-      log('   stopDuration: ${report.stopDuration}');
-      log('   topSpeed: ${report.topSpeed}');
-      log('   engineHours: ${report.engineHours}');
+      //
+      // log('📊 [HomeController] Report received:');
+      // log('   isEmpty: ${report.isEmpty}');
+      // log('   routeLength: ${report.routeLength}');
+      // log('   moveDuration: ${report.moveDuration}');
+      // log('   stopDuration: ${report.stopDuration}');
+      // log('   topSpeed: ${report.topSpeed}');
+      // log('   engineHours: ${report.engineHours}');
 
       // UPDATE THE REACTIVE VARIABLE - THIS IS KEY!
       todayReport.value = report;
@@ -162,12 +161,12 @@ class HomeController extends GetxController {
 
       if (report.isEmpty) {
         reportError.value = 'No data for today';
-        log('⚠️ [HomeController] Report is empty');
+      //  log('⚠️ [HomeController] Report is empty');
       } else {
-        log('✅ [HomeController] Report loaded successfully');
+       // log('✅ [HomeController] Report loaded successfully');
       }
     } catch (e) {
-      log('❌ [HomeController] Error: $e');
+    //  log('❌ [HomeController] Error: $e');
       todayReport.value = TodayReportData();
       reportError.value = 'Failed to load report';
     } finally {
@@ -179,7 +178,7 @@ class HomeController extends GetxController {
   void onVehicleChanged(int deviceId) {
     if (deviceId == selectedDeviceId.value) return;
 
-    log('🚗 [HomeController] Vehicle changed: $deviceId');
+   // log('🚗 [HomeController] Vehicle changed: $deviceId');
     selectedDeviceId.value = deviceId;
 
     // Clear previous data
@@ -206,7 +205,7 @@ class HomeController extends GetxController {
         if (m.isRealData && m.distance > 0) isDummyMileageData.value = false;
       }
     } catch (e) {
-      log('❌ [HomeController] Mileage error: $e');
+     // log('❌ [HomeController] Mileage error: $e');
       _addDummyMileageData();
     } finally {
       isLoadingMileage.value = false;

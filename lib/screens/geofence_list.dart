@@ -16,7 +16,7 @@ class GeofenceListPage extends StatefulWidget {
 
 class _GeofenceListPageState extends State<GeofenceListPage> {
   List<Geofence> fenceList = [];
-  Map<int, List<Map<String, dynamic>>> fenceDevices = {}; // Store device info
+  Map<int, List<Map<String, dynamic>>> fenceDevices = {};
   bool isLoading = true;
   final TextEditingController _searchController = TextEditingController();
   String searchQuery = '';
@@ -35,7 +35,6 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     super.dispose();
   }
 
-  // Get all geofences with device associations
   Future<void> getFences() async {
     setState(() => isLoading = true);
 
@@ -43,7 +42,6 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
       final value = await APIService.getGeoFences();
       if (value != null && value.isNotEmpty) {
         fenceList = value;
-        // Fetch device associations for each fence
         await _fetchDeviceAssociations();
       } else {
         fenceList = [];
@@ -58,7 +56,6 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     }
   }
 
-  // Fetch device associations for geofences
   Future<void> _fetchDeviceAssociations() async {
     try {
       for (var fence in fenceList) {
@@ -67,7 +64,6 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
           if (devices != null && devices.isNotEmpty) {
             List<Map<String, dynamic>> deviceList = [];
             for (var deviceData in devices) {
-              // Match with actual device names from DataController
               final deviceId = deviceData['device_id'] ?? deviceData['id'];
               final deviceName = _getDeviceNameById(deviceId);
               deviceList.add({
@@ -86,7 +82,6 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     }
   }
 
-  // Get device name by ID from DataController
   String? _getDeviceNameById(dynamic deviceId) {
     try {
       for (var group in dataController.devices) {
@@ -104,7 +99,6 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     return null;
   }
 
-  // Toggle fence active status
   Future<void> _toggleFenceStatus(Geofence fence, bool activate) async {
     try {
       Map<String, String> requestBody = {
@@ -130,37 +124,46 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     }
   }
 
-  // Delete fence
+  // ✅ IMPROVED DELETE CONFIRMATION
   Future<void> _deleteFence(Geofence fence) async {
     bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.delete_outline, color: Colors.red[700], size: 24),
+              child: Icon(Icons.delete_outline, color: Colors.red.shade600, size: 28),
             ),
             const SizedBox(width: 12),
-            const Expanded(child: Text('Delete Geofence')),
+            const Expanded(
+              child: Text(
+                'Delete Geofence',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Are you sure you want to delete this geofence?'),
-            const SizedBox(height: 12),
+            const Text(
+              'Are you sure you want to delete this geofence?',
+              style: TextStyle(fontSize: 15),
+            ),
+            const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade300),
               ),
               child: Row(
                 children: [
@@ -168,36 +171,45 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                     fence.type == 'polygon'
                         ? Icons.pentagon_outlined
                         : Icons.radio_button_unchecked,
-                    color: Colors.grey[700],
+                    color: CustomColor.primary,
+                    size: 20,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       fence.name ?? 'Unnamed Fence',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey[800],
+                        fontSize: 14,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'This action cannot be undone.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.red[700],
-                fontStyle: FontStyle.italic,
-              ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange.shade600, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'This action cannot be undone',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.orange.shade700,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -205,8 +217,9 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
               elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
             child: const Text('Delete'),
@@ -217,22 +230,24 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
 
     if (confirmed != true) return;
 
+    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => Center(
-        child: Card(
-          margin: const EdgeInsets.all(50),
-          child: Padding(
-            padding: const EdgeInsets.all(30),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Deleting geofence...'),
-              ],
-            ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Deleting geofence...'),
+            ],
           ),
         ),
       ),
@@ -250,7 +265,7 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
         });
         _showToast('Geofence deleted successfully', Colors.green);
       } else {
-        _showToast('Failed to delete: ${response.body}', Colors.red);
+        _showToast('Failed to delete geofence', Colors.red);
       }
     } catch (e) {
       if (mounted) Navigator.pop(context);
@@ -297,13 +312,12 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.grey.shade50,
       appBar: _buildAppBar(),
       body: Column(
         children: [
           _buildSearchBar(),
           _buildFilterChips(),
-          // if (!isLoading && fenceList.isNotEmpty) _buildStatsCard(),
           Expanded(
             child: isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -337,16 +351,8 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       elevation: 0,
-      flexibleSpace: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [CustomColor.primary, CustomColor.primary.withValues(alpha: 0.4)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-      ),
-      foregroundColor: Colors.white,
+      backgroundColor: Colors.white,
+      foregroundColor: Colors.black87,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -355,7 +361,6 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 20,
-              color: Colors.white,
             ),
           ),
           if (!isLoading)
@@ -363,45 +368,29 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
               '${fenceList.length} total',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.white.withValues(alpha: 0.9),
+                color: Colors.grey.shade600,
                 fontWeight: FontWeight.normal,
               ),
             ),
         ],
       ),
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios, size: 20),
-        onPressed: () => Navigator.pop(context),
-      ),
-
-      actions: [
-
-        IconButton(
-          icon: const Icon(Icons.refresh),
-          onPressed: getFences,
-          tooltip: 'Refresh',
-        ),
-        const SizedBox(width: 8),
-      ],
     );
   }
 
   Widget _buildSearchBar() {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.only(left: 12,right: 12, top: 8,bottom: 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: TextField(
         controller: _searchController,
-        onChanged: (value) {
-          setState(() => searchQuery = value);
-        },
+        onChanged: (value) => setState(() => searchQuery = value),
         decoration: InputDecoration(
-          hintText: 'Search by geofence or vehicle name...',
-          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-          prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
+          hintText: 'Search geofences or vehicles...',
+          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 22),
           suffixIcon: searchQuery.isNotEmpty
               ? IconButton(
-            icon: Icon(Icons.clear, color: Colors.grey[400]),
+            icon: Icon(Icons.clear, color: Colors.grey.shade400, size: 20),
             onPressed: () {
               _searchController.clear();
               setState(() => searchQuery = '');
@@ -409,12 +398,12 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
           )
               : null,
           filled: true,
-          fillColor: Colors.grey[100],
+          fillColor: Colors.grey.shade100,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         ),
       ),
     );
@@ -423,14 +412,14 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
   Widget _buildFilterChips() {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
             _buildFilterChip('All', 'all', Icons.grid_view),
-            _buildFilterChip('Active', 'active', Icons.check_circle),
-            _buildFilterChip('Inactive', 'inactive', Icons.cancel),
+            _buildFilterChip('Active', 'active', Icons.check_circle_outline),
+            _buildFilterChip('Inactive', 'inactive', Icons.cancel_outlined),
             _buildFilterChip('Circle', 'circle', Icons.radio_button_unchecked),
             _buildFilterChip('Polygon', 'polygon', Icons.pentagon_outlined),
           ],
@@ -453,16 +442,16 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
             Icon(
               icon,
               size: 16,
-              color: isSelected ? Colors.white : Colors.grey[700],
+              color: isSelected ? Colors.white : Colors.grey.shade700,
             ),
             const SizedBox(width: 6),
             Text(label),
             if (count > 0 && !isSelected) ...[
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: CustomColor.primary.withValues(alpha: 0.2),
+                  color: CustomColor.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -477,15 +466,11 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
             ],
           ],
         ),
-        onSelected: (selected) {
-          setState(() {
-            filterType = value;
-          });
-        },
+        onSelected: (selected) => setState(() => filterType = value),
         selectedColor: CustomColor.primary,
-        backgroundColor: Colors.grey[100],
+        backgroundColor: Colors.grey.shade100,
         labelStyle: TextStyle(
-          color: isSelected ? Colors.white : Colors.grey[700],
+          color: isSelected ? Colors.white : Colors.grey.shade700,
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           fontSize: 13,
         ),
@@ -493,7 +478,7 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: BorderSide(
-            color: isSelected ? CustomColor.primary : Colors.grey[300]!,
+            color: isSelected ? CustomColor.primary : Colors.grey.shade300,
           ),
         ),
       ),
@@ -517,75 +502,6 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     }
   }
 
-  // Widget _buildStatsCard() {
-  //   final activeCount = fenceList.where((f) => f.active.toString() == "1").length;
-  //   final circleCount = fenceList.where((f) => f.type == 'circle').length;
-  //   final polygonCount = fenceList.where((f) => f.type == 'polygon').length;
-  //
-  //   return Container(
-  //     margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-  //     padding: const EdgeInsets.all(20),
-  //     decoration: BoxDecoration(
-  //       gradient: LinearGradient(
-  //         colors: [CustomColor.primary, CustomColor.primary.withValues(alpha: 0.8)],
-  //         begin: Alignment.topLeft,
-  //         end: Alignment.bottomRight,
-  //       ),
-  //       borderRadius: BorderRadius.circular(16),
-  //       boxShadow: [
-  //         BoxShadow(
-  //           color: CustomColor.primary.withValues(alpha: 0.3),
-  //           blurRadius: 10,
-  //           offset: const Offset(0, 4),
-  //         ),
-  //       ],
-  //     ),
-  //     child: Row(
-  //       mainAxisAlignment: MainAxisAlignment.spaceAround,
-  //       children: [
-  //         _buildStatItem(Icons.check_circle, 'Active', activeCount.toString()),
-  //         _buildStatDivider(),
-  //         _buildStatItem(Icons.radio_button_unchecked, 'Circle', circleCount.toString()),
-  //         _buildStatDivider(),
-  //         _buildStatItem(Icons.pentagon_outlined, 'Polygon', polygonCount.toString()),
-  //       ],
-  //     ),
-  //   );
-  // }
-
-  Widget _buildStatItem(IconData icon, String label, String value) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white, size: 28),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.white.withValues(alpha: 0.9),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatDivider() {
-    return Container(
-      height: 50,
-      width: 1,
-      color: Colors.white.withValues(alpha: 0.3),
-    );
-  }
-
   Widget _buildEmptyState() {
     return Center(
       child: SingleChildScrollView(
@@ -597,21 +513,20 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
               Container(
                 padding: const EdgeInsets.all(32),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: CustomColor.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   searchQuery.isNotEmpty ? Icons.search_off : Icons.location_off_outlined,
                   size: 80,
-                  color: Colors.grey[400],
+                  color: CustomColor.primary.withValues(alpha: 0.5),
                 ),
               ),
               const SizedBox(height: 24),
               Text(
-                searchQuery.isNotEmpty ? 'No results found' : 'No geofences yet',
-                style: TextStyle(
+                searchQuery.isNotEmpty ? 'No Results Found' : 'No Geofences Yet',
+                style: const TextStyle(
                   fontSize: 20,
-                  color: Colors.grey[800],
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -622,7 +537,7 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                     : 'Create your first geofence to monitor locations',
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey[600],
+                  color: Colors.grey.shade600,
                   height: 1.5,
                 ),
                 textAlign: TextAlign.center,
@@ -667,14 +582,13 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: filteredList.length,
-        itemBuilder: (context, index) {
-          return _buildFenceCard(filteredList[index]);
-        },
+        itemBuilder: (context, index) => _buildCleanFenceCard(filteredList[index]),
       ),
     );
   }
 
-  Widget _buildFenceCard(Geofence fence) {
+  // ✅ CLEAN FENCE CARD DESIGN
+  Widget _buildCleanFenceCard(Geofence fence) {
     final bool isActive = fence.active.toString() == "1";
     final String fenceType = fence.type ?? 'circle';
     final int fenceId = int.tryParse(fence.id.toString()) ?? 0;
@@ -682,19 +596,17 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     final int deviceCount = devices?.length ?? 0;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isActive ? CustomColor.primary.withValues(alpha: 0.3) : Colors.grey[200]!,
-          width: isActive ? 2 : 1,
+          color: isActive ? CustomColor.primary.withValues(alpha: 0.3) : Colors.grey.shade200,
+          width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: isActive
-                ? CustomColor.primary.withValues(alpha: 0.1)
-                : Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -702,282 +614,220 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
       ),
       child: Column(
         children: [
+          // Main Content
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Icon
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: isActive
-                              ? [CustomColor.primary, CustomColor.primary.withValues(alpha: 0.7)]
-                              : [Colors.grey[300]!, Colors.grey[400]!],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: isActive ? [
-                          BoxShadow(
-                            color: CustomColor.primary.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ] : null,
-                      ),
-                      child: Icon(
-                        fenceType == 'polygon'
-                            ? Icons.pentagon_outlined
-                            : Icons.radio_button_unchecked,
-                        color: Colors.white,
-                        size: 30,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
+                // Icon
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: isActive ? CustomColor.primary.withValues(alpha: 0.1) : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    fenceType == 'polygon' ? Icons.pentagon_outlined : Icons.radio_button_unchecked,
+                    color: isActive ? CustomColor.primary : Colors.grey.shade500,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 14),
 
-                    // Info
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Name and Status
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  fence.name ?? 'Unnamed Fence',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 17,
-                                    color: Colors.grey[900],
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                          Expanded(
+                            child: Text(
+                              fence.name ?? 'Unnamed Fence',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
                               ),
-                              const SizedBox(width: 8),
-                              // Status badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isActive ? Colors.green[50] : Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isActive ? Colors.green[200]! : Colors.grey[300]!,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 7,
-                                      height: 7,
-                                      decoration: BoxDecoration(
-                                        color: isActive ? Colors.green : Colors.grey,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      isActive ? 'Active' : 'Inactive',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: isActive ? Colors.green[700] : Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              // Type chip
-                              _buildInfoChip(
-                                icon: fenceType == 'polygon' ? Icons.pentagon_outlined : Icons.radio_button_unchecked,
-                                label: fenceType.toUpperCase(),
-                                color: CustomColor.primary,
-                              ),
-                              // Radius (if circle)
-                              if (fence.radius != null && fence.radius.toString().isNotEmpty && fenceType == 'circle')
-                                _buildInfoChip(
-                                  icon: Icons.straighten,
-                                  label: '${fence.radius}m',
-                                  color: Colors.orange[700]!,
+                          const SizedBox(width: 8),
+                          // Status Badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isActive ? Colors.green.shade50 : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: isActive ? Colors.green : Colors.grey,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
-                              // Device count
-                              _buildInfoChip(
-                                icon: Icons.directions_car,
-                                label: '$deviceCount ${deviceCount == 1 ? "vehicle" : "vehicles"}',
-                                color: deviceCount > 0 ? Colors.blue[700]! : Colors.grey[600]!,
-                              ),
-                            ],
+                                const SizedBox(width: 5),
+                                Text(
+                                  isActive ? 'Active' : 'Inactive',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isActive ? Colors.green.shade700 : Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(height: 10),
 
-                // Show vehicle names if available
-                if (devices != null && devices.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.blue[100]!),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.directions_car, size: 16, color: Colors.blue[700]),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Assigned Vehicles:',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.blue[900],
-                              ),
+                      // Info Chips
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          _buildInfoChip(
+                            icon: fenceType == 'polygon' ? Icons.pentagon_outlined : Icons.radio_button_unchecked,
+                            label: fenceType.toUpperCase(),
+                            color: CustomColor.primary,
+                          ),
+                          if (fence.radius != null && fence.radius.toString().isNotEmpty && fenceType == 'circle')
+                            _buildInfoChip(
+                              icon: Icons.straighten,
+                              label: '${fence.radius}m',
+                              color: Colors.orange.shade700,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            // First 3 devices
-                            ...devices.take(3).map((device) {
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.blue[200]!),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.circle, size: 8, color: Colors.blue[600]),
-                                    const SizedBox(width: 6),
+                          _buildInfoChip(
+                            icon: Icons.directions_car,
+                            label: '$deviceCount ${deviceCount == 1 ? "vehicle" : "vehicles"}',
+                            color: deviceCount > 0 ? Colors.blue.shade700 : Colors.grey.shade600,
+                          ),
+                        ],
+                      ),
+
+                      // Vehicle Names
+                      if (devices != null && devices.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.directions_car, size: 14, color: Colors.blue.shade700),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Vehicles:',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue.shade900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: [
+                                  ...devices.take(3).map((device) => Text(
+                                    '• ${device['name']}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.blue.shade800,
+                                    ),
+                                  )),
+                                  if (devices.length > 3)
                                     Text(
-                                      device['name'] ?? 'Unknown',
+                                      ' +${devices.length - 3} more',
                                       style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         fontWeight: FontWeight.w600,
-                                        color: Colors.blue[800],
+                                        color: Colors.grey.shade700,
                                       ),
                                     ),
-                                  ],
-                                ),
-                              );
-                            }),
-                            // Show "+X more" if there are more than 3 devices
-                            if (devices.length > 3)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[300],
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '+${devices.length - 3} more',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
+                                ],
                               ),
-                          ],
-                        )
-                      ],
-                    ),
-                  ),
-                ],
-
-                // No vehicles assigned message
-                if (deviceCount == 0) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.orange[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange[200]!),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: Colors.orange[700]),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'No vehicles assigned to this geofence',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.orange[900],
-                              fontWeight: FontWeight.w500,
-                            ),
+                            ],
                           ),
                         ),
                       ],
-                    ),
+
+                      // No Vehicles Warning
+                      // if (deviceCount == 0) ...[
+                      //   const SizedBox(height: 10),
+                      //   Container(
+                      //     padding: const EdgeInsets.all(8),
+                      //     decoration: BoxDecoration(
+                      //       color: Colors.orange.shade50,
+                      //       borderRadius: BorderRadius.circular(6),
+                      //     ),
+                      //     child: Row(
+                      //       children: [
+                      //         Icon(Icons.info_outline, size: 14, color: Colors.orange.shade700),
+                      //         const SizedBox(width: 6),
+                      //         Expanded(
+                      //           child: Text(
+                      //             'No vehicles assigned',
+                      //             style: TextStyle(
+                      //               fontSize: 11,
+                      //               color: Colors.orange.shade800,
+                      //             ),
+                      //           ),
+                      //         ),
+                      //       ],
+                      //     ),
+                      //   ),
+                      // ],
+                    ],
                   ),
-                ],
+                ),
               ],
             ),
           ),
 
           // Divider
-          Divider(height: 1, color: Colors.grey[200], thickness: 1),
+          Divider(height: 1, color: Colors.grey.shade200),
 
           // Actions
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               children: [
-                // Toggle
+                // Toggle Switch
                 Expanded(
                   child: Row(
                     children: [
                       Transform.scale(
-                        scale: 0.9,
+                        scale: 0.85,
                         child: Switch(
                           value: isActive,
                           onChanged: (value) => _toggleFenceStatus(fence, value),
-                          activeThumbColor: CustomColor.primary,
+                          activeColor: CustomColor.primary,
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),
                       Text(
                         isActive ? 'Active' : 'Inactive',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Colors.grey[700],
+                          color: Colors.grey.shade700,
                         ),
                       ),
                     ],
@@ -985,9 +835,8 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                 ),
 
                 // Edit Button
-                _buildActionButton(
-                  icon: Icons.edit_outlined,
-                  color: Colors.blue[600]!,
+                IconButton(
+                  icon: Icon(Icons.edit_outlined, color: Colors.blue.shade600, size: 20),
                   onPressed: () async {
                     final result = await Navigator.pushNamed(
                       context,
@@ -1002,9 +851,8 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                 ),
 
                 // Delete Button
-                _buildActionButton(
-                  icon: Icons.delete_outline,
-                  color: Colors.red[600]!,
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.red.shade600, size: 20),
                   onPressed: () => _deleteFence(fence),
                   tooltip: 'Delete',
                 ),
@@ -1016,43 +864,33 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     );
   }
 
-  Widget _buildInfoChip({required IconData icon, required String label, required Color color}) {
+  Widget _buildInfoChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: color,
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required Color color,
-    required VoidCallback onPressed,
-    required String tooltip,
-  }) {
-    return IconButton(
-      icon: Icon(icon, color: color, size: 22),
-      onPressed: onPressed,
-      tooltip: tooltip,
-      splashRadius: 20,
     );
   }
 }

@@ -3,9 +3,11 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -16,7 +18,144 @@ import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
 import 'package:intl/intl.dart';
+import 'dart:math' as math;
 
+// ==================== SMOOTH CAR ANIMATOR FOR PLAYBACK ====================
+class PlaybackCarAnimator {
+  final TickerProvider vsync;
+  final void Function(LatLng position, double bearing) onPositionUpdate;
+  final void Function()? onAnimationComplete;
+
+  Ticker? _ticker;
+
+  LatLng _currentPosition;
+  double _currentBearing;
+
+  LatLng? _targetPosition;
+  double _targetBearing = 0;
+
+  bool _isRunning = false;
+  int _lastTickTime = 0;
+
+  double _speedMultiplier = 1.0;
+  static const double _baseSpeed = 15.0;
+
+  PlaybackCarAnimator({
+    required this.vsync,
+    required this.onPositionUpdate,
+    required LatLng initialPosition,
+    this.onAnimationComplete,
+    double initialBearing = 0,
+  })  : _currentPosition = initialPosition,
+        _currentBearing = initialBearing {
+    _ticker = vsync.createTicker(_onTick);
+  }
+
+  LatLng get currentPosition => _currentPosition;
+  double get currentBearing => _currentBearing;
+  bool get isAnimating => _isRunning;
+
+  void setSpeedMultiplier(double multiplier) {
+    _speedMultiplier = multiplier;
+  }
+
+  void moveTo(LatLng target, double bearing) {
+    _targetPosition = target;
+    _targetBearing = bearing;
+
+    if (!_isRunning) {
+      _isRunning = true;
+      _lastTickTime = DateTime.now().millisecondsSinceEpoch;
+      _ticker?.start();
+    }
+  }
+
+  void _onTick(Duration elapsed) {
+    if (_targetPosition == null) {
+      _stop();
+      return;
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final deltaTime = (now - _lastTickTime) / 1000.0;
+    _lastTickTime = now;
+
+    final dt = deltaTime.clamp(0.001, 0.1);
+    final distance = _calculateDistance(_currentPosition, _targetPosition!);
+
+    if (distance < 0.5) {
+      _currentPosition = _targetPosition!;
+      _currentBearing = _normalizeBearing(_targetBearing);
+      onPositionUpdate(_currentPosition, _currentBearing);
+      _targetPosition = null;
+      _stop();
+      onAnimationComplete?.call();
+      return;
+    }
+
+    final speed = _baseSpeed * _speedMultiplier;
+    final moveDistance = speed * dt;
+    final moveRatio = (moveDistance / distance).clamp(0.0, 1.0);
+
+    final newLat = _currentPosition.latitude +
+        (_targetPosition!.latitude - _currentPosition.latitude) * moveRatio;
+    final newLng = _currentPosition.longitude +
+        (_targetPosition!.longitude - _currentPosition.longitude) * moveRatio;
+
+    _currentPosition = LatLng(newLat, newLng);
+    _currentBearing = _interpolateBearing(_currentBearing, _targetBearing, 150.0 * dt);
+
+    onPositionUpdate(_currentPosition, _currentBearing);
+  }
+
+  double _interpolateBearing(double from, double to, double maxDelta) {
+    from = _normalizeBearing(from);
+    to = _normalizeBearing(to);
+
+    double diff = to - from;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+
+    if (diff.abs() <= maxDelta) {
+      return _normalizeBearing(to);
+    }
+
+    return _normalizeBearing(from + diff.sign * maxDelta);
+  }
+
+  double _normalizeBearing(double bearing) {
+    bearing = bearing % 360;
+    return bearing < 0 ? bearing + 360 : bearing;
+  }
+
+  double _calculateDistance(LatLng a, LatLng b) {
+    const R = 6371000.0;
+    final lat1 = a.latitude * math.pi / 180;
+    final lat2 = b.latitude * math.pi / 180;
+    final dLat = (b.latitude - a.latitude) * math.pi / 180;
+    final dLon = (b.longitude - a.longitude) * math.pi / 180;
+    final x = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(lat1) * math.cos(lat2) * math.sin(dLon / 2) * math.sin(dLon / 2);
+    return R * 2 * math.atan2(math.sqrt(x), math.sqrt(1 - x));
+  }
+
+  void updatePosition(LatLng position, double bearing) {
+    _currentPosition = position;
+    _currentBearing = bearing;
+  }
+
+  void _stop() {
+    _isRunning = false;
+    _ticker?.stop();
+  }
+
+  void dispose() {
+    _ticker?.stop();
+    _ticker?.dispose();
+  }
+}
+
+// ==================== MAIN PLAYBACK SCREEN ====================
 class PlaybackScreen extends StatefulWidget {
   final int? id;
   final String? name;
@@ -67,9 +206,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   final Set<Polyline> _playbackPolyLines = {};
   final Set<Polyline> _animatedPolyLines = {};
 
-  // SMOOTH ANIMATION VARIABLES
-  AnimationController? _animationController;
-  Animation<double>? _animation;
+  // SMOOTH ANIMATION
+  PlaybackCarAnimator? _carAnimator;
+  Timer? _cameraFollowTimer;
 
   int _currentPointIndex = 0;
   bool _isPlaying = false;
@@ -78,16 +217,17 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   // Speed control
   int _speedMultiplier = 1;
   String _speedText = "1x";
-  int _animationDurationMs = 800;
 
   // Cached marker icon
   BitmapDescriptor? _cachedCarIcon;
-  LatLng? _currentCarPosition;
-  double _currentCarBearing = 0.0;
+  bool _isIconLoaded = false;
 
   // Date range
   late DateTime _fromDate;
   late DateTime _toDate;
+
+  // Quick select button state
+  int _selectedQuickButton = -1;
 
   // Marker toggles
   bool _showParkingMarkers = true;
@@ -96,18 +236,11 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   final DraggableScrollableController _sheetController =
   DraggableScrollableController();
 
-  // Camera update throttling
-  DateTime? _lastCameraUpdate;
-  static const int _cameraUpdateIntervalMs = 100;
-
-  // Default position (Dhaka, Bangladesh - change as needed)
   static const LatLng _defaultPosition = LatLng(23.8103, 90.4125);
 
-  // Helper to check initial dates
   bool get _hasInitialDates =>
       widget.initialFromDate != null && widget.initialToDate != null;
 
-  // Get initial camera position safely
   LatLng get _initialCameraPosition {
     if (widget.device != null &&
         widget.device!.lat != null &&
@@ -129,7 +262,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   void initState() {
     super.initState();
 
-    // Initialize dates from widget parameters or defaults
     _fromDate = widget.initialFromDate ??
         DateTime.now().subtract(const Duration(hours: 12));
     _toDate = widget.initialToDate ?? DateTime.now();
@@ -140,8 +272,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       debugPrint('Error loading map style: $error');
     });
 
-    _initAnimation();
-    _cacheCarIcon();
+    // Load car icon first
+    _loadCarIcon();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_hasInitialDates) {
@@ -152,102 +284,107 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     });
   }
 
-  void _initAnimation() {
-    _animationController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: _animationDurationMs),
-    );
-
-    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController!,
-        curve: Curves.linear,
-      ),
-    );
-
-    _animation!.addListener(_onAnimationUpdate);
-    _animationController!.addStatusListener(_onAnimationStatus);
-  }
-
-  Future<void> _cacheCarIcon() async {
+  // ==================== LOAD CAR ICON - FIXED ====================
+  Future<void> _loadCarIcon() async {
     try {
       if (widget.device?.icon?.path != null) {
-        await Util.fetchAndCacheImages(
-          "${UserRepository.getServerUrl() ?? ''}/${widget.device!.icon!.path!}",
-        );
-        _cachedCarIcon = await Util.getMarkerIcon(widget.device!.icon!.path!);
-      } else {
-        // Use default car icon
-        _cachedCarIcon = BitmapDescriptor.defaultMarkerWithHue(
-          BitmapDescriptor.hueAzure,
-        );
+        final path = widget.device!.icon!.path!;
+        _cachedCarIcon = await Util.getMarkerIcon(path);
       }
+
+      _cachedCarIcon ??=
+          BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueAzure);
+
+      _isIconLoaded = true;
+      if (mounted) setState(() {});
+
     } catch (e) {
-      debugPrint('Error caching car icon: $e');
-      _cachedCarIcon = BitmapDescriptor.defaultMarkerWithHue(
-        BitmapDescriptor.hueAzure,
-      );
+      debugPrint('Error loading car icon: $e');
+      _cachedCarIcon =
+          BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueAzure);
+      _isIconLoaded = true;
+      if (mounted) setState(() {});
     }
   }
 
-  void _onAnimationUpdate() {
-    if (!mounted || _isDisposed || !_isPlaying) return;
+
+  void _initCarAnimator() {
     if (playbackRoutePoints.isEmpty) return;
-    if (_currentPointIndex >= playbackRoutePoints.length - 1) return;
 
-    final t = _animation!.value;
-    final startIndex = _currentPointIndex;
-    final endIndex = (_currentPointIndex + _speedMultiplier)
-        .clamp(0, playbackRoutePoints.length - 1);
-
-    final start = playbackRoutePoints[startIndex];
-    final end = playbackRoutePoints[endIndex];
-
-    final lat = _lerp(start.latitude, end.latitude, t);
-    final lng = _lerp(start.longitude, end.longitude, t);
-    final interpolatedPosition = LatLng(lat, lng);
-
-    final bearing = Geolocator.bearingBetween(
-      start.latitude,
-      start.longitude,
-      end.latitude,
-      end.longitude,
+    _carAnimator?.dispose();
+    _carAnimator = PlaybackCarAnimator(
+      vsync: this,
+      onPositionUpdate: _onCarPositionUpdate,
+      onAnimationComplete: _onCarReachedTarget,
+      initialPosition: playbackRoutePoints.first,
+      initialBearing: 0,
     );
 
-    _currentCarPosition = interpolatedPosition;
-    _currentCarBearing = bearing;
+    // IMPORTANT: Add initial car marker
+    _addCarMarker(playbackRoutePoints.first, 0);
+  }
 
-    _updateCarMarker(interpolatedPosition, bearing);
-    _playbackProgress = startIndex + t * (_speedMultiplier);
-    _updateAnimatedPolyline(startIndex);
-    _updateCameraThrottled(interpolatedPosition);
-
+  void _onCarPositionUpdate(LatLng position, double bearing) {
+    if (_isDisposed) return;
+    _addCarMarker(position, bearing);
+    _updateAnimatedPolyline(_currentPointIndex);
     if (mounted) setState(() {});
   }
 
-  void _onAnimationStatus(AnimationStatus status) {
-    if (!mounted || _isDisposed) return;
+  void _onCarReachedTarget() {
+    if (!_isPlaying) return;
 
-    if (status == AnimationStatus.completed) {
-      _currentPointIndex += _speedMultiplier;
+    _currentPointIndex++;
+    _playbackProgress = _currentPointIndex.toDouble();
 
-      if (_currentPointIndex >= playbackRoutePoints.length - 1) {
-        _stopPlayback();
-        _currentPointIndex = 0;
-        _playbackProgress = 0;
-        if (mounted) setState(() {});
-        return;
-      }
-
-      _animationController!.reset();
-      _animationController!.forward();
+    if (_currentPointIndex >= playbackRoutePoints.length - 1) {
+      _stopPlayback();
+      _currentPointIndex = 0;
+      _playbackProgress = 0;
+      if (mounted) setState(() {});
+      return;
     }
+
+    _moveToNextPoint();
   }
 
-  double _lerp(double a, double b, double t) => a + (b - a) * t;
+  void _moveToNextPoint() {
+    if (_currentPointIndex >= playbackRoutePoints.length - 1) return;
+    if (_carAnimator == null) return;
 
-  void _updateCarMarker(LatLng position, double bearing) {
-    if (_cachedCarIcon == null) return;
+    final nextIndex = (_currentPointIndex + 1).clamp(0, playbackRoutePoints.length - 1);
+    final currentPos = playbackRoutePoints[_currentPointIndex];
+    final nextPos = playbackRoutePoints[nextIndex];
+
+    final bearing = Geolocator.bearingBetween(
+      currentPos.latitude,
+      currentPos.longitude,
+      nextPos.latitude,
+      nextPos.longitude,
+    );
+
+    _carAnimator!.setSpeedMultiplier(_speedMultiplier.toDouble());
+    _carAnimator!.moveTo(nextPos, bearing);
+  }
+
+  // ==================== ADD CAR MARKER - FIXED ====================
+  void _addCarMarker(LatLng position, double bearing) {
+    if (!_isIconLoaded || _cachedCarIcon == null) {
+      // Use default marker if icon not loaded yet
+      final marker = Marker(
+        markerId: const MarkerId('playback_car'),
+        position: position,
+        rotation: bearing,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        anchor: const Offset(0.5, 0.5),
+        flat: true,
+        zIndex: 10,
+      );
+      _playbackMarkers[const MarkerId('playback_car')] = marker;
+      return;
+    }
 
     final marker = Marker(
       markerId: const MarkerId('playback_car'),
@@ -282,20 +419,15 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     ));
   }
 
-  void _updateCameraThrottled(LatLng position) {
-    final now = DateTime.now();
-    if (_lastCameraUpdate != null &&
-        now.difference(_lastCameraUpdate!).inMilliseconds <
-            _cameraUpdateIntervalMs) {
-      return;
-    }
-    _lastCameraUpdate = now;
-
-    _safeAnimateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(target: position, zoom: currentZoom),
-      ),
-    );
+  void _startCameraFollowTimer() {
+    _cameraFollowTimer?.cancel();
+    _cameraFollowTimer = Timer.periodic(const Duration(milliseconds: 150), (_) {
+      if (_isPlaying && _carAnimator != null && _mapController != null) {
+        _mapController!.moveCamera(
+          CameraUpdate.newLatLng(_carAnimator!.currentPosition),
+        );
+      }
+    });
   }
 
   Future<void> _safeAnimateCamera(CameraUpdate update) async {
@@ -312,7 +444,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   @override
   void dispose() {
     _isDisposed = true;
-    _animationController?.dispose();
+    _cameraFollowTimer?.cancel();
+    _carAnimator?.dispose();
     _sheetController.dispose();
     _isMapCreated = false;
     _mapController = null;
@@ -336,7 +469,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     return StatefulBuilder(
       builder: (context, setModalState) {
         return Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -345,9 +478,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 40,
+                width: 36,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
+                margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
                   color: Colors.grey[300],
                   borderRadius: BorderRadius.circular(2),
@@ -358,97 +491,124 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                 children: [
                   const Text(
                     'Select Date Range',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   if (playbackRoutePoints.isNotEmpty)
                     IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
+                      icon: const Icon(Icons.close, size: 20),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
               Row(
                 children: [
-                  _quickButton('Today', Colors.blue, () {
-                    setModalState(() {
-                      _fromDate = DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
-                      );
-                      _toDate = DateTime.now();
-                    });
-                  }),
+                  _quickSelectButton(
+                    label: 'Today',
+                    index: 0,
+                    isSelected: _selectedQuickButton == 0,
+                    onTap: () {
+                      setModalState(() {
+                        _selectedQuickButton = 0;
+                        _fromDate = DateTime(
+                          DateTime.now().year,
+                          DateTime.now().month,
+                          DateTime.now().day,
+                        );
+                        _toDate = DateTime.now();
+                      });
+                    },
+                  ),
                   const SizedBox(width: 8),
-                  _quickButton('Yesterday', Colors.orange, () {
-                    setModalState(() {
-                      final yesterday =
-                      DateTime.now().subtract(const Duration(days: 1));
-                      _fromDate = DateTime(
-                          yesterday.year, yesterday.month, yesterday.day);
-                      _toDate = DateTime(yesterday.year, yesterday.month,
-                          yesterday.day, 23, 59, 59);
-                    });
-                  }),
+                  _quickSelectButton(
+                    label: 'Yesterday',
+                    index: 1,
+                    isSelected: _selectedQuickButton == 1,
+                    onTap: () {
+                      setModalState(() {
+                        _selectedQuickButton = 1;
+                        final yesterday =
+                        DateTime.now().subtract(const Duration(days: 1));
+                        _fromDate = DateTime(
+                            yesterday.year, yesterday.month, yesterday.day);
+                        _toDate = DateTime(yesterday.year, yesterday.month,
+                            yesterday.day, 23, 59, 59);
+                      });
+                    },
+                  ),
                   const SizedBox(width: 8),
-                  _quickButton('Week', Colors.green, () {
-                    setModalState(() {
-                      _fromDate =
-                          DateTime.now().subtract(const Duration(days: 7));
-                      _toDate = DateTime.now();
-                    });
-                  }),
+                  _quickSelectButton(
+                    label: 'Week',
+                    index: 2,
+                    isSelected: _selectedQuickButton == 2,
+                    onTap: () {
+                      setModalState(() {
+                        _selectedQuickButton = 2;
+                        _fromDate =
+                            DateTime.now().subtract(const Duration(days: 7));
+                        _toDate = DateTime.now();
+                      });
+                    },
+                  ),
                 ],
               ),
-              const SizedBox(height: 20),
-              _dateField(
-                label: 'From',
-                date: _fromDate,
-                color: Colors.green,
-                onTap: () async {
-                  final result = await _pickDateTime(_fromDate);
-                  if (result != null) {
-                    setModalState(() => _fromDate = result);
-                  }
-                },
-              ),
               const SizedBox(height: 12),
-              _dateField(
-                label: 'To',
-                date: _toDate,
-                color: Colors.red,
-                onTap: () async {
-                  final result = await _pickDateTime(_toDate);
-                  if (result != null) {
-                    setModalState(() => _toDate = result);
-                  }
-                },
+              Row(
+                children: [
+                  Expanded(
+                    child: _compactDateField(
+                      label: 'From',
+                      date: _fromDate,
+                      color: Colors.green,
+                      onTap: () async {
+                        setModalState(() => _selectedQuickButton = -1);
+                        final result = await _pickDateTime(_fromDate);
+                        if (result != null) {
+                          setModalState(() => _fromDate = result);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _compactDateField(
+                      label: 'To',
+                      date: _toDate,
+                      color: Colors.red,
+                      onTap: () async {
+                        setModalState(() => _selectedQuickButton = -1);
+                        final result = await _pickDateTime(_toDate);
+                        if (result != null) {
+                          setModalState(() => _toDate = result);
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 44,
                 child: ElevatedButton.icon(
                   onPressed: () {
                     Navigator.pop(context);
                     _loadPlaybackData();
                   },
-                  icon: const Icon(Icons.play_circle_outline),
-                  label: const Text('Load Playback',
-                      style: TextStyle(fontSize: 16)),
+                  icon: const Icon(Icons.play_circle_outline, size: 20),
+                  label: const Text('Load Playback', style: TextStyle(fontSize: 14)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: CustomColor.primaryColor,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                 ),
               ),
-              SizedBox(height: MediaQuery.of(context).padding.bottom + 10),
+              SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
             ],
           ),
         );
@@ -456,25 +616,32 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     );
   }
 
-  Widget _quickButton(String label, Color color, VoidCallback onTap) {
+  Widget _quickSelectButton({
+    required String label,
+    required int index,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: isSelected ? Colors.green : Colors.grey[100],
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color.withOpacity(0.3)),
+            border: Border.all(
+              color: isSelected ? Colors.grey[500]! : Colors.grey[300]!,
+            ),
           ),
           child: Center(
             child: Text(
               label,
               style: TextStyle(
-                color: color,
+                color: isSelected ? Colors.white : Colors.grey[700],
                 fontWeight: FontWeight.w600,
-                fontSize: 13,
+                fontSize: 12,
               ),
             ),
           ),
@@ -483,7 +650,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     );
   }
 
-  Widget _dateField({
+  Widget _compactDateField({
     required String label,
     required DateTime date,
     required Color color,
@@ -491,48 +658,39 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: Colors.grey[50],
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.grey[300]!),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                label == 'From' ? Icons.play_arrow : Icons.stop,
-                color: color,
-                size: 18,
+            Row(
+              children: [
+                Icon(
+                  label == 'From' ? Icons.play_arrow : Icons.stop,
+                  color: color,
+                  size: 14,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              DateFormat('dd MMM, HH:mm').format(date),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                  ),
-                  Text(
-                    DateFormat('dd MMM yyyy, HH:mm').format(date),
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.edit, size: 18, color: Colors.grey[400]),
           ],
         ),
       ),
@@ -591,6 +749,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     _currentPointIndex = 0;
     _playbackProgress = 0;
     _isPlaying = false;
+    _carAnimator?.dispose();
+    _carAnimator = null;
   }
 
   void _loadPlaybackData() {
@@ -607,37 +767,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     _clearData();
     setState(() => _isPlaybackLoading = true);
 
-    showDialog(
-      barrierDismissible: false,
-      context: context,
-      builder: (context) => Center(
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SpinKitRing(
-                lineWidth: 3.0,
-                color: CustomColor.primaryColor,
-                size: 40.0,
-              ),
-              const SizedBox(height: 16),
-              Text('Loading playback...', style: TextStyle(color: Colors.grey[700])),
-              const SizedBox(height: 8),
-              Text(
-                '${DateFormat('dd MMM').format(_fromDate)} - ${DateFormat('dd MMM').format(_toDate)}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
     APIService.getHistory(
       widget.id.toString(),
       Util.formatReportDate(_fromDate),
@@ -645,12 +774,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       Util.formatReportDate(_toDate),
       Util.formatReportTime(_toDate),
     ).then((value) async {
-      if (!mounted || _isDisposed) {
-        if (Navigator.canPop(context)) Navigator.pop(context);
-        return;
-      }
-
-      Navigator.pop(context);
+      if (!mounted || _isDisposed) return;
 
       if (value != null && value.items != null && value.items!.isNotEmpty) {
         playbackTotalDistance = value.distance_sum ?? "0 km";
@@ -719,7 +843,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             visible: true,
             points: playbackRoutePoints,
             width: 4,
-            color: Colors.orange.withOpacity(0.6),
+            color: Colors.orange.withValues(alpha: 0.6),
             geodesic: true,
             startCap: Cap.roundCap,
             endCap: Cap.roundCap,
@@ -729,8 +853,11 @@ class _PlaybackScreenState extends State<PlaybackScreen>
           _addParkingMarkers();
           _addEventMarkers();
 
-          _currentCarPosition = playbackRoutePoints.first;
-          _updateCarMarker(playbackRoutePoints.first, 0);
+          // IMPORTANT: Initialize car animator and add car marker
+          _initCarAnimator();
+          _startCameraFollowTimer();
+
+          debugPrint('Playback loaded: ${playbackRoutePoints.length} points');
         }
 
         setState(() => _isPlaybackLoading = false);
@@ -756,7 +883,6 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         );
       }
     }).catchError((error) {
-      if (Navigator.canPop(context)) Navigator.pop(context);
       setState(() => _isPlaybackLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -783,8 +909,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       Uint8List? endIcon;
 
       try {
-        startIcon = await Util.getBytesFromAsset('assets/images/map-start-point.png', 40);
-        endIcon = await Util.getBytesFromAsset('assets/images/map-end-point.png', 40);
+        startIcon = await Util.getBytesFromAsset('assets/images/map-start-point.png', 36);
+        endIcon = await Util.getBytesFromAsset('assets/images/map-end-point.png', 36);
       } catch (e) {
         debugPrint('Error loading marker assets: $e');
       }
@@ -837,7 +963,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   }
 
   Future<BitmapDescriptor> _createCircleMarker(String text, Color color) async {
-    const size = 40.0;
+    const size = 36.0;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final center = const Offset(size / 2, size / 2);
@@ -864,7 +990,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         text: text,
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 12,
+          fontSize: 10,
           fontWeight: FontWeight.bold,
         ),
       ),
@@ -957,7 +1083,10 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   // ==================== PLAYBACK CONTROLS ====================
 
   void _togglePlayPause() {
-    if (playbackRoutePoints.isEmpty) return;
+    if (playbackRoutePoints.isEmpty || _carAnimator == null) {
+      debugPrint('Cannot play: no route points or animator');
+      return;
+    }
 
     setState(() => _isPlaying = !_isPlaying);
 
@@ -965,16 +1094,14 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       if (_currentPointIndex >= playbackRoutePoints.length - 1) {
         _currentPointIndex = 0;
         _playbackProgress = 0;
+        _carAnimator!.updatePosition(playbackRoutePoints.first, 0);
+        _addCarMarker(playbackRoutePoints.first, 0);
       }
-      _animationController!.forward();
-    } else {
-      _animationController!.stop();
+      _moveToNextPoint();
     }
   }
 
   void _stopPlayback() {
-    _animationController?.stop();
-    _animationController?.reset();
     setState(() => _isPlaying = false);
   }
 
@@ -983,23 +1110,21 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       if (_speedMultiplier == 1) {
         _speedMultiplier = 2;
         _speedText = "2x";
-        _animationDurationMs = 600;
       } else if (_speedMultiplier == 2) {
         _speedMultiplier = 4;
         _speedText = "4x";
-        _animationDurationMs = 400;
       } else if (_speedMultiplier == 4) {
         _speedMultiplier = 8;
         _speedText = "8x";
-        _animationDurationMs = 200;
       } else {
         _speedMultiplier = 1;
         _speedText = "1x";
-        _animationDurationMs = 800;
       }
     });
 
-    _animationController!.duration = Duration(milliseconds: _animationDurationMs);
+    if (_carAnimator != null) {
+      _carAnimator!.setSpeedMultiplier(_speedMultiplier.toDouble());
+    }
   }
 
   void _seekTo(double value) {
@@ -1009,8 +1134,10 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
     if (index < playbackRoutePoints.length) {
       final pos = playbackRoutePoints[index];
-      _currentCarPosition = pos;
-      _updateCarMarker(pos, _currentCarBearing);
+      if (_carAnimator != null) {
+        _carAnimator!.updatePosition(pos, _carAnimator!.currentBearing);
+      }
+      _addCarMarker(pos, _carAnimator?.currentBearing ?? 0);
       _updateAnimatedPolyline(index);
       _safeAnimateCamera(CameraUpdate.newLatLng(pos));
     }
@@ -1058,21 +1185,21 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.15),
+                color: Colors.orange.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.play_circle, color: Colors.orange, size: 16),
-                  const SizedBox(width: 4),
+                  const Icon(Icons.play_circle, color: Colors.orange, size: 14),
+                  const SizedBox(width: 3),
                   Text(
                     'Playback',
                     style: TextStyle(
                       color: Colors.orange[700],
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1085,7 +1212,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                 widget.name ?? 'Unknown',
                 style: const TextStyle(
                   color: Colors.black87,
-                  fontSize: 16,
+                  fontSize: 15,
                   fontWeight: FontWeight.w500,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -1096,19 +1223,19 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         actions: [
           if (playbackRoutePoints.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: 4),
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     DateFormat('dd MMM').format(_fromDate),
                     style: const TextStyle(
                       color: Colors.blue,
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1116,18 +1243,18 @@ class _PlaybackScreenState extends State<PlaybackScreen>
               ),
             ),
           IconButton(
-            icon: const Icon(Icons.date_range, color: Colors.black54),
+            icon: const Icon(Icons.date_range, color: Colors.black54, size: 22),
             onPressed: _showDatePicker,
           ),
         ],
       ),
       body: Stack(
         children: [
-          // Map - USE SAFE INITIAL POSITION
+          // Map
           GoogleMap(
             mapType: _currentMapType,
             initialCameraPosition: CameraPosition(
-              target: _initialCameraPosition, // FIXED: Using safe getter
+              target: _initialCameraPosition,
               zoom: 14,
             ),
             onMapCreated: (controller) {
@@ -1144,40 +1271,87 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
+            buildingsEnabled: false,
             padding: const EdgeInsets.only(bottom: 120),
           ),
 
-          // Map Controls
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Column(
-              children: [
-                _mapButton(Icons.layers, () {
-                  setState(() {
-                    _currentMapType = _currentMapType == MapType.normal
-                        ? MapType.hybrid
-                        : MapType.normal;
-                  });
-                }),
-                const SizedBox(height: 8),
-                _mapButton(Icons.add, () => _safeAnimateCamera(CameraUpdate.zoomIn())),
-                const SizedBox(height: 4),
-                _mapButton(Icons.remove, () => _safeAnimateCamera(CameraUpdate.zoomOut())),
-              ],
+          if (_isPlaybackLoading)
+            Container(
+              color: Colors.black.withValues(alpha: 0.3),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: CustomColor.primaryColor,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Loading...',
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
+
+          // Map Controls
+          if (!_isPlaybackLoading)
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Column(
+                children: [
+                  _mapButton(Icons.layers, () {
+                    setState(() {
+                      _currentMapType = _currentMapType == MapType.normal
+                          ? MapType.hybrid
+                          : MapType.normal;
+                    });
+                  }),
+                  const SizedBox(height: 6),
+                  _mapButton(Icons.add, () => _safeAnimateCamera(CameraUpdate.zoomIn())),
+                  const SizedBox(height: 4),
+                  _mapButton(Icons.remove, () => _safeAnimateCamera(CameraUpdate.zoomOut())),
+                  if (playbackRoutePoints.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _mapButton(Icons.gps_fixed, () {
+                      if (_carAnimator != null) {
+                        _safeAnimateCamera(
+                          CameraUpdate.newLatLngZoom(_carAnimator!.currentPosition, 16),
+                        );
+                      } else if (playbackRoutePoints.isNotEmpty) {
+                        _safeAnimateCamera(
+                          CameraUpdate.newLatLngZoom(playbackRoutePoints.first, 16),
+                        );
+                      }
+                    }),
+                  ],
+                ],
+              ),
+            ),
 
           // Marker Toggle Buttons
-          if (playbackRoutePoints.isNotEmpty)
+          if (playbackRoutePoints.isNotEmpty && !_isPlaybackLoading)
             Positioned(
-              bottom: 140,
+              bottom: 130,
               left: 10,
               child: _buildMarkerToggles(),
             ),
 
           // Bottom Sheet
-          _buildBottomSheet(),
+          if (!_isPlaybackLoading) _buildBottomSheet(),
         ],
       ),
     );
@@ -1192,8 +1366,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         onTap: onTap,
         customBorder: const CircleBorder(),
         child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, size: 20, color: Colors.grey[700]),
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, size: 18, color: Colors.grey[700]),
         ),
       ),
     );
@@ -1201,17 +1375,17 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
   Widget _buildMarkerToggles() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6)],
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6)],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _toggleChip('P', parkingPoints.length, Colors.blue, _showParkingMarkers, _toggleParkingMarkers),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           _toggleChip('A', eventsPoints.length, Colors.red, _showEventMarkers, _toggleEventMarkers),
         ],
       ),
@@ -1222,24 +1396,24 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: active ? color.withOpacity(0.15) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
+          color: active ? color.withValues(alpha: 0.15) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: active ? color : Colors.grey[300]!),
         ),
         child: Row(
           children: [
             Container(
-              width: 18,
-              height: 18,
+              width: 16,
+              height: 16,
               decoration: BoxDecoration(color: active ? color : Colors.grey, shape: BoxShape.circle),
               child: Center(
-                child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
               ),
             ),
-            const SizedBox(width: 4),
-            Text('$count', style: TextStyle(color: active ? color : Colors.grey, fontSize: 12, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 3),
+            Text('$count', style: TextStyle(color: active ? color : Colors.grey, fontSize: 11, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -1248,16 +1422,16 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
   Widget _buildBottomSheet() {
     return DraggableScrollableSheet(
-      initialChildSize: 0.15,
+      initialChildSize: 0.14,
       minChildSize: 0.08,
-      maxChildSize: 0.6,
+      maxChildSize: 0.55,
       controller: _sheetController,
       builder: (context, scrollController) {
         return Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+            borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8)],
           ),
           child: ListView(
             controller: scrollController,
@@ -1265,18 +1439,18 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             children: [
               Center(
                 child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  width: 36,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  width: 32,
                   height: 4,
                   decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
                 ),
               ),
               _buildControls(),
               if (playbackRoutePoints.isNotEmpty) ...[
-                const Divider(),
+                const Divider(height: 1),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   child: Row(
                     children: [
                       _statChip(Icons.route, playbackTotalDistance, Colors.blue),
@@ -1286,17 +1460,16 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
               ],
               if (bottomRouteList.isNotEmpty)
                 ...bottomRouteList.asMap().entries.map((e) => _buildTimelineItem(e.value, e.key))
               else
                 Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(20),
                   child: Center(
                     child: Text(
-                      _isPlaybackLoading ? 'Loading...' : 'Select date range to load',
-                      style: TextStyle(color: Colors.grey[500]),
+                      'Select date range to load',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 13),
                     ),
                   ),
                 ),
@@ -1312,26 +1485,32 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     final currentValue = _playbackProgress.clamp(0.0, maxValue);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(DateFormat('dd/MM HH:mm').format(_fromDate), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text(
+                DateFormat('dd/MM HH:mm').format(_fromDate),
+                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+              ),
               if (playbackRoutePoints.isNotEmpty && _playbackProgress.toInt() < routeList.length)
                 Text(
                   '${routeList[_playbackProgress.toInt().clamp(0, routeList.length - 1)].speed ?? 0} kph',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-              Text(DateFormat('dd/MM HH:mm').format(_toDate), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              Text(
+                DateFormat('dd/MM HH:mm').format(_toDate),
+                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+              ),
             ],
           ),
           if (playbackRoutePoints.isNotEmpty) ...[
             SliderTheme(
               data: SliderThemeData(
-                trackHeight: 4,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
                 activeTrackColor: CustomColor.primaryColor,
                 inactiveTrackColor: Colors.grey[300],
                 thumbColor: CustomColor.primaryColor,
@@ -1348,40 +1527,59 @@ class _PlaybackScreenState extends State<PlaybackScreen>
               children: [
                 IconButton(
                   onPressed: () => _seekTo((_playbackProgress - 10).clamp(0, maxValue)),
-                  icon: const Icon(Icons.replay_10),
+                  icon: const Icon(Icons.replay_10, size: 22),
                   color: Colors.grey[700],
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 GestureDetector(
                   onTap: _togglePlayPause,
                   child: Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: CustomColor.primaryColor),
-                    child: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 28),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: CustomColor.primaryColor,
+                    ),
+                    child: Icon(
+                      _isPlaying ? Icons.pause : Icons.play_arrow,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 IconButton(
                   onPressed: () => _seekTo((_playbackProgress + 10).clamp(0, maxValue)),
-                  icon: const Icon(Icons.forward_10),
+                  icon: const Icon(Icons.forward_10, size: 22),
                   color: Colors.grey[700],
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 GestureDetector(
                   onTap: _changeSpeed,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: Colors.orange),
                     ),
-                    child: Text(_speedText, style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      _speedText,
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 6),
           ],
         ],
       ),
@@ -1390,18 +1588,21 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
   Widget _statChip(IconData icon, String value, Color color) {
     return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 14),
-          const SizedBox(width: 4),
-          Text(value, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+          Icon(icon, color: color, size: 12),
+          const SizedBox(width: 3),
+          Text(
+            value,
+            style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );
@@ -1427,36 +1628,48 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         }
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: 44,
+              width: 40,
               child: Column(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: isStopped ? Colors.blue : Colors.green),
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isStopped ? Colors.blue : Colors.green,
+                    ),
                     child: Center(
                       child: isStopped
-                          ? Text('P$parkingNum', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))
-                          : const Icon(Icons.directions_car, color: Colors.white, size: 14),
+                          ? Text(
+                        'P$parkingNum',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                          : const Icon(Icons.directions_car, color: Colors.white, size: 12),
                     ),
                   ),
                   if (index < bottomRouteList.length - 1)
-                    Container(width: 2, height: 30, color: Colors.grey[300]),
+                    Container(width: 2, height: 24, color: Colors.grey[300]),
                 ],
               ),
             ),
             Expanded(
               child: Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: (isStopped ? Colors.blue : Colors.green).withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: (isStopped ? Colors.blue : Colors.green).withOpacity(0.2)),
+                  color: (isStopped ? Colors.blue : Colors.green).withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: (isStopped ? Colors.blue : Colors.green).withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1466,15 +1679,22 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                       children: [
                         Text(
                           isStopped ? 'P$parkingNum - Stopped' : 'Moving',
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: isStopped ? Colors.blue : Colors.green),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                            color: isStopped ? Colors.blue : Colors.green,
+                          ),
                         ),
-                        Text(Util.formatOnlyTime(trip.show ?? ""), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                        Text(
+                          Util.formatOnlyTime(trip.show ?? ""),
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
+                      spacing: 6,
+                      runSpacing: 3,
                       children: [
                         _infoChip(Icons.timer, trip.time ?? "0"),
                         if (!isStopped) ...[
@@ -1497,9 +1717,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 11, color: Colors.grey[600]),
+        Icon(icon, size: 10, color: Colors.grey[600]),
         const SizedBox(width: 2),
-        Text(value, style: TextStyle(fontSize: 10, color: Colors.grey[700])),
+        Text(value, style: TextStyle(fontSize: 9, color: Colors.grey[700])),
       ],
     );
   }

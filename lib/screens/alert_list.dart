@@ -104,7 +104,6 @@ class _AlertListPageState extends State<AlertListPage> {
 
       if (userJson == null || userJson.isEmpty) {
         debugPrint("User data not found in SharedPreferences");
-        // Continue to load alerts even without user data
         await getAlerts();
         return;
       }
@@ -127,38 +126,27 @@ class _AlertListPageState extends State<AlertListPage> {
     } catch (e, stackTrace) {
       debugPrint("Error getting user: $e");
       debugPrint("Stack trace: $stackTrace");
-      // Still try to load alerts
       await getAlerts();
     }
   }
 
-  /// Get current logged-in user name
-  /// Get current logged-in user name
   String _getCurrentUserName() {
     if (user == null) return 'Unknown User';
-
-    // User model only has email, so use that
     if (user!.email != null && user!.email!.isNotEmpty) {
       return user!.email!;
     }
-
     return 'Unknown User';
   }
 
-  /// Get user name for a specific alert
   String _getAlertUserName(Alert alert) {
-    // Check if alert's user_id matches current user
     if (user != null && alert.user_id != null) {
       if (alert.user_id.toString() == user!.toString()) {
         return _getCurrentUserName();
       }
     }
-
-    // If different user, show user ID
     if (alert.user_id != null) {
       return 'User #${alert.user_id}';
     }
-
     return 'Unknown User';
   }
 
@@ -296,30 +284,109 @@ class _AlertListPageState extends State<AlertListPage> {
     });
   }
 
+  // ✅ VALIDATION POPUP
+  void _showValidationError(List<String> errors) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.warning_amber_rounded, color: Colors.orange.shade400, size: 28),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Required Fields',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Please complete the following:',
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            ...errors.map((error) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 6),
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade400,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      error,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            )),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF5C8ACF),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void addAlert() {
-    // Validation
+    // ✅ Validation with popup
+    List<String> errors = [];
+
     if (_nameCtl.text.trim().isEmpty) {
-      _showSnackBar('Please enter alert name', isError: true);
-      return;
+      errors.add('Alert Name is required');
     }
+
     if (selectedType.isEmpty) {
-      _showSnackBar('Please select alert type', isError: true);
-      return;
+      errors.add('Alert Type must be selected');
     }
+
     if (selectedDevices.isEmpty) {
-      _showSnackBar('Please select at least one device', isError: true);
-      return;
+      errors.add('At least one Device must be selected');
     }
 
-    // Check if value is required
     if (_needsValueInput() && _typeCtl.text.trim().isEmpty) {
-      _showSnackBar('Please enter a value for this alert type', isError: true);
-      return;
+      errors.add('${_getValueLabel()} is required for this alert type');
     }
 
-    // Check if geofence is required
     if (_isGeofenceType() && selectedFenceList.isEmpty) {
-      _showSnackBar('Please select at least one geofence', isError: true);
+      errors.add('At least one Geofence must be selected for this alert type');
+    }
+
+    // Show validation popup if there are errors
+    if (errors.isNotEmpty) {
+      _showValidationError(errors);
       return;
     }
 
@@ -359,18 +426,15 @@ class _AlertListPageState extends State<AlertListPage> {
     String type = selectedType;
     String devices = selectedDevices.join("&");
 
-    // Types that don't need additional parameters
     if (_isSimpleType()) {
       return "&name=$name&type=$type&$devices";
     }
 
-    // Geofence types
     if (_isGeofenceType()) {
       String geofences = selectedFenceList.join("&");
       return "&name=$name&type=$type&zone=0&$geofences&$devices";
     }
 
-    // Types that need a value parameter
     String value = Uri.encodeComponent(_typeCtl.text.trim());
     String paramName = _getParameterName();
     return "&name=$name&type=$type&$paramName=$value&$devices";
@@ -456,7 +520,6 @@ class _AlertListPageState extends State<AlertListPage> {
     );
   }
 
-  /// Format date string
   String _formatDate(String? dateString) {
     if (dateString == null || dateString.isEmpty) return 'N/A';
 
@@ -467,53 +530,6 @@ class _AlertListPageState extends State<AlertListPage> {
       return dateString;
     }
   }
-
-  // /// Get device names for alert
-  // String _getDeviceNames(Alert alert) {
-  //   if (alert.devices == null || alert.devices!.isEmpty) {
-  //     return 'No devices';
-  //   }
-  //
-  //   List<String> deviceNames = [];
-  //   for (var device in alert.devices!) {
-  //     if (device is Map) {
-  //       deviceNames.add(device['name'] ?? device['id'].toString());
-  //     } else {
-  //       // Find device name from devicesList
-  //       var found = devicesList.firstWhereOrNull((d) => d.id.toString() == device.toString());
-  //       deviceNames.add(found?.name ?? 'Device #$device');
-  //     }
-  //   }
-  //
-  //   if (deviceNames.length > 3) {
-  //     return '${deviceNames.take(3).join(", ")} +${deviceNames.length - 3} more';
-  //   }
-  //
-  //   return deviceNames.join(", ");
-  // }
-  //
-  // /// Get geofence names for alert
-  // String _getGeofenceNames(Alert alert) {
-  //   if (alert.geofences == null || alert.geofences!.isEmpty) {
-  //     return 'No geofences';
-  //   }
-  //
-  //   List<String> geofenceNames = [];
-  //   for (var fence in alert.geofences!) {
-  //     if (fence is Map) {
-  //       geofenceNames.add(fence['name'] ?? fence['id'].toString());
-  //     } else {
-  //       var found = fenceList.firstWhereOrNull((f) => f.id.toString() == fence.toString());
-  //       geofenceNames.add(found?.name ?? 'Geofence #$fence');
-  //     }
-  //   }
-  //
-  //   if (geofenceNames.length > 2) {
-  //     return '${geofenceNames.take(2).join(", ")} +${geofenceNames.length - 2} more';
-  //   }
-  //
-  //   return geofenceNames.join(", ");
-  // }
 
   @override
   void dispose() {
@@ -541,40 +557,37 @@ class _AlertListPageState extends State<AlertListPage> {
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('alerts'.tr, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text('alerts'.tr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
           Text(
-            '${alertList.length} alerts configured',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            '${alertList.length} alerts',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.normal),
           ),
         ],
       ),
       actions: [
-        // Show current user name
         if (user != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.person, size: 16, color: Colors.blue.shade700),
-                    const SizedBox(width: 4),
-                    Text(
-                      _getCurrentUserName(),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.person, size: 14, color: Colors.blue.shade700),
+                  const SizedBox(width: 4),
+                  Text(
+                    _getCurrentUserName(),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.blue.shade700,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -610,7 +623,7 @@ class _AlertListPageState extends State<AlertListPage> {
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: alertList.length,
-        itemBuilder: (context, index) => _buildAlertCard(alertList[index]),
+        itemBuilder: (context, index) => _buildCleanAlertCard(alertList[index]),
       ),
     );
   }
@@ -642,264 +655,173 @@ class _AlertListPageState extends State<AlertListPage> {
             'Tap the + button to create your first alert',
             style: TextStyle(color: Colors.grey.shade600),
           ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => _showAddAlertBottomSheet(),
-            icon: const Icon(Icons.add),
-            label: const Text('Create Alert'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF5C8ACF),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildAlertCard(Alert alert) {
+  // ✅ CLEAN ALERT CARD DESIGN
+  Widget _buildCleanAlertCard(Alert alert) {
     final bool isActive = alert.active.toString() == "1";
     final IconData typeIcon = _getAlertTypeIcon(alert.type ?? "");
-    final String userName = _getAlertUserName(alert);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive ? Colors.green.shade100 : Colors.grey.shade200,
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           onTap: () => _showAlertDetails(alert),
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                // Main Row
-                Row(
-                  children: [
-                    // Icon Container
-                    _buildIconContainer(typeIcon, isActive),
-                    const SizedBox(width: 16),
+                // Icon
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isActive ? Colors.green.shade50 : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    typeIcon,
+                    color: isActive ? Colors.green.shade600 : Colors.grey.shade500,
+                    size: 24,
+                  ),
+                ),
 
-                    // Content
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(width: 14),
+
+                // Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Alert Name
+                      Text(
+                        alert.name ?? 'Unnamed Alert',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+
+                      // Type and Status
+                      Row(
                         children: [
-                          // Alert Name
-                          Text(
-                            alert.name ?? 'Unnamed Alert',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                          // Type Badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(4),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            child: Text(
+                              _formatAlertType(alert.type ?? ""),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.blue.shade700,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(width: 6),
 
-                          // Badges
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            children: [
-                              _buildTypeBadge(alert.type ?? ""),
-                              _buildStatusBadge(isActive),
-                            ],
+                          // Status Indicator
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: isActive ? Colors.green : Colors.grey,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isActive ? 'Active' : 'Inactive',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
                         ],
                       ),
-                    ),
 
-                    // Actions
-                    _buildActions(alert, isActive),
-                  ],
-                ),
+                      const SizedBox(height: 6),
 
-                const SizedBox(height: 12),
-                Divider(height: 1, color: Colors.grey.shade200),
-                const SizedBox(height: 12),
-
-                // Info Row
-                Row(
-                  children: [
-                    // User Info
-                    Expanded(
-                      child: _buildInfoChip(
-                        icon: Icons.person_outline,
-                        label: userName,
-                        color: Colors.purple,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Device Count
-                    _buildInfoChip(
-                      icon: Icons.directions_car_outlined,
-                      label: '${alert.devices?.length ?? 0} devices',
-                      color: Colors.blue,
-                    ),
-                  ],
-                ),
-
-                // Created Date
-                if (alert.created_at != null) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.access_time, size: 14, color: Colors.grey.shade500),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Created: ${_formatDate(alert.created_at)}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade500,
-                        ),
+                      // Devices Count
+                      Row(
+                        children: [
+                          Icon(Icons.directions_car, size: 12, color: Colors.grey.shade500),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${alert.devices?.length ?? 0} devices',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
+
+                const SizedBox(width: 8),
+
+                // Actions
+                Column(
+                  children: [
+                    // Switch
+                    Transform.scale(
+                      scale: 0.85,
+                      child: Switch(
+                        value: isActive,
+                        onChanged: (value) {
+                          value ? activateAlert(alert) : removeAlert(alert);
+                        },
+                        activeColor: Colors.green.shade600,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+
+                    // Delete Button
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      onPressed: () => deleteAlert(alert.id!),
+                      icon: Icon(
+                        Icons.delete_outline,
+                        color: Colors.red.shade400,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildInfoChip({
-    required IconData icon,
-    required String label,
-    required MaterialColor color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.shade50,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color.shade700),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: color.shade700,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIconContainer(IconData icon, bool isActive) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isActive ? Colors.blue.shade50 : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Icon(
-        icon,
-        color: isActive ? const Color(0xFF5C8ACF) : Colors.grey,
-        size: 24,
-      ),
-    );
-  }
-
-  Widget _buildTypeBadge(String type) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        _formatAlertType(type),
-        style: TextStyle(
-          fontSize: 11,
-          color: Colors.grey.shade700,
-          fontWeight: FontWeight.w500,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(bool isActive) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: isActive ? Colors.green.shade50 : Colors.red.shade50,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: isActive ? Colors.green : Colors.red,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            isActive ? 'Active' : 'Inactive',
-            style: TextStyle(
-              fontSize: 11,
-              color: isActive ? Colors.green.shade700 : Colors.red.shade700,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActions(Alert alert, bool isActive) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Transform.scale(
-          scale: 0.8,
-          child: Switch(
-            value: isActive,
-            onChanged: (value) {
-              value ? activateAlert(alert) : removeAlert(alert);
-            },
-            activeThumbColor: const Color(0xFF5C8ACF),
-          ),
-        ),
-        IconButton(
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          onPressed: () => deleteAlert(alert.id!),
-          icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 22),
-        ),
-      ],
     );
   }
 
@@ -1031,14 +953,6 @@ class _AlertListPageState extends State<AlertListPage> {
                         _buildDetailItem(Icons.calendar_today_outlined, 'Created At', _formatDate(alert.created_at)),
                         _buildDetailItem(Icons.update_outlined, 'Updated At', _formatDate(alert.updated_at)),
                       ]),
-
-                      // Notifications Section (if available)
-                      if (alert.notifications != null && alert.notifications!.isNotEmpty) ...[
-                        const SizedBox(height: 20),
-                        _buildSectionHeader('Notifications'),
-                        const SizedBox(height: 12),
-                        _buildNotificationsCard(alert),
-                      ],
 
                       const SizedBox(height: 30),
 
@@ -1265,49 +1179,6 @@ class _AlertListPageState extends State<AlertListPage> {
     );
   }
 
-  Widget _buildNotificationsCard(Alert alert) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        children: alert.notifications!.entries.map((entry) {
-          IconData icon = Icons.notifications;
-          if (entry.key == 'email') icon = Icons.email;
-          if (entry.key == 'push') icon = Icons.phone_android;
-          if (entry.key == 'sms') icon = Icons.sms;
-
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Icon(icon, size: 18, color: Colors.grey.shade600),
-                const SizedBox(width: 12),
-                Text(
-                  entry.key.toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                const Spacer(),
-                Icon(
-                  entry.value == true || entry.value == "1" || entry.value == 1
-                      ? Icons.check_circle
-                      : Icons.cancel,
-                  color: entry.value == true || entry.value == "1" || entry.value == 1
-                      ? Colors.green
-                      : Colors.red,
-                  size: 20,
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
   Widget _buildEmptyCard(String message, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -1337,32 +1208,37 @@ class _AlertListPageState extends State<AlertListPage> {
         normalizedType == "geofence_inout";
   }
 
-  // Widget _buildDetailRow(String label, String value) {
-  //   return Padding(
-  //     padding: const EdgeInsets.symmetric(vertical: 4),
-  //     child: Row(
-  //       crossAxisAlignment: CrossAxisAlignment.start,
-  //       children: [
-  //         SizedBox(
-  //           width: 80,
-  //           child: Text(
-  //             '$label:',
-  //             style: TextStyle(
-  //               fontWeight: FontWeight.w600,
-  //               color: Colors.grey.shade700,
-  //             ),
-  //           ),
-  //         ),
-  //         Expanded(
-  //           child: Text(
-  //             value,
-  //             style: const TextStyle(fontSize: 14),
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
+  Widget _buildStatusBadge(bool isActive) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.green.shade50 : Colors.red.shade50,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: isActive ? Colors.green : Colors.red,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            isActive ? 'Active' : 'Inactive',
+            style: TextStyle(
+              fontSize: 11,
+              color: isActive ? Colors.green.shade700 : Colors.red.shade700,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   IconData _getAlertTypeIcon(String type) {
     String normalizedType = type.toLowerCase().replaceAll(' ', '_');
@@ -1558,7 +1434,7 @@ class _AlertListPageState extends State<AlertListPage> {
                       color: Colors.white,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
+                          color: Colors.black.withOpacity(0.05),
                           blurRadius: 10,
                           offset: const Offset(0, -4),
                         ),

@@ -551,4 +551,65 @@ class Util {
     final Uint8List bytes = await imageFile.readAsBytes();
     return BitmapDescriptor.bytes(bytes);
   }
+
+  // static Future<BitmapDescriptor> getMarkerVehicleIcon(String imagePath, {required int width,required int height}) async {
+  //   final String imageUrl = UserRepository.getServerUrl()! + "/" + imagePath;
+  //   final File imageFile = await DefaultCacheManager().getSingleFile(imageUrl);
+  //   final Uint8List bytes = await imageFile.readAsBytes();
+  //   return BitmapDescriptor.bytes(bytes);
+  // }
+
+  // Add to util.dart
+
+  /// Get a resized marker icon for smooth performance
+  // static Future<BitmapDescriptor> getScaledMarkerIcon(
+  //     String imagePath, {
+  //       int size =40, // Smaller size for better performance
+  //     }) async {
+  //   try {
+  //     final String imageUrl = "${UserRepository.getServerUrl()}/$imagePath";
+  //     final File imageFile = await DefaultCacheManager().getSingleFile(imageUrl);
+  //     final Uint8List originalBytes = await imageFile.readAsBytes();
+  //
+  //     // Decode and resize the image
+  //     final ui.Codec codec = await ui.instantiateImageCodec(
+  //       originalBytes,
+  //       targetWidth: 20,
+  //       targetHeight: 38,
+  //     );
+  //     final ui.FrameInfo frameInfo = await codec.getNextFrame();
+  //     final ui.Image resizedImage = frameInfo.image;
+  //
+  //     // Convert to bytes
+  //     final ByteData? byteData = await resizedImage.toByteData(
+  //       format: ui.ImageByteFormat.png,
+  //     );
+  //
+  //     if (byteData == null) {
+  //       return BitmapDescriptor.defaultMarker;
+  //     }
+  //
+  //     return BitmapDescriptor.bytes(byteData.buffer.asUint8List());
+  //   } catch (e) {
+  //     debugPrint('Error loading marker icon: $e');
+  //     return BitmapDescriptor.defaultMarker;
+  //   }
+  // }
+  //
+  // /// Pre-cache marker icon for instant access
+  // static BitmapDescriptor? _cachedMarkerIcon;
+  // static String? _cachedMarkerPath;
+  //
+  // static Future<BitmapDescriptor> getCachedMarkerIcon(
+  //     String imagePath, {
+  //       int size = 48,
+  //     }) async {
+  //   if (_cachedMarkerIcon != null && _cachedMarkerPath == imagePath) {
+  //     return _cachedMarkerIcon!;
+  //   }
+  //
+  //   _cachedMarkerIcon = await getScaledMarkerIcon(imagePath, size: size);
+  //   _cachedMarkerPath = imagePath;
+  //   return _cachedMarkerIcon!;
+  // }
 }

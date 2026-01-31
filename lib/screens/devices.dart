@@ -740,13 +740,21 @@ class _DevicePageState extends State<DevicePage> {
                           color: statusColor.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Image.asset(
-                          "assets/images/car-icon.png",
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => Icon(
-                            Icons.directions_car,
-                            color: statusColor,
-                            size: 28,
+                        // child: Image.asset(
+                        //   "assets/images/car-icon.png",
+                        //   fit: BoxFit.contain,
+                        //   errorBuilder: (_, __, ___) => Icon(
+                        //     Icons.directions_car,
+                        //     color: statusColor,
+                        //     size: 28,
+                        //   ),
+                        // ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(2.0),
+                          child: Image(
+                            image: CachedNetworkImageProvider(
+                              "${UserRepository.getServerUrl()}/${device.icon!.path!}",
+                            ),
                           ),
                         ),
                       ),
@@ -990,7 +998,7 @@ class _DevicePageState extends State<DevicePage> {
     );
   }
 
-// ============ ENHANCED DETAILS BOTTOM SHEET ============
+
 
   void _showDetailsSheet(DeviceItem device) {
     final status = _getDeviceStatus(device);
@@ -2579,15 +2587,14 @@ class _DevicePageState extends State<DevicePage> {
                   },
                 ),
                 _buildOptionItem(
-                  Icons.settings_outlined,
-                  'Settings',
+                  Icons.car_crash_outlined,
+                  'Edit Device',
                   _greyColor,
                       () {
                     Navigator.pop(context);
                     _getEditDeviceData(device.id);
                   },
                 ),
-                const SizedBox(width: 70),
                 const SizedBox(width: 70),
               ],
             ),
@@ -2763,71 +2770,188 @@ class _DevicePageState extends State<DevicePage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('reportDeviceName'.tr),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
             children: [
-              TextField(
-                controller: _name,
-                decoration: InputDecoration(
-                  labelText: 'sharedName'.tr,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
+              Icon(Icons.edit, color: _primaryBlue, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'reportDeviceName'.tr,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
-              const Gap(16),
-              if (sd?.device_icons != null && sd!.device_icons!.isNotEmpty) ...[
-                Text("selectIcon".tr,
-                    style: const TextStyle(fontWeight: FontWeight.w500)),
-                const Gap(8),
-                SizedBox(
-                  height: 70,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: sd!.device_icons!.length,
-                    itemBuilder: (context, index) {
-                      final icon = sd!.device_icons![index];
-                      final isSelected = selectedIconId == icon["id"];
-                      return GestureDetector(
-                        onTap: () =>
-                            setState(() => selectedIconId = icon["id"]),
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color:
-                              isSelected ? _primaryBlue : Colors.grey[300]!,
-                              width: isSelected ? 2 : 1,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: CachedNetworkImage(
-                            imageUrl:
-                            "${APIService.serverURL ?? ''}/${icon["path"]}",
-                            width: 50,
-                            height: 60,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      );
-                    },
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Name Input Field
+                TextField(
+                  controller: _name,
+                  decoration: InputDecoration(
+                    labelText: 'sharedName'.tr,
+                    prefixIcon: const Icon(Icons.label_outline),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: _primaryBlue, width: 2),
+                    ),
                   ),
                 ),
+
+                // Icon Selection Section
+                if (sd?.device_icons != null && sd!.device_icons!.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Icon(Icons.image_outlined,
+                          color: _primaryBlue, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        "selectIcon".tr,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 3-Column Grid Layout
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 280),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[200]!),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.all(12),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 4,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 0.95,
+                      ),
+                      itemCount: sd!.device_icons!.length,
+                      itemBuilder: (context, index) {
+                        final icon = sd!.device_icons![index];
+                        final isSelected = selectedIconId == icon["id"];
+
+                        return GestureDetector(
+                          onTap: () => setState(() => selectedIconId = icon["id"]),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? _primaryBlue.withOpacity(0.08)
+                                  : Colors.grey[50],
+                              border: Border.all(
+                                color: isSelected
+                                    ? _primaryBlue
+                                    : Colors.grey[300]!,
+                                width: isSelected ? 2.5 : 1,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: isSelected
+                                  ? [
+                                BoxShadow(
+                                  color: _primaryBlue.withOpacity(0.2),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                                  : [],
+                            ),
+                            child: Stack(
+                              children: [
+                                Center(
+                                  child: CachedNetworkImage(
+                                    imageUrl: "${APIService.serverURL ?? ''}/${icon["path"]}",
+                                    width: 55,
+                                    height: 55,
+                                    fit: BoxFit.contain,
+                                    placeholder: (context, url) => const SizedBox(
+                                      width: 30,
+                                      height: 30,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                    errorWidget: (context, url, error) =>
+                                        Icon(Icons.image_not_supported,
+                                            color: Colors.grey[400]),
+                                  ),
+                                ),
+                                if (isSelected)
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                        color: _primaryBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 14,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child:
-              Text('cancel'.tr, style: const TextStyle(color: Colors.red)),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.close, size: 18),
+                  const SizedBox(width: 4),
+                  Text('cancel'.tr),
+                ],
+              ),
             ),
             ElevatedButton(
               onPressed: () => _updateDevice(device["id"]),
-              child: Text('ok'.tr),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 2,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.check, size: 18),
+                  const SizedBox(width: 4),
+                  Text('ok'.tr, style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
             ),
           ],
         ),
@@ -2848,6 +2972,41 @@ class _DevicePageState extends State<DevicePage> {
       showProgress(false, context);
       Navigator.pop(context);
       _loadDevices();
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 8),
+              Text('deviceUpdatedSuccessfully'.tr),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }).catchError((error) {
+      showProgress(false, context);
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 8),
+              Text('updateFailed'.tr),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
     });
   }
 }

@@ -5,6 +5,84 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/services/model/event.dart';
 
+// MUST BE TOP-LEVEL FUNCTION (outside any class)
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await _showBackgroundNotification(message);
+}
+
+// Helper function to show notification in background
+Future<void> _showBackgroundNotification(RemoteMessage message) async {
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  FlutterLocalNotificationsPlugin();
+
+  const AndroidInitializationSettings initializationSettingsAndroid =
+  AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const DarwinInitializationSettings initializationSettingsIOS =
+  DarwinInitializationSettings(
+    requestAlertPermission: false,
+    requestBadgePermission: false,
+    requestSoundPermission: false,
+  );
+
+  const InitializationSettings initializationSettings = InitializationSettings(
+    android: initializationSettingsAndroid,
+    iOS: initializationSettingsIOS,
+  );
+
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'high_importance_channel',
+    'High Importance Notifications',
+    description: 'This channel is used for important notifications.',
+    importance: Importance.max,
+  );
+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
+
+  final notification = message.notification;
+  final data = message.data;
+
+  String title = notification?.title ?? data['title'] ?? 'New Notification';
+  String body = notification?.body ?? data['body'] ?? 'You have a new message';
+
+  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    'high_importance_channel',
+    'High Importance Notifications',
+    channelDescription: 'This channel is used for important notifications.',
+    importance: Importance.max,
+    priority: Priority.high,
+    showWhen: true,
+    icon: '@mipmap/ic_launcher',
+  );
+
+  const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+    presentAlert: true,
+    presentBadge: true,
+    presentSound: true,
+  );
+
+  const NotificationDetails notificationDetails = NotificationDetails(
+    android: androidDetails,
+    iOS: iosDetails,
+  );
+
+  await flutterLocalNotificationsPlugin.show(
+    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    title,
+    body,
+    notificationDetails,
+    payload: message.data.toString(),
+  );
+}
+
+// ============ MAIN NOTIFICATION SERVICE CLASS ============
+
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -21,21 +99,65 @@ class NotificationService {
     _localNotifications = plugin;
 
     try {
+      await _requestPermissions();
       await _createNotificationChannels();
       _setupMessageHandlers();
+      await _fcm.getToken();
       _isInitialized = true;
-    } catch (e) {
-      print("Error initializing notification service: $e");
+    } catch (_) {}
+  }
+
+  Future<void> _requestPermissions() async {
+    await _fcm.requestPermission(
+      alert: true,
+      announcement: false,
+      badge: true,
+      carPlay: false,
+      criticalAlert: true,
+      provisional: false,
+      sound: true,
+    );
+
+    if (Platform.isAndroid) {
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+      if (androidPlugin != null) {
+        await androidPlugin.requestNotificationsPermission();
+      }
+    }
+
+    if (Platform.isIOS) {
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+        critical: true,
+      );
     }
   }
 
-  // Create Android notification channels - USE DEFAULT SOUND FIRST
   Future<void> _createNotificationChannels() async {
     if (!Platform.isAndroid) return;
 
-    // Alert channel - using default sound (safer)
+    const AndroidNotificationChannel highImportanceChannel =
+    AndroidNotificationChannel(
+      'high_importance_channel',
+      'High Importance Notifications',
+      description: 'This channel is used for important notifications.',
+      importance: Importance.max,
+      enableVibration: true,
+      playSound: true,
+      enableLights: true,
+      ledColor: Color(0xFFFF0000),
+    );
+
     const AndroidNotificationChannel alertChannel = AndroidNotificationChannel(
-      'alert_channel_v1', // Use versioned channel ID
+      'alert_channel_v1',
       'Alert Notifications',
       description: 'Critical alerts and SOS notifications',
       importance: Importance.max,
@@ -43,13 +165,10 @@ class NotificationService {
       playSound: true,
       enableLights: true,
       ledColor: Color(0xFFFF0000),
-      // Remove custom sound to test first, or use:
-      // sound: RawResourceAndroidNotificationSound('alert_sound'),
     );
 
-    // Event channel
     const AndroidNotificationChannel eventChannel = AndroidNotificationChannel(
-      'event_channel_v1', // Use versioned channel ID
+      'event_channel_v1',
       'Event Notifications',
       description: 'GPS tracking event notifications',
       importance: Importance.high,
@@ -57,9 +176,8 @@ class NotificationService {
       playSound: true,
     );
 
-    // SOS channel
     const AndroidNotificationChannel sosChannel = AndroidNotificationChannel(
-      'sos_channel_v1', // Use versioned channel ID
+      'sos_channel_v1',
       'SOS Notifications',
       description: 'Emergency SOS alerts',
       importance: Importance.max,
@@ -74,6 +192,7 @@ class NotificationService {
         AndroidFlutterLocalNotificationsPlugin>();
 
     if (androidPlugin != null) {
+      await androidPlugin.createNotificationChannel(highImportanceChannel);
       await androidPlugin.createNotificationChannel(alertChannel);
       await androidPlugin.createNotificationChannel(eventChannel);
       await androidPlugin.createNotificationChannel(sosChannel);
@@ -81,18 +200,77 @@ class NotificationService {
   }
 
   void _setupMessageHandlers() {
+    // Handle messages when app is in FOREGROUND
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      RemoteNotification? notification = message.notification;
+
+      if (notification != null) {
+        _showForegroundNotification(
+          title: notification.title ?? 'New Notification',
+          body: notification.body ?? '',
+          data: message.data,
+        );
+      } else if (message.data.isNotEmpty) {
+        _showForegroundNotification(
+          title: message.data['title'] ?? 'New Notification',
+          body: message.data['body'] ?? '',
+          data: message.data,
+        );
+      }
+    });
+
+    // Handle notification tap when app was TERMINATED
     FirebaseMessaging.instance.getInitialMessage().then((message) {
       if (message != null) {
         _handleNotificationOpen(message.data);
       }
     });
 
+    // Handle notification tap when app is in BACKGROUND
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       _handleNotificationOpen(message.data);
     });
   }
 
-  // Show local notification - WITH ERROR HANDLING
+  Future<void> _showForegroundNotification({
+    required String title,
+    required String body,
+    Map<String, dynamic>? data,
+  }) async {
+    const AndroidNotificationDetails androidDetails =
+    AndroidNotificationDetails(
+      'high_importance_channel',
+      'High Importance Notifications',
+      channelDescription: 'This channel is used for important notifications.',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: true,
+      enableVibration: true,
+      playSound: true,
+      icon: '@mipmap/ic_launcher',
+      styleInformation: BigTextStyleInformation(''),
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _localNotifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      notificationDetails,
+      payload: data?.toString(),
+    );
+  }
+
   Future<void> showLocalNotification({
     int? id,
     required String title,
@@ -112,9 +290,7 @@ class NotificationService {
         showWhen: true,
         enableVibration: true,
         playSound: true,
-        // Use default sound (remove custom sound for now)
-        // sound: RawResourceAndroidNotificationSound('notification_sound'),
-        icon: '@mipmap/ic_launcher', // Use default launcher icon
+        icon: '@mipmap/ic_launcher',
         styleInformation: BigTextStyleInformation(
           body,
           contentTitle: title,
@@ -140,14 +316,11 @@ class NotificationService {
         notificationDetails,
         payload: payload,
       );
-    } catch (e) {
-      print("Error showing notification: $e");
-      // Fallback: Try with minimal settings
+    } catch (_) {
       await _showFallbackNotification(id, title, body, payload);
     }
   }
 
-  // Fallback notification with minimal settings
   Future<void> _showFallbackNotification(
       int? id,
       String title,
@@ -176,12 +349,9 @@ class NotificationService {
         const NotificationDetails(android: androidDetails, iOS: iosDetails),
         payload: payload,
       );
-    } catch (e) {
-      print("Fallback notification also failed: $e");
-    }
+    } catch (_) {}
   }
 
-  // Show event notification
   Future<void> showEventNotification(Event event) async {
     final eventStyle = _getEventStyle(event.message ?? '');
 
@@ -230,14 +400,10 @@ class NotificationService {
   }
 
   void _handleNotificationOpen(Map<String, dynamic> data) {
-    print("Notification opened with data: $data");
-
     Future.delayed(const Duration(milliseconds: 500), () {
       try {
         Get.toNamed('/events');
-      } catch (e) {
-        print("Navigation error: $e");
-      }
+      } catch (_) {}
     });
   }
 

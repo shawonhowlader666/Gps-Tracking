@@ -1,5 +1,3 @@
-// lib/screens/report/tabs/daily_report_tab.dart
-
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:gpspro/screens/report/get_today_report.dart';
@@ -189,7 +187,7 @@ class _DailyReportTabState extends State<DailyReportTab>
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: onTap != null ? const Color(0xFF3F51B5).withOpacity(0.1) : Colors.grey.shade100,
+          color: onTap != null ? const Color(0xFF3F51B5).withValues(alpha: 0.1) : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(
@@ -546,7 +544,7 @@ class _DailyReportTabState extends State<DailyReportTab>
           width: 24,
           height: 24,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(
@@ -598,7 +596,7 @@ class _DailyReportTabState extends State<DailyReportTab>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(

@@ -258,6 +258,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
     }
   }
 
+
+
   Future<bool> _requestStoragePermission() async {
     if (Platform.isAndroid) {
       // For Android 13+ (API 33+)
@@ -383,11 +385,32 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         date = DateFormat('dd/MM/yyyy').parse(dateString);
       }
 
-      return DateFormat('MMMM yyyy').format(date);
+      return DateFormat('dd MMMM yyyy').format(date);
     } catch (e) {
       return dateString.split(' ').first;
     }
   }
+  String _formatFullDate(String dateString) {
+    try {
+      DateTime date;
+
+      if (dateString.contains('T')) {
+        date = DateTime.parse(dateString);
+      } else if (dateString.contains('-')) {
+        date = DateTime.parse(dateString);
+      } else if (dateString.contains('/')) {
+        date = DateFormat('dd/MM/yyyy').parse(dateString);
+      } else {
+        return dateString;
+      }
+
+      return DateFormat('dd MMMM yyyy').format(date);
+    } catch (e) {
+      return dateString;
+    }
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -700,9 +723,9 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
             ),
           ),
           title: Text(
-            bill.billingMonth,
+            _formatFullDate(bill.billingMonth),
             style: const TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1E293B),
             ),

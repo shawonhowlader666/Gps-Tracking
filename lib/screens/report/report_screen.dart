@@ -61,7 +61,7 @@ class _ReportScreenState extends State<ReportScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Reports',
+              ' Reports',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -70,7 +70,7 @@ class _ReportScreenState extends State<ReportScreen>
             ),
             Text(
               widget.deviceName,
-              style: const TextStyle(fontSize: 12, color: Colors.white70),
+              style: const TextStyle(fontSize: 14, color: Colors.white70),
             ),
           ],
         ),

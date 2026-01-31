@@ -1,4 +1,3 @@
-import 'dart:developer';
 import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -17,139 +16,129 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'translation/translation_service.dart';
 
-// Global notification plugin instance
+// Global notification plugin instance (for foreground use only)
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
 
-// High importance notification channel WITH SOUND
-const AndroidNotificationChannel channel = AndroidNotificationChannel(
-  'high_importance_channel',
-  'High Importance Notifications',
-  description: 'Used for important notifications',
-  importance: Importance.max,
-  playSound: true,
-  enableVibration: true,
-  enableLights: true,
-  ledColor: Color(0xFFFF0000),
-  // Add custom sound (make sure file exists in android/app/src/main/res/raw/)
-  sound: RawResourceAndroidNotificationSound('notification_sound'),
-);
-
-// Alert channel for critical alerts
-const AndroidNotificationChannel alertChannel = AndroidNotificationChannel(
-  'alert_channel',
-  'Alert Notifications',
-  description: 'Critical alerts and emergency notifications',
-  importance: Importance.max,
-  playSound: true,
-  enableVibration: true,
-  enableLights: true,
-  ledColor: Color(0xFFFF0000),
-  sound: RawResourceAndroidNotificationSound('alert_sound'),
-);
-
-// ⚠️ MUST BE TOP-LEVEL FUNCTION - Background message handler
+// Background message handler - MUST BE TOP-LEVEL FUNCTION
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Initialize Firebase for background isolate
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform);
+  } catch (_) {}
 
-  log("Background message received: ${message.messageId}");
-  log("Background message data: ${message.data}");
-  log("Background notification: ${message.notification?.title}");
-
-  // Show notification
   await _showBackgroundNotification(message);
 }
 
 // Show notification for background messages
 Future<void> _showBackgroundNotification(RemoteMessage message) async {
-  // Re-initialize the plugin for background isolate
-  const AndroidInitializationSettings androidSettings =
-  AndroidInitializationSettings('logo');
+  final FlutterLocalNotificationsPlugin backgroundPlugin =
+  FlutterLocalNotificationsPlugin();
 
-  const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
-    requestSoundPermission: false,
-    requestBadgePermission: false,
-    requestAlertPermission: false,
-  );
+  try {
+    const AndroidInitializationSettings androidSettings =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  await flutterLocalNotificationsPlugin.initialize(
-    const InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    ),
-  );
+    const DarwinInitializationSettings iosSettings =
+    DarwinInitializationSettings(
+      requestSoundPermission: false,
+      requestBadgePermission: false,
+      requestAlertPermission: false,
+    );
 
-  // Create the channel (in case it doesn't exist)
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
+    await backgroundPlugin.initialize(
+      const InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      ),
+    );
 
-  // Get notification content
-  String title = message.notification?.title ??
-      message.data['title'] ??
-      'New Notification';
-  String body = message.notification?.body ??
-      message.data['body'] ??
-      'You have a new message';
+    const AndroidNotificationChannel backgroundChannel =
+    AndroidNotificationChannel(
+      'high_importance_channel',
+      'High Importance Notifications',
+      description: 'Used for important notifications',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+    );
 
-  // Get emoji based on message content
-  String emoji = _getEmojiForMessage(body);
+    await backgroundPlugin
+        .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(backgroundChannel);
 
-  // Determine which channel to use
-  String channelId = channel.id;
-  String channelName = channel.name;
-  RawResourceAndroidNotificationSound? sound =
-  const RawResourceAndroidNotificationSound('notification_sound');
+    String title = message.notification?.title ??
+        message.data['title'] ??
+        'New Notification';
+    String body = message.notification?.body ??
+        message.data['body'] ??
+        'You have a new message';
 
-  if (body.toLowerCase().contains('sos') ||
-      body.toLowerCase().contains('alert') ||
-      body.toLowerCase().contains('alarm')) {
-    channelId = alertChannel.id;
-    channelName = alertChannel.name;
-    sound = const RawResourceAndroidNotificationSound('alert_sound');
-  }
+    String emoji = _getEmojiForMessage(body);
 
-  AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-    channelId,
-    channelName,
-    channelDescription: 'Important notifications',
-    importance: Importance.max,
-    priority: Priority.max,
-    playSound: true,
-    sound: sound,
-    enableVibration: true,
-    icon: 'logo',
-    styleInformation: BigTextStyleInformation(
+    const AndroidNotificationDetails androidDetails =
+    AndroidNotificationDetails(
+      'high_importance_channel',
+      'High Importance Notifications',
+      channelDescription: 'Important notifications',
+      importance: Importance.max,
+      priority: Priority.max,
+      playSound: true,
+      enableVibration: true,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    await backgroundPlugin.show(
+      notificationId,
+      '$emoji $title',
       body,
-      contentTitle: '$emoji $title',
-      summaryText: 'Trust Me',
-    ),
-  );
+      notificationDetails,
+      payload: message.data.toString(),
+    );
+  } catch (_) {
+    await _showUltraSimpleNotification(backgroundPlugin, message);
+  }
+}
 
-  const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-    presentAlert: true,
-    presentBadge: true,
-    presentSound: true,
-    sound: 'notification_sound.aiff',
-  );
+// Ultra simple fallback notification
+Future<void> _showUltraSimpleNotification(
+    FlutterLocalNotificationsPlugin plugin, RemoteMessage message) async {
+  try {
+    String title =
+        message.notification?.title ?? message.data['title'] ?? 'Notification';
+    String body =
+        message.notification?.body ?? message.data['body'] ?? 'New message';
 
-  NotificationDetails notificationDetails = NotificationDetails(
-    android: androidDetails,
-    iOS: iosDetails,
-  );
-
-  await flutterLocalNotificationsPlugin.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000, // Unique ID
-    '$emoji $title',
-    body,
-    notificationDetails,
-    payload: message.data.toString(),
-  );
-
-  log("Background notification shown: $title");
+    await plugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'default_channel',
+          'Default',
+          importance: Importance.max,
+          priority: Priority.max,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
+  } catch (_) {}
 }
 
 // Get emoji for message type
@@ -169,8 +158,6 @@ String _getEmojiForMessage(String message) {
 
 // Show notification for foreground messages
 Future<void> showForegroundNotification(RemoteMessage message) async {
-  log("Foreground message received: ${message.notification?.title}");
-
   String title = message.notification?.title ??
       message.data['title'] ??
       'New Notification';
@@ -180,31 +167,19 @@ Future<void> showForegroundNotification(RemoteMessage message) async {
 
   String emoji = _getEmojiForMessage(body);
 
-  // Determine channel and sound
-  String channelId = channel.id;
-  String channelName = channel.name;
-  RawResourceAndroidNotificationSound sound =
-  const RawResourceAndroidNotificationSound('notification_sound');
-
-  if (body.toLowerCase().contains('sos') ||
+  bool isAlert = body.toLowerCase().contains('sos') ||
       body.toLowerCase().contains('alert') ||
-      body.toLowerCase().contains('alarm')) {
-    channelId = alertChannel.id;
-    channelName = alertChannel.name;
-    sound = const RawResourceAndroidNotificationSound('alert_sound');
-  }
+      body.toLowerCase().contains('alarm');
 
   AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-    channelId,
-    channelName,
+    isAlert ? 'alert_channel' : 'high_importance_channel',
+    isAlert ? 'Alert Notifications' : 'High Importance Notifications',
     channelDescription: 'Important notifications',
     importance: Importance.max,
     priority: Priority.max,
     playSound: true,
-    sound: sound,
     enableVibration: true,
-    icon: 'logo',
-    largeIcon: const DrawableResourceAndroidBitmap('logo'),
+    icon: '@mipmap/ic_launcher',
     styleInformation: BigTextStyleInformation(
       body,
       contentTitle: '$emoji $title',
@@ -216,7 +191,6 @@ Future<void> showForegroundNotification(RemoteMessage message) async {
     presentAlert: true,
     presentBadge: true,
     presentSound: true,
-    sound: 'notification_sound.aiff',
   );
 
   NotificationDetails notificationDetails = NotificationDetails(
@@ -231,97 +205,93 @@ Future<void> showForegroundNotification(RemoteMessage message) async {
     notificationDetails,
     payload: message.data.toString(),
   );
-
-  log("Foreground notification shown: $title");
 }
 
 // Background notification response handler
 @pragma('vm:entry-point')
 void onDidReceiveBackgroundNotificationResponse(NotificationResponse response) {
-  log('Background notification tapped: ${response.payload}');
+  // Handle background notification tap
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    // 1. Initialize Firebase FIRST
+    // Initialize Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    log("Firebase initialized successfully");
-
-    // 2. Set background message handler IMMEDIATELY after Firebase init
+    // Set background message handler
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // 3. Initialize local notifications
+    // Initialize local notifications
     await _initializeLocalNotifications();
 
-    // 4. Create notification channels
+    // Create notification channels
     await _createNotificationChannels();
 
-    // 5. Request permissions
+    // Request permissions
     await _requestNotificationPermissions();
 
-    // 6. Set foreground notification options
-    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    // Set foreground notification options
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    // 7. Setup foreground message listener
+    // Setup foreground message listener
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      log("onMessage: ${message.notification?.title}");
       showForegroundNotification(message);
     });
 
-    // 8. Handle notification tap when app opens from terminated state
+    // Handle notification tap when app opens from terminated state
     FirebaseMessaging.instance.getInitialMessage().then((message) {
       if (message != null) {
-        log("App opened from terminated state: ${message.data}");
-        Future.delayed(const Duration(seconds: 1), () {
-          Get.toNamed('/events');
+        Future.delayed(const Duration(seconds: 2), () {
+          try {
+            Get.toNamed('/events');
+          } catch (_) {}
         });
       }
     });
 
-    // 9. Handle notification tap when app is in background
+    // Handle notification tap when app is in background
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      log("Notification opened app: ${message.data}");
       Future.delayed(const Duration(milliseconds: 500), () {
-        Get.toNamed('/events');
+        try {
+          Get.toNamed('/events');
+        } catch (_) {}
       });
     });
 
-    // 10. Initialize NotificationService (for event notifications)
+    // Initialize NotificationService
     await NotificationService().initialize(flutterLocalNotificationsPlugin);
 
-    // 11. Get and log FCM token
-    String? token = await FirebaseMessaging.instance.getToken();
-    log("FCM Token: $token");
+    // Get FCM token (for server registration if needed)
+    await FirebaseMessaging.instance.getToken();
 
-    // 12. Initialize SharedPreferences
+    // Listen for token refresh
+    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+      // TODO: Send new token to your server
+    });
+
+    // Initialize SharedPreferences
     UserRepository.prefs = await SharedPreferences.getInstance();
     final prefs = await SharedPreferences.getInstance();
     final languageCode = prefs.getString('language_code') ?? 'en_US';
     Get.updateLocale(Locale(languageCode));
+  } catch (_) {}
 
-    runApp(Phoenix(child: const MyApp()));
-
-  } catch (e, stackTrace) {
-    log('Error during initialization: $e');
-    log('Stack trace: $stackTrace');
-    // Run app even if there's an error
-    runApp(Phoenix(child: const MyApp()));
-  }
+  runApp(Phoenix(child: const MyApp()));
 }
 
 // Initialize local notifications plugin
 Future<void> _initializeLocalNotifications() async {
   const AndroidInitializationSettings androidSettings =
-  AndroidInitializationSettings('logo');
+  AndroidInitializationSettings('@mipmap/ic_launcher');
 
   const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
     requestSoundPermission: true,
@@ -340,22 +310,17 @@ Future<void> _initializeLocalNotifications() async {
   await flutterLocalNotificationsPlugin.initialize(
     initSettings,
     onDidReceiveNotificationResponse: (NotificationResponse response) {
-      log('Notification tapped: ${response.payload}');
       if (response.payload != null) {
         Future.delayed(const Duration(milliseconds: 500), () {
           try {
             Get.toNamed('/events');
-          } catch (e) {
-            log('Navigation error: $e');
-          }
+          } catch (_) {}
         });
       }
     },
     onDidReceiveBackgroundNotificationResponse:
     onDidReceiveBackgroundNotificationResponse,
   );
-
-  log("Local notifications initialized");
 }
 
 // Create notification channels
@@ -367,14 +332,28 @@ Future<void> _createNotificationChannels() async {
       AndroidFlutterLocalNotificationsPlugin>();
 
   if (androidPlugin != null) {
-    // Create main channel
-    await androidPlugin.createNotificationChannel(channel);
+    const AndroidNotificationChannel highChannel = AndroidNotificationChannel(
+      'high_importance_channel',
+      'High Importance Notifications',
+      description: 'Used for important notifications',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+    );
+    await androidPlugin.createNotificationChannel(highChannel);
 
-    // Create alert channel
+    const AndroidNotificationChannel alertChannel = AndroidNotificationChannel(
+      'alert_channel',
+      'Alert Notifications',
+      description: 'Critical alerts and emergency notifications',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+    );
     await androidPlugin.createNotificationChannel(alertChannel);
 
-    // Create default channel (without custom sound as fallback)
-    const AndroidNotificationChannel defaultChannel = AndroidNotificationChannel(
+    const AndroidNotificationChannel defaultChannel =
+    AndroidNotificationChannel(
       'default_channel',
       'Default Notifications',
       description: 'Default notification channel',
@@ -382,15 +361,11 @@ Future<void> _createNotificationChannels() async {
       playSound: true,
     );
     await androidPlugin.createNotificationChannel(defaultChannel);
-
-    log("Notification channels created");
   }
 }
 
 // Request notification permissions
 Future<void> _requestNotificationPermissions() async {
-  // FCM permissions
-  NotificationSettings settings =
   await FirebaseMessaging.instance.requestPermission(
     alert: true,
     announcement: false,
@@ -401,21 +376,16 @@ Future<void> _requestNotificationPermissions() async {
     sound: true,
   );
 
-  log('FCM permission status: ${settings.authorizationStatus}');
-
-  // Android 13+ permission
   if (Platform.isAndroid) {
     final androidPlugin = flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
 
     if (androidPlugin != null) {
-      final granted = await androidPlugin.requestNotificationsPermission();
-      log('Android notification permission granted: $granted');
+      await androidPlugin.requestNotificationsPermission();
     }
   }
 
-  // iOS permissions
   if (Platform.isIOS) {
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
