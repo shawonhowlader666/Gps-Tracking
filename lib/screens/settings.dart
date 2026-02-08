@@ -246,7 +246,7 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 20),
             Center(
               child: Text(
-                'Version 1.0.0',
+                'Version 1.0.9+11',
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey[400],
@@ -736,7 +736,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       _buildTermsSection(
                         'Contact Information',
-                        'For questions about these terms, contact us at:\nEmail: asthahelpbd@gmail.com\nPhone: +1-XXX-XXX-XXXX',
+                        'For questions about these terms, contact us at:\nEmail: asthahelpbd@gmail.com\nPhone: +880-1912609087',
                       ),
                       const SizedBox(height: 10),
                       Center(
@@ -896,8 +896,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         'Contact Us',
                         'For privacy concerns or to exercise your rights:\n\n'
                             'Email: privacy@spytrack.com\n'
-                            'Website: www.spytrack.com/privacy\n'
-                            'Phone: +1-XXX-XXX-XXXX\n'
+                            'Website: https://souvik600.github.io/trustmegps-privacy-policy/\n'
+                            'Phone: +880-1912609087\n'
                             'Address: [Your Company Address]',
                       ),
                       _buildTermsSection(
