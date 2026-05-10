@@ -1,0 +1,14 @@
+import 'package:smart_lock/services/model/device_item.dart';
+
+class ReportArguments {
+  final int id;
+  final String fromDate;
+  final String fromTime;
+  final String toDate;
+  final String toTime;
+  final String name;
+  final int type;
+  final DeviceItem deviceItem;
+  ReportArguments(this.id, this.fromDate, this.fromTime, this.toDate,
+      this.toTime, this.name, this.type, this.deviceItem);
+}

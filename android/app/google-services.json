@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "270985006580",
+    "project_id": "smartlock-gps",
+    "storage_bucket": "smartlock-gps.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:270985006580:android:95a63cc6b9cca4cafbfda1",
+        "android_client_info": {
+          "package_name": "com.smartlock.smartlockgps"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9t_s6HR8kgdWPJd-AFSB-gA0OOw7tO1M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
