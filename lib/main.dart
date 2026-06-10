@@ -396,7 +396,6 @@ class _MyAppPageState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // No LayoutBuilder / OrientationBuilder — they caused full app rebuilds
     return OverlaySupport.global(
       child: GetMaterialApp(
         fallbackLocale: TranslationService.fallbackLocale,

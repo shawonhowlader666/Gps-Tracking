@@ -338,5 +338,35 @@ const Map<String, String> en_US = {
   "noTravelRecords": "No travel records found for the selected period.",
   "reportPeriod": "Report Period",
   "reportType": "Report Type",
-  "travelTime": "Travel Time"
+  "travelTime": "Travel Time",
+  "privacyPolicyTitle": "Privacy Policy",
+  "termsTitle": "Terms & Conditions",
+  "lastUpdated": "Last updated: January 2025",
+  "policyInfoWeCollect": "Information We Collect",
+  "policyInfoCollectDetail":
+      "Name, email, phone number · Real-time GPS coordinates · Historical location data · Device identifiers",
+  "policyHowWeUse": "How We Use Your Information",
+  "policyHowWeUseDetail":
+      "Provide GPS tracking services · Process payments · Send alerts and notifications · Improve our services",
+  "policyDataSecurity": "Data Security",
+  "policyDataSecurityDetail":
+      "We use encryption and industry-standard security measures to protect your data.",
+  "policyYourRights": "Your Rights",
+  "policyYourRightsDetail":
+      "Access your data · Request data deletion · Opt-out of marketing",
+  "termsAcceptance": "Acceptance of Terms",
+  "termsAcceptanceDetail":
+      "By using this application, you agree to these Terms and Conditions.",
+  "termsService": "Service Description",
+  "termsServiceDetail":
+      "This app provides real-time GPS tracking and management for vehicles.",
+  "termsUser": "User Responsibilities",
+  "termsUserDetail":
+      "Must be 18+ years old · Responsible for account security · Only track authorized vehicles · Comply with applicable laws",
+  "termsPayment": "Payment Terms",
+  "termsPaymentDetail":
+      "Subscription fees are non-refundable except as required by law.",
+  "termsTermination": "Termination",
+  "termsTerminationDetail": "We may suspend accounts that violate these terms.",
+  "contactInfo": "Contact Information",
 };

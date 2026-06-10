@@ -20,9 +20,9 @@ class PDFGenerator {
   static const PdfColor cardColor = PdfColor.fromInt(0xFFFFFFFF);
 
   // Company Details
-  static const String companyName = 'TrackOne Pro';
+  static const String companyName = 'Smart Lock Gps';
   static const String companyTagline = 'Advanced Tracking Solution';
-  static const String logoPath = 'images/track_one_logo.png';
+  static const String logoPath = 'images/app_logo.png';
 
   // Load logo image
   static Future<Uint8List?> _loadLogo() async {

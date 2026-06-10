@@ -13,7 +13,7 @@ import '../constants/app_constants.dart';
 import '../services/payment_service.dart';
 
 // ─── Status enum ────────────────────────────────────────────────────────────
-enum DeviceStatus { running, idle, stop, offline, inactive, expired }
+enum DeviceStatus { running, idle, stop, offline, expired }
 
 class DevicePage extends StatefulWidget {
   const DevicePage({super.key});
@@ -44,7 +44,6 @@ class _DevicePageState extends State<DevicePage> {
   final RxInt _idleCount     = 0.obs;
   final RxInt _stopCount     = 0.obs;
   final RxInt _offlineCount  = 0.obs;
-  final RxInt _inactiveCount = 0.obs;
   final RxInt _expiredCount  = 0.obs;
 
   // ── Brand colours ─────────────────────────────────────────────────────────
@@ -54,7 +53,6 @@ class _DevicePageState extends State<DevicePage> {
   static const Color _redColor    = Color(0xFFEF4444);
   static const Color _greyColor   = Color(0xFF9CA3AF);
   static const Color _blueColor   = Color(0xFF3B82F6);
-  static const Color _darkColor   = Color(0xFF374151);
   static const Color _purpleColor = Color(0xFF7B3FF5);
   static const Color _orangeColor = Color(0xFFF97316);
 
@@ -97,6 +95,71 @@ class _DevicePageState extends State<DevicePage> {
     } catch (e) {
       debugPrint('Error loading due amount: $e');
     }
+  }
+
+  List<Map<String, dynamic>> _parseSensors(List<dynamic>? raw) {
+    if (raw == null || raw.isEmpty) return [];
+
+    final result = <Map<String, dynamic>>[];
+
+    for (final s in raw) {
+      try {
+        if (s is Map) {
+          result.add(Map<String, dynamic>.from(s));
+        }
+      } catch (_) {}
+    }
+
+    return result;
+  }
+
+  Widget _buildSensorRow(DeviceItem device) {
+    final rawSensors = device.sensors?.isNotEmpty == true
+        ? device.sensors!
+        : (device.deviceData?.sensors ?? []);
+
+    final sensors = _parseSensors(rawSensors);
+
+    if (sensors.isEmpty) {
+      return const SizedBox();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: sensors.map((sensor) {
+            final name =
+            (sensor['name'] ?? sensor['type'] ?? 'Sensor').toString();
+
+            final value = (sensor['value'] ?? '').toString();
+
+            return Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 5,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.grey.shade300,
+                ),
+              ),
+              child: Text(
+                '$name : $value',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
   }
 
   void _startPeriodicRefresh() {
@@ -184,13 +247,6 @@ class _DevicePageState extends State<DevicePage> {
     return speed > 0;
   }
 
-  /// Whether the device's account is marked as inactive (disabled).
-  bool _isInactive(DeviceItem device) {
-    if (device.deviceData == null) return false;
-    final active = device.deviceData?.active; // int: 1 = active, 0 = inactive
-    if (active == null) return false;
-    return active == 0;
-  }
 
   /// Whether the device's subscription has expired.
   bool _isExpired(DeviceItem device) {
@@ -209,7 +265,6 @@ class _DevicePageState extends State<DevicePage> {
   ///   expired → inactive → offline → running → idle → stop
   DeviceStatus _getDeviceStatus(DeviceItem device) {
     if (_isExpired(device))  return DeviceStatus.expired;
-    if (_isInactive(device)) return DeviceStatus.inactive;
     if (!_isDeviceOnline(device)) return DeviceStatus.offline;
 
     final speed = double.tryParse(device.speed.toString()) ?? 0;
@@ -222,14 +277,13 @@ class _DevicePageState extends State<DevicePage> {
   void _calculateCounts() {
     if (_isDisposed || !mounted) return;
     final all = controller.filteredDevices.toList();
-    int running = 0, idle = 0, stop = 0, offline = 0, inactive = 0, expired = 0;
+    int running = 0, idle = 0, stop = 0, offline = 0, expired = 0;
     for (final d in all) {
       switch (_getDeviceStatus(d)) {
         case DeviceStatus.running:  running++;  break;
         case DeviceStatus.idle:     idle++;     break;
         case DeviceStatus.stop:     stop++;     break;
         case DeviceStatus.offline:  offline++;  break;
-        case DeviceStatus.inactive: inactive++; break;
         case DeviceStatus.expired:  expired++;  break;
       }
     }
@@ -238,9 +292,10 @@ class _DevicePageState extends State<DevicePage> {
     _idleCount.value     = idle;
     _stopCount.value     = stop;
     _offlineCount.value  = offline;
-    _inactiveCount.value = inactive;
     _expiredCount.value  = expired;
   }
+
+
 
   void _applyCurrentFilter() => _filterDevices(_selectedFilterIndex);
 
@@ -274,12 +329,8 @@ class _DevicePageState extends State<DevicePage> {
             .where((d) => _getDeviceStatus(d) == DeviceStatus.offline)
             .toList();
         break;
-      case 5: // InActive
-        _displayDevices = all
-            .where((d) => _getDeviceStatus(d) == DeviceStatus.inactive)
-            .toList();
-        break;
-      case 6: // Expired
+
+      case 5: // Expired
         _displayDevices = all
             .where((d) => _getDeviceStatus(d) == DeviceStatus.expired)
             .toList();
@@ -307,8 +358,7 @@ class _DevicePageState extends State<DevicePage> {
       case 2: filtered = all.where((d) => _getDeviceStatus(d) == DeviceStatus.stop).toList();     break;
       case 3: filtered = all.where((d) => _getDeviceStatus(d) == DeviceStatus.idle).toList();     break;
       case 4: filtered = all.where((d) => _getDeviceStatus(d) == DeviceStatus.offline).toList();  break;
-      case 5: filtered = all.where((d) => _getDeviceStatus(d) == DeviceStatus.inactive).toList(); break;
-      case 6: filtered = all.where((d) => _getDeviceStatus(d) == DeviceStatus.expired).toList();  break;
+      case 5: filtered = all.where((d) => _getDeviceStatus(d) == DeviceStatus.expired).toList();  break;
       default: filtered = all;
     }
 
@@ -326,7 +376,6 @@ class _DevicePageState extends State<DevicePage> {
       case DeviceStatus.idle:     return _yellowColor;
       case DeviceStatus.stop:     return _redColor;
       case DeviceStatus.offline:  return _greyColor;
-      case DeviceStatus.inactive: return _darkColor;
       case DeviceStatus.expired:  return _orangeColor;
     }
   }
@@ -337,7 +386,6 @@ class _DevicePageState extends State<DevicePage> {
       case DeviceStatus.idle:     return 'Idle Since';
       case DeviceStatus.stop:     return 'Stop Since';
       case DeviceStatus.offline:  return 'Offline Since';
-      case DeviceStatus.inactive: return 'Inactive';
       case DeviceStatus.expired:  return 'Expired';
     }
   }
@@ -451,9 +499,8 @@ class _DevicePageState extends State<DevicePage> {
               _buildChip(1, 'Moving',   _runningCount.value,  _greenColor),
               _buildChip(2, 'Stopped',  _stopCount.value,     _redColor),    // ← stop (engine OFF)
               _buildChip(3, 'Idle',     _idleCount.value,     _yellowColor), // ← idle (engine ON)
-              _buildChip(4, 'Offline',  _offlineCount.value,  _blueColor),
-              _buildChip(5, 'InActive', _inactiveCount.value, _darkColor),
-              _buildChip(6, 'Expired',  _expiredCount.value,  _orangeColor),
+              _buildChip(4, 'Offline',  _offlineCount.value,  _redColor),
+              _buildChip(5, 'Expired',  _expiredCount.value,  _orangeColor),
             ],
           )),
         ),
@@ -562,7 +609,7 @@ class _DevicePageState extends State<DevicePage> {
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Colors.black.withValues(alpha: 0.6),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -723,9 +770,14 @@ class _DevicePageState extends State<DevicePage> {
                         ),
                       ],
                     ),
+
+                    _dotDivider(),
+
+                    _buildSensorRow(device),
                   ],
                 ),
               ),
+
             ],
           ),
         ),
@@ -771,8 +823,6 @@ class _DevicePageState extends State<DevicePage> {
         return device.stopDuration ?? '0s';
       case DeviceStatus.offline:
         return _getOfflineDuration(device);
-      case DeviceStatus.inactive:
-        return 'Device Disabled';
       case DeviceStatus.expired:
         return 'Subscription Expired';
     }

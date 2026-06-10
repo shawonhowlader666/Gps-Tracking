@@ -13,9 +13,6 @@ if (localPropertiesFile.exists()) {
     localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
 
-val flutterRoot = localProperties.getProperty("flutter.sdk")
-    ?: throw GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
-
 val flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
 val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0.0"
 
@@ -53,10 +50,14 @@ android {
     defaultConfig {
         applicationId = "com.smartlock.smartlockgps"
         minSdk = flutter.minSdkVersion
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutterVersionCode.toInt()
         versionName = flutterVersionName
         multiDexEnabled = true
+        manifestPlaceholders["MAPS_API_KEY"] =
+            keystoreProperties.getProperty("MAPS_API_KEY")
+                ?: localProperties.getProperty("MAPS_API_KEY")
+                        ?: ""
     }
 
     signingConfigs {
@@ -72,12 +73,12 @@ android {
         release {
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(
-                getDefaultProguardFile("proguard-android.txt"),
+                getDefaultProguardFile("proguard-android-optimize.txt"), // ✅ optimize version
                 "proguard-rules.pro"
             )
             isCrunchPngs = false
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true   // ✅
+            isShrinkResources = true // ✅
         }
     }
 }
@@ -87,20 +88,13 @@ flutter {
 }
 
 dependencies {
-    // Firebase BOM for version management
-    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation(platform("com.google.firebase:firebase-bom:33.13.0")) // ✅ updated
     implementation("com.google.firebase:firebase-analytics-ktx")
     implementation("com.google.firebase:firebase-messaging-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
 
-    // Multidex support
     implementation("androidx.multidex:multidex:2.0.1")
-
-    // Desugaring support
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
-
-    // Google Play Services - Ads
-    implementation("com.google.android.gms:play-services-ads:24.8.0")
 }
 
 apply(plugin = "com.google.gms.google-services")

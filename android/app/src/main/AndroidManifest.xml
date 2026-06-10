@@ -3,47 +3,57 @@
     package="com.smartlock.smartlockgps">
 
     <!-- ============ PERMISSIONS ============ -->
-    <!-- Location permissions -->
+
+    <!-- Location -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
-    <!-- Storage permissions -->
+    <!-- Storage -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32"/>
+        android:maxSdkVersion="28"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage" />
 
-    <!-- Network permissions -->
+    <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
-    <!-- ✅ NOTIFICATION PERMISSIONS - ALL REQUIRED -->
+    <!-- Notifications & Display -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+
+    <!-- Boot & Wake -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+
+    <!-- Foreground Service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+
+    <!-- Battery -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+
+    <!-- ✅ FIX 1: Exact Alarm পারমিশন যোগ করা হয়েছে -->
+    <!-- App বন্ধ থাকলেও scheduled notification ঠিকমতো আসার জন্য দরকার -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
 
-    <!-- ✅ IMPORTANT: Prevent Doze mode from stopping notifications -->
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- DATA_SYNC সরিয়ে দাও — plugin থেকে আসলেও remove হবে -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+        tools:node="remove"/>
 
+    <!-- ============ APPLICATION ============ -->
     <application
         android:name="${applicationName}"
         android:label="SmartLock GPS"
-        android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="false"
         android:enableOnBackInvokedCallback="true"
-        android:requestLegacyExternalStorage="true"
+        android:requestLegacyExternalStorage="false"
         tools:targetApi="tiramisu">
 
         <!-- ============ MAIN ACTIVITY ============ -->
@@ -64,18 +74,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- ✅ Notification click intent -->
+            <!-- Notification click intent -->
             <intent-filter>
                 <action android:name="FLUTTER_NOTIFICATION_CLICK"/>
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
 
-            <!-- ✅ FCM notification click -->
+            <!-- ✅ FIX 2: FCM notification click intent-filter যোগ করা হয়েছে -->
+            <!-- App বন্ধ থাকলে FCM notification click handle করার জন্য দরকার -->
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT"/>
             </intent-filter>
 
-            <!-- Flutter theme metadata -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"/>
@@ -93,11 +103,17 @@
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
+                android:resource="@xml/file_paths"/>
         </provider>
 
-        <!-- ============ ✅ FIREBASE MESSAGING SERVICE ============ -->
-        <!-- This is CRITICAL for background messages -->
+        <!-- ============ LOCATION FOREGROUND SERVICE ============ -->
+        <!-- geolocator plugin এর জন্য -->
+        <service
+            android:name="com.baseflow.geolocator.service.GeolocationForegroundService"
+            android:foregroundServiceType="location"
+            android:exported="false"/>
+
+        <!-- ============ FIREBASE MESSAGING ============ -->
         <service
             android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingService"
             android:exported="false"
@@ -107,29 +123,24 @@
             </intent-filter>
         </service>
 
-        <!-- ✅ Background message handling service -->
         <service
             android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingBackgroundService"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE"/>
 
-        <!-- ============ FIREBASE MESSAGING METADATA ============ -->
-        <!-- ✅ Default notification channel - MUST MATCH your code -->
+        <!-- ============ FIREBASE METADATA ============ -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="high_importance_channel"/>
 
-        <!-- ✅ Default notification icon - USE MIPMAP for reliability -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher"/>
 
-        <!-- Default notification color -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_color"/>
 
-        <!-- Auto-init enabled -->
         <meta-data
             android:name="firebase_messaging_auto_init_enabled"
             android:value="true"/>
@@ -139,13 +150,11 @@
             android:value="true"/>
 
         <!-- ============ LOCAL NOTIFICATIONS RECEIVERS ============ -->
-        <!-- ✅ Scheduled notification receiver - ADD android:exported -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false"
             android:enabled="true"/>
 
-        <!-- ✅ Boot receiver for scheduled notifications -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
             android:exported="true"
@@ -158,21 +167,15 @@
             </intent-filter>
         </receiver>
 
-        <!-- Action receiver for notification actions -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
             android:exported="false"
             android:enabled="true"/>
 
-        <!-- ============ ADMOB ============ -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3231110074331419~8479601102"/>
-
         <!-- ============ GOOGLE MAPS ============ -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyALy4YVjzneMAJjI4Ng1DT4cGhJf16JXgc"/>
+            android:value="${MAPS_API_KEY}"/>
 
         <!-- ============ FLUTTER EMBEDDING ============ -->
         <meta-data

@@ -1,9 +1,7 @@
 name: smart_lock
 description: Smart Lock GPS
 
-publish_to: 'none'
-
-version: 1.0.10+12
+version: 1.0.0+7
 
 environment:
   sdk: '>=3.5.1 <4.0.0'
@@ -101,9 +99,6 @@ dependencies:
   fl_chart: ^1.1.0
   speedometer_chart: ^1.0.8
 
-  # Ads
-  google_mobile_ads: ^6.0.0
-
   # Sharing
   share_plus: ^12.0.1
 
@@ -132,8 +127,8 @@ dependency_overrides:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "icons/app_logo.png"
-  adaptive_icon_foreground: "icons/app_logo.png"
+  image_path: "icons/logo.png"
+  adaptive_icon_foreground: "icons/logo.png"
 
 flutter:
   uses-material-design: true

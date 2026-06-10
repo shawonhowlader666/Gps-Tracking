@@ -11,9 +11,3 @@ var EMAIL = "";
 int adsFrequency = 2;
 bool SHOW_ADS = true;
 bool ALWAYS_SHOW_BANNER_ADS = false;
-
-// AdMob Test IDs
-const String ADMOB_APP_ID = 'ca-app-pub-3231110074331419~8479601102';
-const String BANNER_AD_ID = 'ca-app-pub-3231110074331419/1828015542';
-const String INTERSTITIAL_AD_ID = 'ca-app-pub-3231110074331419/1648972019';
-const String REWARDED_AD_ID = 'ca-app-pub-3231110074331419/1333277240';

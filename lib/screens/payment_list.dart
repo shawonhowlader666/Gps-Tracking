@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:smart_lock/screens/manual_payment_screen.dart';
 import 'package:smart_lock/services/model/bill.dart';
 import 'package:smart_lock/services/model/payment_stats.dart';
 import 'package:smart_lock/services/payment_service.dart';
@@ -115,50 +116,200 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
     }
   }
 
+  // Future<void> _initiatePayment() async {
+  //   if (_stats == null || _stats!.due <= 0) {
+  //     if (!mounted) return;
+  //     _showErrorSnackBar('No due available to pay');
+  //     return;
+  //   }
+  //
+  //   if (!mounted) return;
+  //   _showLoadingDialog();
+  //
+  //   try {
+  //     final gatewayUrl = await PaymentService.initiateSslPayment();
+  //
+  //     if (!mounted) return;
+  //
+  //     Navigator.of(context).pop();
+  //
+  //     if (gatewayUrl != null) {
+  //       final result = await Navigator.push(
+  //         context,
+  //         MaterialPageRoute(
+  //           builder: (context) => WebViewScreen(
+  //             title: 'Payment',
+  //             url: gatewayUrl,
+  //           ),
+  //         ),
+  //       );
+  //
+  //       if (mounted) {
+  //         _loadData();
+  //       }
+  //     } else {
+  //       _showErrorSnackBar('Failed to initiate payment');
+  //     }
+  //   } catch (e) {
+  //     debugPrint('Payment initiation error: $e');
+  //
+  //     if (!mounted) return;
+  //
+  //     Navigator.of(context).pop();
+  //
+  //     _showErrorSnackBar(_getErrorMessage(e));
+  //   }
+  // }
+
+
   Future<void> _initiatePayment() async {
     if (_stats == null || _stats!.due <= 0) {
-      if (!mounted) return;
       _showErrorSnackBar('No due available to pay');
       return;
     }
 
-    if (!mounted) return;
-    _showLoadingDialog();
-
-    try {
-      final gatewayUrl = await PaymentService.initiateSslPayment();
-
-      if (!mounted) return;
-
-      Navigator.of(context).pop();
-
-      if (gatewayUrl != null) {
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => WebViewScreen(
-              title: 'Payment',
-              url: gatewayUrl,
+    // Show bottom sheet to let user choose: SSL Pay or Manual
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
             ),
-          ),
-        );
+            const SizedBox(height: 20),
 
-        if (mounted) {
-          _loadData();
-        }
-      } else {
-        _showErrorSnackBar('Failed to initiate payment');
-      }
-    } catch (e) {
-      debugPrint('Payment initiation error: $e');
+            // Title
+            const Text(
+              'Choose Payment Method',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Due: BDT ${_stats!.due.toStringAsFixed(0)}৳',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF3E6FB8)),
+            ),
+            const SizedBox(height: 24),
 
-      if (!mounted) return;
+            // SSL / Online payment
+            _payOptionTile(
+              icon: Icons.credit_card_rounded,
+              color: const Color(0xFF3E6FB8),
+              title: 'Pay Online (SSL Commerz)',
+              subtitle: 'Card, Mobile Banking, Internet Banking',
+              onTap: () async {
+                Navigator.pop(context);
+                _showLoadingDialog();
+                try {
+                  final url = await PaymentService.initiateSslPayment();
+                  if (!mounted) return;
+                  Navigator.of(context).pop();
+                  if (url != null) {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => WebViewScreen(title: 'Payment', url: url),
+                      ),
+                    );
+                    if (mounted) _loadData();
+                  } else {
+                    _showErrorSnackBar('Failed to initiate payment');
+                  }
+                } catch (e) {
+                  if (mounted) Navigator.of(context).pop();
+                  _showErrorSnackBar(_getErrorMessage(e));
+                }
+              },
+            ),
 
-      Navigator.of(context).pop();
+            const SizedBox(height: 12),
 
-      _showErrorSnackBar(_getErrorMessage(e));
-    }
+            // Manual payment
+            _payOptionTile(
+              icon: Icons.account_balance_wallet_rounded,
+              color: const Color(0xFF25D366),
+              title: 'Manual Payment',
+              subtitle: 'bKash · Nagad · Rocket → Send screenshot via WhatsApp',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ManualPaymentScreen(dueAmount: _stats!.due),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
+
+  // helper widget used only inside _initiatePayment
+  Widget _payOptionTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text(subtitle,
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: 14, color: Colors.grey.shade400),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   Future<void> _downloadBillPDF(Bill bill) async {
     try {
@@ -418,7 +569,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title: const Text('Payment & Invoices'),
-        backgroundColor: const Color(0xFF3E6FB8),
+        backgroundColor: const Color(0xFF980E04),
         foregroundColor: Colors.white,
         actions: [
           if (_bills.isNotEmpty)
@@ -584,7 +735,14 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (hasStats && hasDue) ? _initiatePayment : null,
+              onPressed: (hasStats && hasDue)
+                  ? () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ManualPaymentScreen(dueAmount: _stats!.due),
+                ),
+              )
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: const Color(0xFF3E6FB8),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:smart_lock/screens/alert_list.dart';
-import 'package:smart_lock/screens/device_dashboard.dart';
 import 'package:smart_lock/screens/device_event.dart';
 import 'package:smart_lock/screens/device_info.dart';
 import 'package:smart_lock/screens/devices_selection.dart';
@@ -26,7 +25,6 @@ final Map<String, WidgetBuilder> routes = {
   '/login': (context) => LoginPage(),
   '/home': (context) => MainBottomNav(),
   '/deviceSelection': (context) => DeviceSelection(),
-  '/deviceDashboard': (context) => DeviceDashboard(),
   '/deviceInfo': (context) => DeviceInfo(),
   '/reportRoute': (context) => ReportRoutePage(),
   '/reportEvent': (context) => ReportEventPage(),

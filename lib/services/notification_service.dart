@@ -5,7 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:smart_lock/services/model/event.dart';
 
-// MUST BE TOP-LEVEL FUNCTION (outside any class)
+
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await _showBackgroundNotification(message);

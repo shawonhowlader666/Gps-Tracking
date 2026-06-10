@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:line_icons/line_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_lock/screens/home_screen.dart';
 import 'package:smart_lock/screens/devices.dart';
 import 'package:smart_lock/screens/map_home.dart';
 import 'package:smart_lock/screens/report/recent_events.dart';
 import 'package:smart_lock/screens/settings.dart';
 import 'package:smart_lock/screens/data_controller/data_controller.dart';
+import 'package:smart_lock/widgets/payment_due_popup.dart';
 
 class MainBottomNav extends StatefulWidget {
+  const MainBottomNav({super.key});
+
   @override
   State<StatefulWidget> createState() => _MainBottomNavState();
 }
@@ -33,8 +37,34 @@ class _MainBottomNavState extends State<MainBottomNav> {
     SettingsPage(),
   ];
 
-  void _onItemTapped(int index) {
-    setState(() => _selectedIndex = index);
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPaymentDue());
+  }
+
+  Future<void> _checkPaymentDue() async {
+    final prefs = await SharedPreferences.getInstance();
+    final snoozeUntil = prefs.getInt('payment_snooze_until');
+    if (snoozeUntil != null) {
+      final snoozeDate = DateTime.fromMillisecondsSinceEpoch(snoozeUntil);
+      if (DateTime.now().isBefore(snoozeDate)) return;
+    }
+    if (!mounted) return;
+    final result = await showPaymentDuePopupIfNeeded(context);
+    if (result == 'snoozed') {
+      final until = DateTime.now().add(const Duration(days: 7));
+      await prefs.setInt('payment_snooze_until', until.millisecondsSinceEpoch);
+    }
+  }
+
+  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
+  Future<void> _onWillPop() async {
+    if (_selectedIndex != 0) {
+      setState(() => _selectedIndex = 0);
+      return;
+    }
+    Get.offAllNamed('/login');
   }
 
   @override
@@ -45,20 +75,26 @@ class _MainBottomNavState extends State<MainBottomNav> {
       statusBarIconBrightness: Brightness.dark,
     ));
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
-      body: GetX<DataController>(
-        init: DataController(),
-        builder: (controller) {
-          return !controller.isLoading.value
-              ? IndexedStack(
-            index: _selectedIndex,
-            children: _screens,
-          )
-              : const Center(child: CircularProgressIndicator());
-        },
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) _onWillPop();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F6FA),
+        body: GetX<DataController>(
+          init: DataController(),
+          builder: (controller) {
+            return !controller.isLoading.value
+                ? IndexedStack(
+              index: _selectedIndex,
+              children: _screens,
+            )
+                : const Center(child: CircularProgressIndicator());
+          },
+        ),
+        bottomNavigationBar: _buildBottomNav(),
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 

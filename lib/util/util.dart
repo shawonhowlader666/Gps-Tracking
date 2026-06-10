@@ -14,36 +14,52 @@ import 'package:xml/xml.dart' as xml;
 import 'package:smart_lock/storage/user_repository.dart';
 
 class Util {
+  // ✅ Bangladesh timezone offset (UTC+6)
+  static const Duration _bdOffset = Duration(hours: 6);
+
+  /// যেকোনো DateTime কে Bangladesh time এ convert করো
+  static DateTime _toBD(DateTime dt) => dt.toUtc().add(_bdOffset);
+
   static String convertSpeed(var speed, String type) {
     return "${speed.toInt()} $type";
   }
 
+  // ✅ FIX: toLocal() এর বদলে BD time use করো
   static String formatTime(String time) {
-    DateTime lastUpdate = DateTime.parse(time);
-    return DateFormat('dd-MM-yyyy hh:mm:ss').format(lastUpdate.toLocal());
+    final lastUpdate = _toBD(DateTime.parse(time));
+    return DateFormat('dd-MM-yyyy hh:mm:ss').format(lastUpdate);
   }
 
   static String formatOnlyTime(String date) {
-    DateFormat inputFormat = DateFormat("MM-dd-yyyy HH:mm:ss");
-    DateTime lastUpdate = inputFormat.parse(date);
-    return DateFormat('HH:mm').format(lastUpdate.toLocal());
+    final inputFormat = DateFormat("MM-dd-yyyy HH:mm:ss");
+    final lastUpdate = _toBD(inputFormat.parse(date));
+    return DateFormat('HH:mm').format(lastUpdate);
+  }
+
+  static String formatOnlyTimeAMPM(String rawTime) {
+    try {
+      final dt = _toBD(DateTime.parse(rawTime));
+      return DateFormat('hh:mm:ss a').format(dt);
+    } catch (e) {
+      return rawTime;
+    }
   }
 
   static String historyTabTime(String time) {
-    DateTime lastUpdate = DateTime.parse(time);
-    return DateFormat('dd-MMM').format(lastUpdate.toLocal());
+    final lastUpdate = _toBD(DateTime.parse(time));
+    return DateFormat('dd-MMM').format(lastUpdate);
   }
 
   static String formatInvalidDate(String date) {
-    DateFormat inputFormat = DateFormat("dd-MM-yyyy HH:mm:ss");
-    DateTime lastUpdate = inputFormat.parse(date);
-    return DateFormat('yyyy-MM-dd').format(lastUpdate.toLocal());
+    final inputFormat = DateFormat("dd-MM-yyyy HH:mm:ss");
+    final lastUpdate = _toBD(inputFormat.parse(date));
+    return DateFormat('yyyy-MM-dd').format(lastUpdate);
   }
 
   static String formatInvalidTime(String date) {
-    DateFormat inputFormat = DateFormat("MM-dd-yyyy HH:mm:ss");
-    DateTime lastUpdate = inputFormat.parse(date);
-    return DateFormat('HH:mm:ss').format(lastUpdate.toLocal());
+    final inputFormat = DateFormat("MM-dd-yyyy HH:mm:ss");
+    final lastUpdate = _toBD(inputFormat.parse(date));
+    return DateFormat('HH:mm:ss').format(lastUpdate);
   }
 
   static String convertDistance(double distance) {
@@ -67,10 +83,40 @@ class Util {
     return hours.toInt().toString();
   }
 
+  static String formatReportDate(DateTime date) {
+    return DateFormat('dd-MM-yyyy').format(_toBD(date));
+  }
+
+  static String formatReportTime(DateTime date) {
+    return DateFormat('HH:mm:ss').format(_toBD(date));
+  }
+
+  static String formatDateReport(String date) {
+    final lastUpdate = _toBD(DateTime.parse(date));
+    String month = lastUpdate.month < 10
+        ? "0${lastUpdate.month}"
+        : lastUpdate.month.toString();
+    String day =
+    lastUpdate.day < 10 ? "0${lastUpdate.day}" : lastUpdate.day.toString();
+    return "${lastUpdate.year}-$month-$day";
+  }
+
+  static String formatTimeReport(String date) {
+    final lastUpdate = _toBD(DateTime.parse(date));
+    String hour = lastUpdate.hour < 10
+        ? "0${lastUpdate.hour}"
+        : lastUpdate.hour.toString();
+    String minute = lastUpdate.minute < 10
+        ? "0${lastUpdate.minute}"
+        : lastUpdate.minute.toString();
+    return "$hour:$minute:00";
+  }
+
   static Future<Uint8List?> getBytesFromAsset(String path, int width) async {
     if (path.isNotEmpty) {
       ByteData data = await rootBundle.load(path);
-      ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List(),
+      ui.Codec codec = await ui.instantiateImageCodec(
+          data.buffer.asUint8List(),
           targetWidth: width);
       ui.FrameInfo fi = await codec.getNextFrame();
       return (await fi.image.toByteData(format: ui.ImageByteFormat.png))!
@@ -94,7 +140,7 @@ class Util {
     if (decodedImage.clone().height < 70) {
       double devicePixelRatio = MediaQuery.of(context).size.width / 2.5;
       Uint8List? imageData =
-          await getBytesFromBytes(path, devicePixelRatio.toInt());
+      await getBytesFromBytes(path, devicePixelRatio.toInt());
       return BitmapDescriptor.bytes(imageData!);
     } else {
       Uint8List? imageData = await getBytesFromBytes(path, width);
@@ -104,7 +150,8 @@ class Util {
 
   static Future<Uint8List?> getBytesFromBytes(var data, int width) async {
     if (data != null) {
-      ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List(),
+      ui.Codec codec = await ui.instantiateImageCodec(
+          data.buffer.asUint8List(),
           targetWidth: width);
       ui.FrameInfo fi = await codec.getNextFrame();
       return (await fi.image.toByteData(format: ui.ImageByteFormat.png))!
@@ -113,55 +160,6 @@ class Util {
     } else {
       return null;
     }
-  }
-
-  static String formatReportDate(DateTime date) {
-    return DateFormat('dd-MM-yyyy').format(date.toLocal());
-  }
-
-  static String formatReportTime(DateTime date) {
-    return DateFormat('HH:mm:ss').format(date.toLocal());
-  }
-
-  static String formatDateReport(String date) {
-    DateTime lastUpdate = DateTime.parse(date);
-    String month, day;
-    if (lastUpdate.month < 10) {
-      month = "0" + lastUpdate.month.toString();
-    } else {
-      month = lastUpdate.month.toString();
-    }
-
-    if (lastUpdate.day < 10) {
-      day = "0" + lastUpdate.day.toString();
-    } else {
-      day = lastUpdate.day.toString();
-    }
-
-    return lastUpdate.year.toString() + "-" + month + "-" + day;
-  }
-
-  static String formatTimeReport(String date) {
-    DateTime lastUpdate = DateTime.parse(date);
-    String hour, minute;
-    if (lastUpdate.month < 10) {
-      hour = "0" + lastUpdate.month.toString();
-    } else {
-      minute = lastUpdate.month.toString();
-    }
-
-    if (lastUpdate.hour < 10) {
-      hour = "0" + lastUpdate.hour.toString();
-    } else {
-      hour = lastUpdate.hour.toString();
-    }
-
-    if (lastUpdate.minute < 10) {
-      minute = "0" + lastUpdate.minute.toString();
-    } else {
-      minute = lastUpdate.minute.toString();
-    }
-    return hour + ":" + minute + ":00";
   }
 
   static LatLngBounds boundsFromLatLngList(Set<Marker> list) {
@@ -198,12 +196,9 @@ class Util {
       maxLng = lng > maxLng ? lng : maxLng;
     }
 
-    final southwest = LatLng(minLat, minLng);
-    final northeast = LatLng(maxLat, maxLng);
-
     return LatLngBounds(
-      southwest: southwest,
-      northeast: northeast,
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
     );
   }
 
@@ -234,12 +229,10 @@ class Util {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
 
-    //size
     Size canvasSize = const Size(700.0, 200.0);
     Size markerSize = const Size(250.0, 120.0);
     TextPainter? textPainter;
     if (_showTitle) {
-      // Add info text
       textPainter = TextPainter(textDirection: m.TextDirection.ltr);
       textPainter.text = TextSpan(
         text: infoText,
@@ -253,45 +246,26 @@ class Util {
     final Paint infoStrokePaint = Paint()..color = color;
     final double infoHeight = 50.0;
     final double strokeWidth = 2.0;
-
-    //final Paint markerPaint = Paint()..color = color.withOpacity(0.1);
     final double shadowWidth = 30.0;
 
     canvas.translate(
         canvasSize.width / 2, canvasSize.height / 2 + infoHeight / 2);
 
-    // Add shadow circle
-    //canvas.drawOval(Rect.fromLTWH(-markerSize.width/2, -markerSize.height/2, markerSize.width, markerSize.height), markerPaint);
-    // Add border circle
-    //canvas.drawOval(Rect.fromLTWH(-markerSize.width/2+shadowWidth, -markerSize.height/2+shadowWidth, markerSize.width-2*shadowWidth, markerSize.height-2*shadowWidth), borderPaint);
-
-    // Oval for the image
     Rect oval = Rect.fromLTWH(
         -markerSize.width / 2 + .5 * shadowWidth,
         -markerSize.height / 2 + .5 * shadowWidth,
         markerSize.width - shadowWidth,
         markerSize.height - shadowWidth);
 
-    //save canvas before rotate
     canvas.save();
-
-    double rotateRadian = (pi / 180.0) * rotateDegree;
-
-    //Rotate Image
-    canvas.rotate(rotateRadian);
-
-    // Add path for oval image
+    canvas.rotate((pi / 180.0) * rotateDegree);
     canvas.clipPath(Path()..addOval(oval));
 
-    ui.Image image;
-    // Add image
-    image = await getImageFromPath(imagePath);
-
+    ui.Image image = await getImageFromPath(imagePath);
     paintImage(canvas: canvas, image: image, rect: oval, fit: BoxFit.fitHeight);
 
     canvas.restore();
     if (_showTitle) {
-      // Add info box stroke
       canvas.drawPath(
           Path()
             ..addRRect(RRect.fromLTRBR(
@@ -305,7 +279,6 @@ class Util {
             ..lineTo(15, -canvasSize.height / 2 + infoHeight / 2 + 1),
           infoStrokePaint);
 
-      //info info box
       canvas.drawPath(
           Path()
             ..addRRect(RRect.fromLTRBR(
@@ -321,6 +294,7 @@ class Util {
             ..lineTo(15 - strokeWidth / 2,
                 -canvasSize.height / 2 + infoHeight / 2 + 1 - strokeWidth),
           infoPaint);
+
       textPainter.paint(
           canvas,
           Offset(
@@ -333,26 +307,22 @@ class Util {
       canvas.restore();
     }
 
-    // Convert canvas to image
     final ui.Image markerAsImage = await pictureRecorder
         .endRecording()
         .toImage(canvasSize.width.toInt(), canvasSize.height.toInt());
 
-    // Convert image to bytes
     final ByteData? byteData =
-        await markerAsImage.toByteData(format: ui.ImageByteFormat.png);
+    await markerAsImage.toByteData(format: ui.ImageByteFormat.png);
     final Uint8List? uint8List = byteData?.buffer.asUint8List();
 
     return BitmapDescriptor.bytes(uint8List!);
   }
 
   static Future<ui.Image> getImageFromPath(String imagePath) async {
-    //File imageFile = File(imagePath);
     var bd = await rootBundle.load(imagePath);
     Uint8List imageBytes = Uint8List.view(bd.buffer);
 
     final Completer<ui.Image> completer = Completer();
-
     ui.decodeImageFromList(imageBytes, (ui.Image img) {
       return completer.complete(img);
     });
@@ -362,11 +332,9 @@ class Util {
 
   static Future<ui.Image> getImageFromFilePath(String imagePath) async {
     File imageFile = File(imagePath);
-    //var bd = await rootBundle.load(imagePath);
     Uint8List imageBytes = Uint8List.view(imageFile.readAsBytesSync().buffer);
 
     final Completer<ui.Image> completer = Completer();
-
     ui.decodeImageFromList(imageBytes, (ui.Image img) {
       return completer.complete(img);
     });
@@ -377,11 +345,8 @@ class Util {
   static Future<ui.Image> getImageFromPathUrl(String imagePath) async {
     final response = await http.Client().get(Uri.parse(imagePath));
     final bytes = response.bodyBytes;
-//  var bd = await rootBundle.load(imagePath);
-    //Uint8List imageBytes = Uint8List.view(bd.buffer);
 
     final Completer<ui.Image> completer = Completer();
-
     ui.decodeImageFromList(bytes, (ui.Image img) {
       return completer.complete(img);
     });
@@ -398,12 +363,10 @@ class Util {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
 
-    //size
     Size canvasSize = const Size(700.0, 200.0);
     Size markerSize = const Size(250.0, 120.0);
     TextPainter? textPainter;
     if (_showTitle) {
-      // Add info text
       textPainter = TextPainter(textDirection: m.TextDirection.ltr);
       textPainter.text = TextSpan(
         text: infoText,
@@ -417,39 +380,22 @@ class Util {
     final Paint infoStrokePaint = Paint()..color = color;
     final double infoHeight = 50.0;
     final double strokeWidth = 2.0;
-
-    //final Paint markerPaint = Paint()..color = color.withOpacity(0.1);
     final double shadowWidth = 30.0;
 
     canvas.translate(
         canvasSize.width / 2, canvasSize.height / 2 + infoHeight / 2);
 
-    // Add shadow circle
-    //canvas.drawOval(Rect.fromLTWH(-markerSize.width/2, -markerSize.height/2, markerSize.width, markerSize.height), markerPaint);
-    // Add border circle
-    //canvas.drawOval(Rect.fromLTWH(-markerSize.width/2+shadowWidth, -markerSize.height/2+shadowWidth, markerSize.width-2*shadowWidth, markerSize.height-2*shadowWidth), borderPaint);
-
-    // Oval for the image
     Rect oval = Rect.fromLTWH(
         -markerSize.width / 2 + .5 * shadowWidth,
         -markerSize.height / 2 + .5 * shadowWidth,
         markerSize.width - shadowWidth,
         markerSize.height - shadowWidth);
 
-    //save canvas before rotate
     canvas.save();
-
-    double rotateRadian = (pi / 180.0) * rotateDegree;
-
-    //Rotate Image
-    canvas.rotate(rotateRadian);
-
-    // Add path for oval image
+    canvas.rotate((pi / 180.0) * rotateDegree);
     canvas.clipPath(Path()..addOval(oval));
 
     ui.Image? image;
-    // Add image
-    //image = await getImageFromPathUrl(imagePath);
     await DefaultCacheManager().getFileFromCache(imagePath).then((value) async {
       image = await getImageFromFilePath(value!.file.path);
     });
@@ -459,7 +405,6 @@ class Util {
 
     canvas.restore();
     if (_showTitle) {
-      // Add info box stroke
       canvas.drawPath(
           Path()
             ..addRRect(RRect.fromLTRBR(
@@ -473,7 +418,6 @@ class Util {
             ..lineTo(15, -canvasSize.height / 2 + infoHeight / 2 + 1),
           infoStrokePaint);
 
-      //info info box
       canvas.drawPath(
           Path()
             ..addRRect(RRect.fromLTRBR(
@@ -489,6 +433,7 @@ class Util {
             ..lineTo(15 - strokeWidth / 2,
                 -canvasSize.height / 2 + infoHeight / 2 + 1 - strokeWidth),
           infoPaint);
+
       textPainter.paint(
           canvas,
           Offset(
@@ -501,14 +446,12 @@ class Util {
       canvas.restore();
     }
 
-    // Convert canvas to image
     final ui.Image markerAsImage = await pictureRecorder
         .endRecording()
         .toImage(canvasSize.width.toInt(), canvasSize.height.toInt());
 
-    // Convert image to bytes
     final ByteData? byteData =
-        await markerAsImage.toByteData(format: ui.ImageByteFormat.png);
+    await markerAsImage.toByteData(format: ui.ImageByteFormat.png);
     final Uint8List uint8List = byteData!.buffer.asUint8List();
 
     return BitmapDescriptor.bytes(uint8List);
@@ -529,7 +472,6 @@ class Util {
         final key = element.name.local;
         // ignore: deprecated_member_use
         final value = element.text;
-
         jsonMap[key] = value;
       }
     }
@@ -548,65 +490,4 @@ class Util {
     final Uint8List bytes = await imageFile.readAsBytes();
     return BitmapDescriptor.bytes(bytes);
   }
-
-  // static Future<BitmapDescriptor> getMarkerVehicleIcon(String imagePath, {required int width,required int height}) async {
-  //   final String imageUrl = UserRepository.getServerUrl()! + "/" + imagePath;
-  //   final File imageFile = await DefaultCacheManager().getSingleFile(imageUrl);
-  //   final Uint8List bytes = await imageFile.readAsBytes();
-  //   return BitmapDescriptor.bytes(bytes);
-  // }
-
-  // Add to util.dart
-
-  /// Get a resized marker icon for smooth performance
-  // static Future<BitmapDescriptor> getScaledMarkerIcon(
-  //     String imagePath, {
-  //       int size =40, // Smaller size for better performance
-  //     }) async {
-  //   try {
-  //     final String imageUrl = "${UserRepository.getServerUrl()}/$imagePath";
-  //     final File imageFile = await DefaultCacheManager().getSingleFile(imageUrl);
-  //     final Uint8List originalBytes = await imageFile.readAsBytes();
-  //
-  //     // Decode and resize the image
-  //     final ui.Codec codec = await ui.instantiateImageCodec(
-  //       originalBytes,
-  //       targetWidth: 20,
-  //       targetHeight: 38,
-  //     );
-  //     final ui.FrameInfo frameInfo = await codec.getNextFrame();
-  //     final ui.Image resizedImage = frameInfo.image;
-  //
-  //     // Convert to bytes
-  //     final ByteData? byteData = await resizedImage.toByteData(
-  //       format: ui.ImageByteFormat.png,
-  //     );
-  //
-  //     if (byteData == null) {
-  //       return BitmapDescriptor.defaultMarker;
-  //     }
-  //
-  //     return BitmapDescriptor.bytes(byteData.buffer.asUint8List());
-  //   } catch (e) {
-  //     debugPrint('Error loading marker icon: $e');
-  //     return BitmapDescriptor.defaultMarker;
-  //   }
-  // }
-  //
-  // /// Pre-cache marker icon for instant access
-  // static BitmapDescriptor? _cachedMarkerIcon;
-  // static String? _cachedMarkerPath;
-  //
-  // static Future<BitmapDescriptor> getCachedMarkerIcon(
-  //     String imagePath, {
-  //       int size = 48,
-  //     }) async {
-  //   if (_cachedMarkerIcon != null && _cachedMarkerPath == imagePath) {
-  //     return _cachedMarkerIcon!;
-  //   }
-  //
-  //   _cachedMarkerIcon = await getScaledMarkerIcon(imagePath, size: size);
-  //   _cachedMarkerPath = imagePath;
-  //   return _cachedMarkerIcon!;
-  // }
 }
