@@ -70,9 +70,9 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   FlutterLocalNotificationsPlugin();
 
   // Theme Colors
-  static const Color _primaryColor = Color(0xFF1D4888);
-  static const Color _accentColor = Color(0xFFFFAC00);
-  static const Color _lightAccent = Color(0xFFE4B34E);
+  static const Color _primaryColor = Color(0xFF1B851C);
+  static const Color _accentColor = Color(0xFFB30B0B);
+  static const Color _lightAccent = Color(0xFFB30B0B);
 
   @override
   void initState() {
@@ -266,7 +266,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
       checkLogin();
     } else {
       await Future.delayed(const Duration(milliseconds: 300));
-      Get.offAndToNamed('/login');
+      if (mounted) Navigator.pushReplacementNamed(context, '/login');
     }
   }
 
@@ -286,10 +286,10 @@ class _SplashScreenPageState extends State<SplashScreenPage>
         updateToken();
         _updateStatus('Welcome back!');
         Future.delayed(const Duration(milliseconds: 500), () {
-          Get.offAndToNamed('/home');
+          if (mounted) Navigator.pushReplacementNamed(context, '/home');
         });
       } else {
-        Get.offAndToNamed('/login');
+        if (mounted) Navigator.pushReplacementNamed(context, '/login');
       }
     });
   }
@@ -625,7 +625,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
                           padding: const EdgeInsets.all(22),
                           child: Image.asset(
                             AppConstants.appIcon,
-                            fit: BoxFit.cover,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),

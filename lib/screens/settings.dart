@@ -693,11 +693,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     children: [
                       _buildTermsSection(
                         'Acceptance of Terms',
-                        'By downloading, installing, or using SpyTrack GPS Tracking App, you agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use our services.',
+                        'By downloading, installing, or using ORBITGPS GPS Tracking App, you agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use our services.',
                       ),
                       _buildTermsSection(
                         'Service Description',
-                        'SpyTrack provides real-time GPS tracking services for vehicles. Our services include location tracking, geofencing, alerts, trip history, and fleet management features.',
+                        'ORBITGPS provides real-time GPS tracking services for vehicles. Our services include location tracking, geofencing, alerts, trip history, and fleet management features.',
                       ),
                       _buildTermsSection(
                         'User Responsibilities',
@@ -724,7 +724,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       _buildTermsSection(
                         'Limitation of Liability',
-                        'SpyTrack is not liable for any indirect, incidental, or consequential damages arising from use of our services. Our maximum liability is limited to the amount paid for the service.',
+                        'ORBITGPS is not liable for any indirect, incidental, or consequential damages arising from use of our services. Our maximum liability is limited to the amount paid for the service.',
                       ),
                       _buildTermsSection(
                         'Termination',
@@ -813,7 +813,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     children: [
                       _buildTermsSection(
                         'Introduction',
-                        'SpyTrack ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our GPS tracking application.',
+                        'ORBITGPS ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our GPS tracking application.',
                       ),
                       _buildTermsSection(
                         'Information We Collect',
@@ -895,7 +895,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       _buildTermsSection(
                         'Contact Us',
                         'For privacy concerns or to exercise your rights:\n\n'
-                            'Email: privacy@spytrack.com\n'
+                            'Email: privacy@orbitgps.com\n'
                             'Website: https://souvik600.github.io/trustmegps-privacy-policy/\n'
                             'Phone: +880-1912609087\n'
                             'Address: [Your Company Address]',

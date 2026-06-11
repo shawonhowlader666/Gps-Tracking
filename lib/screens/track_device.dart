@@ -240,7 +240,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   static const _successColor = Color(0xFF22C55E);
   static const _warningColor = Color(0xFFF59E0B);
   static const _dangerColor = Color(0xFFEF4444);
-  static const _primaryColor = Color(0xFF2563EB);
+  static const _primaryColor = Color(0xFF1B851C);
   static const _neutralColor = Color(0xFF64748B);
 
   @override
@@ -369,6 +369,30 @@ class _TrackDeviceState extends State<TrackDevicePage>
         if (history != null && mounted && !_isDisposed) {
           setState(() {
             todaytotalDistance = history.distance_sum ?? "0";
+
+            // If report data is not yet loaded, populate with history data
+            if (todayData == null || todayData!.isEmpty) {
+              String avgSpeed = '--';
+              if (history.distance_sum != null && history.move_duration != null) {
+                try {
+                  double distance = double.parse(history.distance_sum!.replaceAll(RegExp(r'[^0-9.]'), ''));
+                  double hours = _parseDurationToHours(history.move_duration!);
+                  if (hours > 0) {
+                    avgSpeed = (distance / hours).toStringAsFixed(1) + " km/h";
+                  }
+                } catch (_) {}
+              }
+
+              todayData = TodayReportData(
+                routeLength: history.distance_sum,
+                moveDuration: history.move_duration,
+                stopDuration: history.stop_duration,
+                topSpeed: history.top_speed,
+                averageSpeed: avgSpeed,
+                engineHours: device?.engineHours ?? device?.deviceData?.engineHours,
+              );
+              todayEngineHours = device?.engineHours ?? device?.deviceData?.engineHours ?? "--";
+            }
           });
         }
       } catch (e) {
@@ -378,7 +402,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       // Fetch report
       try {
         final report = await ReportService.getTodayReportData(deviceId: deviceId);
-        if (report != null && mounted && !_isDisposed) {
+        if (report != null && report.isNotEmpty && mounted && !_isDisposed) {
           setState(() {
             todayData = report;
             todayEngineHours = report.engineHours ?? "--";
@@ -390,6 +414,157 @@ class _TrackDeviceState extends State<TrackDevicePage>
     } catch (e) {
       log("Data fetch error: $e");
     }
+  }
+
+  double _parseDurationToHours(String durationStr) {
+    try {
+      durationStr = durationStr.toLowerCase().trim();
+      
+      // If it contains colon (e.g. 02:30:00)
+      if (durationStr.contains(':')) {
+        final parts = durationStr.split(':');
+        if (parts.length >= 2) {
+          final hours = double.parse(parts[0]);
+          final minutes = double.parse(parts[1]);
+          final seconds = parts.length > 2 ? double.parse(parts[2]) : 0.0;
+          return hours + (minutes / 60.0) + (seconds / 3600.0);
+        }
+      }
+      
+      // If it contains h, m, s (e.g. 2h 30m)
+      double totalHours = 0.0;
+      final hourReg = RegExp(r'(\d+)\s*h');
+      final minReg = RegExp(r'(\d+)\s*m');
+      final secReg = RegExp(r'(\d+)\s*s');
+      
+      final hourMatch = hourReg.firstMatch(durationStr);
+      if (hourMatch != null) {
+        totalHours += double.parse(hourMatch.group(1)!);
+      }
+      
+      final minMatch = minReg.firstMatch(durationStr);
+      if (minMatch != null) {
+        totalHours += double.parse(minMatch.group(1)!) / 60.0;
+      }
+      
+      final secMatch = secReg.firstMatch(durationStr);
+      if (secMatch != null) {
+        totalHours += double.parse(secMatch.group(1)!) / 3600.0;
+      }
+      
+      return totalHours;
+    } catch (_) {
+      return 0.0;
+    }
+  }
+
+  String? _getRawParameter(String key) {
+    if (device == null) return null;
+    
+    // 1. Try to search in device.sensors list
+    final sensors = device!.sensors;
+    if (sensors != null) {
+      for (var s in sensors) {
+        if (s is Map) {
+          final name = (s['name'] ?? '').toString().toLowerCase();
+          if (name.contains(key.toLowerCase())) {
+            return s['value']?.toString();
+          }
+        }
+      }
+    }
+
+    // 2. Try to search in deviceData.sensors
+    final ddSensors = device!.deviceData?.sensors;
+    if (ddSensors != null) {
+      for (var s in ddSensors) {
+        if (s is Map) {
+          final name = (s['name'] ?? '').toString().toLowerCase();
+          if (name.contains(key.toLowerCase())) {
+            return s['value']?.toString();
+          }
+        }
+      }
+    }
+
+    // 3. Try to extract from traccar.other (XML or JSON)
+    final other = device!.deviceData?.traccar?.other;
+    if (other != null && other.isNotEmpty) {
+      final xmlMatch = RegExp('<$key>(.*?)</$key>', caseSensitive: false).firstMatch(other);
+      if (xmlMatch != null && xmlMatch.group(1) != null) {
+        return xmlMatch.group(1);
+      }
+      final jsonMatch = RegExp('"$key"\\s*:\\s*(true|false|"[^"]*"|\\d+\\.?\\d*)', caseSensitive: false).firstMatch(other);
+      if (jsonMatch != null && jsonMatch.group(1) != null) {
+        return jsonMatch.group(1)!.replaceAll('"', '');
+      }
+    }
+
+    // 4. Try from deviceData.parameters or currents
+    final params = device!.deviceData?.parameters;
+    if (params != null && params.isNotEmpty) {
+      final jsonMatch = RegExp('"$key"\\s*:\\s*(true|false|"[^"]*"|\\d+\\.?\\d*)', caseSensitive: false).firstMatch(params);
+      if (jsonMatch != null && jsonMatch.group(1) != null) {
+        return jsonMatch.group(1)!.replaceAll('"', '');
+      }
+    }
+
+    return null;
+  }
+
+  String getEngineStatus() {
+    String? val = _getRawParameter('ignition') ?? _getRawParameter('engine');
+    if (val != null) {
+      val = val.toLowerCase().trim();
+      if (val == 'true' || val == '1' || val == 'on') return 'On';
+      if (val == 'false' || val == '0' || val == 'off') return 'Off';
+    }
+    return _isEngineOn(device!) ? 'On' : 'Off';
+  }
+
+  String getLockStatus() {
+    String? val = _getRawParameter('blocked') ?? _getRawParameter('lock');
+    if (val != null) {
+      val = val.toLowerCase().trim();
+      if (val == 'true' || val == '1' || val == 'blocked' || val == 'lock') return 'Locked';
+      if (val == 'false' || val == '0' || val == 'unblocked' || val == 'unlock') return 'Unlocked';
+    }
+    return 'Unlocked';
+  }
+
+  String getChargeStatus() {
+    String? val = _getRawParameter('charge') ?? _getRawParameter('charging');
+    if (val != null) {
+      val = val.toLowerCase().trim();
+      if (val == 'true' || val == '1' || val == 'yes') return 'Charging';
+      if (val == 'false' || val == '0' || val == 'no') return 'Discharging';
+    }
+    return 'Discharging';
+  }
+
+  String getBatteryVoltage() {
+    String? power = _getRawParameter('power') ?? _getRawParameter('voltage') ?? _getRawParameter('adc1');
+    if (power != null && power.isNotEmpty) {
+      if (!power.toLowerCase().contains('v')) {
+        try {
+          double vol = double.parse(power);
+          return "${vol.toStringAsFixed(1)}V";
+        } catch (_) {}
+      }
+      return power;
+    }
+    String? bat = _getRawParameter('battery') ?? _getRawParameter('batterylevel');
+    if (bat != null && bat.isNotEmpty) {
+      if (!bat.contains('%')) {
+        return "$bat%";
+      }
+      return bat;
+    }
+    return '--';
+  }
+
+  String getSatelliteCount() {
+    return _getRawParameter('sat') ?? _getRawParameter('satellite') ?? '--';
   }
 
   // ==================== SMOOTH MARKER UPDATE ====================
@@ -701,6 +876,42 @@ class _TrackDeviceState extends State<TrackDevicePage>
             selected: _followVehicle,
             onTap: _centerOnVehicle,
           ),
+          const SizedBox(height: 6),
+          _MapButton(
+            icon: Icons.play_circle_fill,
+            iconColor: Colors.orange,
+            onTap: _openPlayback,
+          ),
+          const SizedBox(height: 6),
+          _MapButton(
+            icon: Icons.lock,
+            iconColor: _dangerColor,
+            onTap: _openLock,
+          ),
+          const SizedBox(height: 6),
+          _MapButton(
+            icon: Icons.phone,
+            iconColor: _successColor,
+            onTap: _callDevice,
+          ),
+          const SizedBox(height: 6),
+          _MapButton(
+            icon: Icons.navigation_rounded,
+            iconColor: Colors.purple,
+            onTap: _navigate,
+          ),
+          const SizedBox(height: 6),
+          _MapButton(
+            icon: Icons.share_rounded,
+            iconColor: Colors.teal,
+            onTap: _shareLocation,
+          ),
+          const SizedBox(height: 6),
+          _MapButton(
+            icon: Icons.description,
+            iconColor: Colors.indigo,
+            onTap: _openReport,
+          ),
         ],
       ),
     );
@@ -855,8 +1066,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
               const Divider(height: 1),
               _buildRouteCard(),
               const Divider(height: 1),
-              _buildQuickActions(),
-              const Divider(height: 1),
               _buildSummarySection(),
               const SizedBox(height: 30),
             ],
@@ -921,57 +1130,138 @@ class _TrackDeviceState extends State<TrackDevicePage>
                 ),
               ],
             ),
-          ),
-          Expanded(
-            flex: 3,
-            child: _Speedometer(speed: speed),
-          ),
-          Expanded(
-            flex: 2,
-            child: Column(
-              children: [
-                _MiniSensor(
-                  icon: Icons.moving,
-                  label: 'Moving',
-                  value: todayData?.moveDuration ?? '--',
-                  statusColor: _getStatusColor(),
-                ),
-                const SizedBox(height: 8),
-                _MiniSensor(
-                  icon: Icons.speed,
-                  label: 'Top Speed',
-                  value: todayData?.topSpeed ?? '--',
-                  statusColor: _getStatusColor(),
-                ),
-              ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
+            Expanded(
+              flex: 3,
+              child: _Speedometer(speed: speed),
+            ),
+            Expanded(
+              flex: 2,
+              child: Column(
+                children: [
+                  _MiniSensor(
+                    icon: Icons.moving,
+                    label: 'Moving',
+                    value: todayData?.moveDuration ?? '--',
+                    statusColor: _getStatusColor(),
+                  ),
+                  const SizedBox(height: 8),
+                  _MiniSensor(
+                    icon: Icons.speed,
+                    label: 'Top Speed',
+                    value: todayData?.topSpeed ?? '--',
+                    statusColor: _getStatusColor(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
   Widget _buildSensorsSection() {
-    final sensors = device?.sensors ?? [];
-    if (sensors.isEmpty) return const SizedBox.shrink();
+    if (device == null) return const SizedBox.shrink();
+
+    final engineVal = getEngineStatus();
+    final lockVal = getLockStatus();
+    final voltVal = getBatteryVoltage();
+    final chargeVal = getChargeStatus();
+    final satVal = getSatelliteCount();
+
+    final List<Widget> cards = [
+      _StatusCard(
+        icon: Icons.power,
+        label: 'Engine',
+        value: engineVal,
+        color: engineVal == 'On' ? Colors.green : Colors.amber,
+      ),
+      _StatusCard(
+        icon: lockVal == 'Locked' ? Icons.lock : Icons.lock_open,
+        label: 'Lock',
+        value: lockVal,
+        color: lockVal == 'Locked' ? Colors.red : Colors.blue,
+      ),
+      _StatusCard(
+        icon: Icons.bolt,
+        label: 'Charge',
+        value: chargeVal,
+        color: chargeVal == 'Charging' ? Colors.orange : Colors.grey,
+      ),
+      _StatusCard(
+        icon: Icons.battery_charging_full,
+        label: 'Voltage',
+        value: voltVal,
+        color: Colors.teal,
+      ),
+      _StatusCard(
+        icon: Icons.satellite_alt,
+        label: 'Sats',
+        value: satVal,
+        color: Colors.indigo,
+      ),
+    ];
+
+    // Append other custom sensors
+    final sensors = device!.sensors ?? [];
+    for (var s in sensors) {
+      if (s is Map) {
+        final name = (s['name'] ?? '').toString();
+        final lowerName = name.toLowerCase();
+        if (lowerName.contains('ignition') ||
+            lowerName.contains('engine') ||
+            lowerName.contains('blocked') ||
+            lowerName.contains('lock') ||
+            lowerName.contains('charge') ||
+            lowerName.contains('voltage') ||
+            lowerName.contains('power') ||
+            lowerName.contains('battery') ||
+            lowerName.contains('sat')) {
+          continue;
+        }
+
+        cards.add(
+          _StatusCard(
+            icon: Icons.sensors,
+            label: name,
+            value: s['value']?.toString() ?? '--',
+            color: Colors.blueGrey,
+          ),
+        );
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: 30,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            itemCount: sensors.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (_, i) {
-              final s = sensors[i];
-              return _SensorChip(
-                name: s['name'] ?? '',
-                value: s['value']?.toString() ?? '--',
-              );
-            },
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Icon(Icons.dashboard_customize, size: 16, color: CustomColor.primaryColor),
+              const SizedBox(width: 8),
+              const Text(
+                "Device Diagnostics",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A2E),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: IntrinsicHeight(
+            child: Row(
+              children: cards.map((card) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: card,
+                ),
+              )).toList(),
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -1202,74 +1492,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 
-  Widget _buildQuickActions() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _ActionButton(
-                icon: Icons.description,
-                label: 'Report',
-                color: Colors.indigo,
-                onTap: _openReport,
-              ),
-              _ActionButton(
-                icon: Icons.play_circle_fill,
-                label: 'Playback',
-                color: Colors.orange,
-                onTap: _openPlayback,
-              ),
-              _ActionButton(
-                icon: Icons.phone,
-                label: 'Call',
-                color: _successColor,
-                onTap: _callDevice,
-              ),
-              _ActionButton(
-                icon: Icons.lock,
-                label: 'Lock',
-                color: _dangerColor,
-                onTap: _openLock,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _ActionButton(
-                icon: Icons.share,
-                label: 'Share',
-                color: Colors.teal,
-                onTap: _shareLocation,
-              ),
-              _ActionButton(
-                icon: Icons.navigation,
-                label: 'Navigate',
-                color: Colors.purple,
-                onTap: _navigate,
-              ),
-              _ActionButton(
-                icon: Icons.streetview,
-                label: 'Street View',
-                color: _primaryColor,
-                onTap: _openStreetView,
-              ),
-              _ActionButton(
-                icon: Icons.gps_fixed,
-                label: 'Center',
-                color: _neutralColor,
-                onTap: _centerOnVehicle,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildSummarySection() {
     final report = todayData;
@@ -1299,7 +1522,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
             crossAxisCount: 3,
             mainAxisSpacing: 8,
             crossAxisSpacing: 8,
-            childAspectRatio: 1.5,
+            childAspectRatio: 1.3,
             children: [
               _SummaryItem(
                 icon: Icons.route,
@@ -1349,17 +1572,24 @@ class _MapButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool selected;
+  final Color? iconColor;
+  final Color? backgroundColor;
 
   const _MapButton({
     required this.icon,
     required this.onTap,
     this.selected = false,
+    this.iconColor,
+    this.backgroundColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final defaultIconColor = selected ? Colors.white : (iconColor ?? CustomColor.primaryColor);
+    final defaultBgColor = selected ? CustomColor.primaryColor : (backgroundColor ?? Colors.white);
+
     return Material(
-      color: selected ? CustomColor.primaryColor : Colors.white,
+      color: defaultBgColor,
       elevation: 2,
       shape: const CircleBorder(),
       child: InkWell(
@@ -1371,53 +1601,9 @@ class _MapButton extends StatelessWidget {
           child: Icon(
             icon,
             size: 20,
-            color: selected ? Colors.white : CustomColor.primaryColor,
+            color: defaultIconColor,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, size: 22, color: color),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.grey[700],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1660,27 +1846,56 @@ class _MiniSensor extends StatelessWidget {
   }
 }
 
-class _SensorChip extends StatelessWidget {
-  final String name;
+class _StatusCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
   final String value;
+  final Color color;
 
-  const _SensorChip({required this.name, required this.value});
+  const _StatusCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       decoration: BoxDecoration(
-        color: CustomColor.primaryColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 1),
       ),
-      child: Text(
-        '$name: $value',
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: CustomColor.primaryColor,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[500],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 1),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

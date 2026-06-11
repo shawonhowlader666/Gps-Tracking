@@ -6,8 +6,8 @@ const Color MAPS_IMAGES_COLOR = Color(0xFF0a4349);
 const Color YELLOW_CUSTOM = Color(0xffFFAC00);
 
 class CustomColor {
-  static var primaryColor = MaterialColor(0xFF39a4db, color);
-  static var primary= Color(0xFF4478C5);
+  static var primaryColor = MaterialColor(0xFF1B851C, color);
+  static var primary= const Color(0xFF1B851C);
   static var secondaryColor = Colors.white;
   static var onColor = Colors.green;
   static var offColor = Colors.grey;
@@ -15,14 +15,14 @@ class CustomColor {
 }
 
 Map<int, Color> color = {
-  50: Color.fromRGBO(57, 164, 219, .1),
-  100: Color.fromRGBO(57, 164, 219, .2),
-  200: Color.fromRGBO(57, 164, 219, .3),
-  300: Color.fromRGBO(57, 164, 219, .4),
-  400: Color.fromRGBO(57, 164, 219, .5),
-  500: Color.fromRGBO(57, 164, 219, .6),
-  600: Color.fromRGBO(57, 164, 219, .7),
-  700: Color.fromRGBO(57, 164, 219, .8),
-  800: Color.fromRGBO(57, 164, 219, .9),
-  900: Color.fromRGBO(57, 164, 219, 1),
+  50: const Color.fromRGBO(27, 133, 28, .1),
+  100: const Color.fromRGBO(27, 133, 28, .2),
+  200: const Color.fromRGBO(27, 133, 28, .3),
+  300: const Color.fromRGBO(27, 133, 28, .4),
+  400: const Color.fromRGBO(27, 133, 28, .5),
+  500: const Color.fromRGBO(27, 133, 28, .6),
+  600: const Color.fromRGBO(27, 133, 28, .7),
+  700: const Color.fromRGBO(27, 133, 28, .8),
+  800: const Color.fromRGBO(27, 133, 28, .9),
+  900: const Color.fromRGBO(27, 133, 28, 1),
 };

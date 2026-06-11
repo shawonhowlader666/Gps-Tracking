@@ -216,6 +216,13 @@ void onDidReceiveBackgroundNotificationResponse(NotificationResponse response) {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize SharedPreferences first so they are always found
+  try {
+    UserRepository.prefs = await SharedPreferences.getInstance();
+    final languageCode = UserRepository.prefs!.getString('language_code') ?? 'en_US';
+    Get.updateLocale(Locale(languageCode));
+  } catch (_) {}
+
   try {
     // Initialize Firebase
     await Firebase.initializeApp(
@@ -277,12 +284,6 @@ void main() async {
     FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
       // TODO: Send new token to your server
     });
-
-    // Initialize SharedPreferences
-    UserRepository.prefs = await SharedPreferences.getInstance();
-    final prefs = await SharedPreferences.getInstance();
-    final languageCode = prefs.getString('language_code') ?? 'en_US';
-    Get.updateLocale(Locale(languageCode));
   } catch (_) {}
 
   runApp(Phoenix(child: const MyApp()));

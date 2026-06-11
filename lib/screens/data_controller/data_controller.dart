@@ -179,7 +179,7 @@ class DataController extends GetxController {
     }
   }
 
-  void getEvents() async {
+  void getEvents({bool showError = false}) async {
     try {
       isEventLoading.value = true;
 
@@ -194,14 +194,19 @@ class DataController extends GetxController {
         events.value = <Event>[].obs;
       }
 
-    } on SocketException catch (e) {
-      _showError('No internet connection. Please check your network.');
-    } on TimeoutException catch (e) {
-      _showError('Connection timeout. Please try again.');
-    } on Exception catch (e) {
-      _showError(e.toString().replaceAll('Exception: ', ''));
     } catch (e) {
-      _showError('An unexpected error occurred');
+      // Periodic background polling should fail silently. We only show error popups if explicitly requested.
+      if (showError) {
+        String message = 'An unexpected error occurred';
+        if (e is SocketException) {
+          message = 'No internet connection. Please check your network.';
+        } else if (e is TimeoutException) {
+          message = 'Connection timeout. Please try again.';
+        } else {
+          message = e.toString().replaceAll('Exception: ', '');
+        }
+        _showError(message);
+      }
     } finally {
       isEventLoading.value = false;
     }

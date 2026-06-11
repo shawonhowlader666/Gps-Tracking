@@ -26,7 +26,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.trustmegps.app"
+    namespace = "com.orbitgps.app"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 
@@ -51,7 +51,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.trustmegps.app"
+        applicationId = "com.orbitgps.app"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = flutterVersionCode.toInt()

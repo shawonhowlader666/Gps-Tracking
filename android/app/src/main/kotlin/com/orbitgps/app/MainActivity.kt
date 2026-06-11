@@ -1,4 +1,4 @@
-package com.trustmegps.app
+package com.orbitgps.app
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -14,7 +14,6 @@ dependencies:
 
   # UI & Icons
   cupertino_icons: ^1.0.8
-  font_awesome_flutter: ^10.8.0
   line_icons: ^2.0.3
   google_fonts: ^6.2.1
   lottie: ^3.3.1
@@ -90,7 +89,6 @@ dependencies:
   flutter_bloc: ^9.1.1
   get: ^4.7.3
   flutter_phoenix: ^1.1.1
-  page_transition: ^2.1.0
 
   # Images & Media
   cached_network_image: ^3.4.1
@@ -119,6 +117,7 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^6.0.0
+  change_app_package_name: ^1.4.0
 
 dependency_overrides:
   js: ^0.7.1

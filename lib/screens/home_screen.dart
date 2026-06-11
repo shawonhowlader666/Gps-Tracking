@@ -42,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final RxInt _offlineCount = 0.obs;
 
   // Simple color palette
-  static const Color primaryColor = Color(0xFF2563EB);
+  static const Color primaryColor = Color(0xFF1B851C);
   static const Color successColor = Color(0xFF22C55E);
   static const Color warningColor = Color(0xFFF59E0B);
   static const Color dangerColor = Color(0xFFEF4444);

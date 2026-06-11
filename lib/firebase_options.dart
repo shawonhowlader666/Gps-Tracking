@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
-///
+///Default fire base storoge 
 /// Example:
 /// ```dart
 /// import 'firebase_options.dart';
@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '58525743652',
     projectId: 'trust-me-cd5ac',
     storageBucket: 'trust-me-cd5ac.firebasestorage.app',
-    iosBundleId: 'com.trustmegps.app',
+    iosBundleId: 'com.orbitgps.app',
   );
 
 }

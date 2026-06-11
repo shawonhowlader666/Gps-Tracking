@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class AppConstants {
   // App Name
-  static const String appName = 'Trust Me';
+  static const String appName = 'ORBITGPS';
   static const String appTagline = 'Advanced Tracking Solution';
 
   // Logo Path
@@ -11,8 +11,8 @@ class AppConstants {
 }
 
 class ShimmerAppTitle extends StatelessWidget {
-  static const Color _primaryColor = Color(0xFF1D4888);
-  static const Color _lightAccent = Color(0xFFE4B34E);
+  static const Color _primaryColor = Color(0xFF1B851C);
+  static const Color _lightAccent = Color(0xFFB30B0B);
 
   final Animation<double> animation;
   final String title;

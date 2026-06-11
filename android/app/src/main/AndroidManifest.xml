@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.trustmegps.app">
+    package="com.orbitgps.app">
 
     <!-- ============ PERMISSIONS ============ -->
     <!-- Location permissions -->
@@ -38,7 +38,7 @@
 
     <application
         android:name="${applicationName}"
-        android:label="Trust Me"
+        android:label="ORBITGPS"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"

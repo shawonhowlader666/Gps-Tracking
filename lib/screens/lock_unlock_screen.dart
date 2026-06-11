@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/material.dart' as m;
+import 'package:gpspro/theme/custom_color.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/config.dart';
@@ -36,8 +37,8 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -77,344 +78,500 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      extendBodyBehindAppBar: true,
+      backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.white,
-        title: Text(
+        backgroundColor: Colors.transparent,
+        title: const Text(
           'Engine Control',
-          style: const TextStyle(
-            color: Color(0xFF1E293B),
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
+          style: TextStyle(
+            color: Color(0xFF0F172A),
+            fontWeight: FontWeight.w700,
+            fontSize: 19,
+            letterSpacing: 0.5,
           ),
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF64748B)),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A)),
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
           IconButton(
-            icon: const m.Icon(Icons.settings, color: Color(0xFF64748B)),
+            icon: const m.Icon(Icons.settings_suggest_rounded, color: Color(0xFF0F172A)),
             onPressed: () => showCommandDialog(context, widget.device),
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              Expanded(
-                child: Center(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFFAFAFA),
+              Color(0xFFF1F5F9),
+            ],
+          ),
+        ),
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                Expanded(
                   child: SingleChildScrollView(
                     child: Padding(
-                      padding: const EdgeInsets.all(32),
+                      padding: const EdgeInsets.fromLTRB(20, 110, 20, 20),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Vehicle Name
-                          Text(
-                            widget.device.name ?? 'Unknown Device',
-                            style: const TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E293B),
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-
-                          if (widget.device.deviceData?.plateNumber != null) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              widget.device.deviceData!.plateNumber!,
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-
-                          const SizedBox(height: 60),
-
-                          // Engine Status Text
-                          Text(
-                            'ENGINE STATUS',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[500],
-                              letterSpacing: 2,
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // Status Indicator
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _isEngineOn
-                                  ? const Color(0xFF22C55E).withValues(alpha: 0.1)
-                                  : const Color(0xFFEF4444).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: _isEngineOn
-                                    ? const Color(0xFF22C55E)
-                                    : const Color(0xFFEF4444),
-                                width: 2,
-                              ),
-                            ),
+                          const SizedBox(height: 10),
+                          // HUD Status Ring
+                          _buildHUDStatusRing(),
+                          const SizedBox(height: 28),
+                          // Vehicle Dashboard Card
+                          _buildVehicleDashboard(),
+                          const SizedBox(height: 28),
+                          // Action controls section
+                          Align(
+                            alignment: Alignment.centerLeft,
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Container(
-                                  width: 12,
-                                  height: 12,
+                                  width: 4,
+                                  height: 16,
                                   decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _isEngineOn
-                                        ? const Color(0xFF22C55E)
-                                        : const Color(0xFFEF4444),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: (_isEngineOn
-                                            ? const Color(0xFF22C55E)
-                                            : const Color(0xFFEF4444))
-                                            .withValues(alpha: 0.6),
-                                        blurRadius: 8,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
+                                    color: CustomColor.primary,
+                                    borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 8),
                                 Text(
-                                  _isEngineOn ? 'UNLOCKED' : 'LOCKED',
+                                  'COMMANDS',
                                   style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: _isEngineOn
-                                        ? const Color(0xFF22C55E)
-                                        : const Color(0xFFEF4444),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                    color: const Color(0xFF0F172A).withOpacity(0.4),
                                     letterSpacing: 1.5,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-
-                          const SizedBox(height: 80),
-
-                          // Analog Button
-                          _buildAnalogButton(),
-
-                          const SizedBox(height: 40),
-
-                          // Info Text
-                          Text(
-                            _isEngineOn
-                                ? 'Tap to lock engine'
-                                : 'Tap to unlock engine',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
+                          const SizedBox(height: 16),
+                          // Dual Buttons
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildCircularButton(
+                                isUnlockButton: true,
+                              ),
+                              _buildCircularButton(
+                                isUnlockButton: false,
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 24),
+                          // Security Card
+                          _buildSecurityCard(),
                         ],
                       ),
                     ),
                   ),
                 ),
-              ),
-              BannerAdWidget(forceShow: ALWAYS_SHOW_BANNER_ADS),
-            ],
+                BannerAdWidget(forceShow: ALWAYS_SHOW_BANNER_ADS),
+              ],
+            ),
+            if (_isLoading) _buildLoadingOverlay(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHUDStatusRing() {
+    return SizedBox(
+      height: 170,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Outer breathing glowing ring
+          AnimatedBuilder(
+            animation: _animationController,
+            builder: (context, child) {
+              final double value = _animationController.value;
+              return Container(
+                width: 135 + (value * 16),
+                height: 135 + (value * 16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _isEngineOn
+                          ? const Color(0xFF10B981).withOpacity(0.08 * (1 - value))
+                          : const Color(0xFFEF4444).withOpacity(0.08 * (1 - value)),
+                      blurRadius: 20,
+                      spreadRadius: 8 * value,
+                    ),
+                  ],
+                  border: Border.all(
+                    color: _isEngineOn
+                        ? const Color(0xFF10B981).withOpacity(0.15 + (0.35 * (1 - value)))
+                        : const Color(0xFFEF4444).withOpacity(0.15 + (0.35 * (1 - value))),
+                    width: 1.5,
+                  ),
+                ),
+              );
+            },
           ),
-          if (_isLoading) _buildLoadingOverlay(),
+          // Intermediate ring
+          Container(
+            width: 125,
+            height: 125,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: _isEngineOn
+                    ? const Color(0xFF10B981).withOpacity(0.1)
+                    : const Color(0xFFEF4444).withOpacity(0.1),
+                width: 3,
+              ),
+            ),
+          ),
+          // Inner solid card HUD
+          Container(
+            width: 105,
+            height: 105,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const RadialGradient(
+                colors: [
+                  Colors.white,
+                  Color(0xFFF8FAFC),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border: Border.all(
+                color: _isEngineOn
+                    ? const Color(0xFF10B981).withOpacity(0.8)
+                    : const Color(0xFFEF4444).withOpacity(0.8),
+                width: 2,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                m.Icon(
+                  _isEngineOn ? Icons.play_arrow_rounded : Icons.lock_outline_rounded,
+                  color: _isEngineOn ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  size: 34,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _isEngineOn ? "RUNNING" : "SECURED",
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
+                    color: _isEngineOn ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildAnalogButton() {
-    final isOn = _isEngineOn;
-    final buttonColor = isOn ? const Color(0xFFEF4444) : const Color(0xFF22C55E);
-    final buttonText = isOn ? 'OFF' : 'ON';
-
-    return GestureDetector(
-      onTapDown: (_) => _animationController.forward(),
-      onTapUp: (_) {
-        _animationController.reverse();
-        if (!_isLoading) {
-          _toggleEngine();
-        }
-      },
-      onTapCancel: () => _animationController.reverse(),
-      child: AnimatedBuilder(
-        animation: _animationController,
-        builder: (context, child) {
-          final scale = 1.0 - (_animationController.value * 0.05);
-          return Transform.scale(
-            scale: scale,
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF1E293B),
-                    const Color(0xFF0F172A),
-                  ],
+  Widget _buildVehicleDashboard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: CustomColor.primary.withOpacity(0.08),
+                  shape: BoxShape.circle,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    blurRadius: 30,
-                    offset: Offset(0, _animationController.value * 10 + 15),
-                    spreadRadius: -5,
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 15,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
+                child: m.Icon(
+                  Icons.directions_car_filled_rounded,
+                  color: CustomColor.primary,
+                  size: 22,
+                ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        const Color(0xFF334155),
-                        const Color(0xFF1E293B),
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        blurRadius: 10,
-                        offset: const Offset(5, 5),
-                        spreadRadius: -5,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.device.name ?? 'Unknown Device',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
                       ),
-                      BoxShadow(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        blurRadius: 10,
-                        offset: const Offset(-5, -5),
-                        spreadRadius: -5,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (widget.device.deviceData?.plateNumber != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.device.deviceData!.plateNumber!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ],
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: buttonColor,
-                        boxShadow: [
-                          BoxShadow(
-                            color: buttonColor.withValues(alpha: 0.7),
-                            blurRadius: 40,
-                            spreadRadius: 5,
-                          ),
-                          BoxShadow(
-                            color: buttonColor.withValues(alpha: 0.4),
-                            blurRadius: 60,
-                            spreadRadius: 15,
-                          ),
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Stack(
-                        children: [
-                          // Shine effect
-                          Positioned(
-                            top: 15,
-                            left: 15,
-                            child: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: RadialGradient(
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0.4),
-                                    Colors.white.withValues(alpha: 0.0),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          // Text
-                          Center(
-                            child: Text(
-                              buttonText,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 3,
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.black26,
-                                    offset: Offset(0, 2),
-                                    blurRadius: 4,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          const Divider(color: Color(0xFFF1F5F9), height: 1),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildQuickStat('GPS SIGNAL', 'ONLINE', Icons.wifi_rounded, const Color(0xFF10B981)),
+              _buildQuickStat('IGNITION', _isEngineOn ? 'ON' : 'OFF', Icons.power_rounded, _isEngineOn ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
+              _buildQuickStat('SECURITY', _isEngineOn ? 'READY' : 'ARMED', Icons.shield_rounded, _isEngineOn ? CustomColor.primary : const Color(0xFFF59E0B)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickStat(String label, String value, IconData icon, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        m.Icon(icon, color: color, size: 18),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF94A3B8),
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCircularButton({required bool isUnlockButton}) {
+    final bool isActive = (isUnlockButton == _isEngineOn);
+    
+    // Core color scheme definitions
+    final Color themeColor = isUnlockButton ? const Color(0xFF16A34A) : const Color(0xFFDC2626); // green / red
+    
+    // Base light background and border colors
+    final Color baseBgColor = isUnlockButton ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2); // light green / light red
+    final Color baseBorderColor = isUnlockButton ? const Color(0xFF86EFAC) : const Color(0xFFFCA5A5);
+
+    // Apply active/inactive opacity values to always maintain full color fill style
+    final Color bgColor = isActive ? baseBgColor : baseBgColor.withOpacity(0.35);
+    final Color borderColor = isActive ? baseBorderColor : baseBorderColor.withOpacity(0.3);
+    final Color textIconColor = isActive ? themeColor : themeColor.withOpacity(0.45);
+
+    final IconData iconData = Icons.power_settings_new_rounded;
+    final String title = isUnlockButton ? 'ENGINE ON' : 'ENGINE OFF';
+    final String subtitle = isUnlockButton ? 'Unlock / Run' : 'Lock / Stop';
+
+    return GestureDetector(
+      onTap: () {
+        if (!_isLoading && !isActive) {
+          sendEngineCommand(isUnlockButton ? 'engineResume' : 'engineStop');
+        }
+      },
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            width: 125,
+            height: 125,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: bgColor,
+              border: Border.all(
+                color: borderColor,
+                width: 2.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Center(
+              child: AnimatedBuilder(
+                animation: _animationController,
+                builder: (context, child) {
+                  final double scale = isActive ? 1.0 + (_animationController.value * 0.05) : 1.0;
+                  return Transform.scale(
+                    scale: scale,
+                    child: child,
+                  );
+                },
+                child: m.Icon(
+                  iconData,
+                  color: textIconColor,
+                  size: 42,
                 ),
               ),
             ),
-          );
-        },
+          ),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.8,
+              color: textIconColor,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF94A3B8),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSecurityCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.01),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const m.Icon(Icons.shield_outlined, color: Color(0xFFF59E0B), size: 22),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Encrypted Connection Active',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Commands are transmitted securely via encrypted channels. Make sure the vehicle is in a safe location before execution.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: const Color(0xFF475569),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildLoadingOverlay() {
     return Container(
-      color: Colors.black.withValues(alpha: 0.5),
+      color: Colors.black.withOpacity(0.4),
       child: Center(
         child: Container(
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 20,
+              ),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(
+              CircularProgressIndicator(
                 strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(CustomColor.primary),
               ),
-              const SizedBox(height: 20),
-              Text(
+              const SizedBox(height: 24),
+              const Text(
                 'Sending command...',
                 style: TextStyle(
-                  color: Colors.grey[800],
+                  color: Color(0xFF0F172A),
                   fontSize: 15,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -519,12 +676,12 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                        color: CustomColor.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.send,
-                        color: Color(0xFF2563EB),
+                        color: CustomColor.primary,
                         size: 20,
                       ),
                     ),
@@ -621,7 +778,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
+                        backgroundColor: CustomColor.primary,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 24,
                           vertical: 12,

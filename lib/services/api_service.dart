@@ -334,8 +334,12 @@ class APIService {
       final language = UserRepository.getLanguage() ?? 'en';
       final hash = UserRepository.getHash() ?? '';
 
+      // Get today's and yesterday's events (last 2 days) to make database search fast
+      final date = DateTime.now().subtract(const Duration(days: 2));
+      final fromDate = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+
       final uri = Uri.parse(
-          "$serverURL/api/get_events?user_api_hash=$hash&lang=$language"
+          "$serverURL/api/get_events?user_api_hash=$hash&lang=$language&from_date=$fromDate&limit=50"
       );
 
       // ✅ Add timeout

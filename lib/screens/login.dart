@@ -17,7 +17,7 @@ import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/config.dart';
 import 'package:gpspro/constants/app_constants.dart';
 
-const Color kPrimaryOrange = Color(0xFF3E6FB8);
+const Color kPrimaryOrange = Color(0xFF1B851C);
 const Color kLightGrey = Color(0xFFE0E0E0);
 
 class LoginPage extends StatefulWidget {
@@ -38,8 +38,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final TextEditingController _emailFilter = TextEditingController();
   final TextEditingController _passwordFilter = TextEditingController();
 
-  static const Color _primaryColor = Color(0xFF1D4888);
-  static const Color _lightAccent = Color(0xFFE4B34E);
+  static const Color _primaryColor = Color(0xFF1B851C);
+  static const Color _lightAccent = Color(0xFFB30B0B);
 
   FocusNode? emailAddressFocusNode;
   late bool passwordVisibility;
@@ -793,35 +793,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   Widget _buildAppTitle() {
-    return AnimatedBuilder(
-      animation: _shimmerAnimation,
-      builder: (context, child) {
-        return ShaderMask(
-          shaderCallback: (bounds) {
-            return LinearGradient(
-              colors: const [
-                _primaryColor,
-                _lightAccent,
-                _primaryColor,
-              ],
-              stops: [
-                (_shimmerAnimation.value - 0.3).clamp(0.0, 1.0),
-                _shimmerAnimation.value.clamp(0.0, 1.0),
-                (_shimmerAnimation.value + 0.3).clamp(0.0, 1.0),
-              ],
-            ).createShader(bounds);
-          },
-          child: const Text(
-            AppConstants.appName,
-            style: TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: 8,
-            ),
-          ),
-        );
-      },
+    return Image.asset(
+      'images/orbit_logo_text.png',
+      height: 38,
+      fit: BoxFit.contain,
     );
   }
 

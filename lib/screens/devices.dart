@@ -61,7 +61,7 @@ class _DevicePageState extends State<DevicePage> {
   final RxInt _offlineCount = 0.obs;
 
   // Colors
-  static const Color _primaryBlue = Color(0xFF3B82F6);
+  static const Color _primaryBlue = Color(0xFF1B851C); // Brand Green
   static const Color _greenColor = Color(0xFF22C55E);
   static const Color _yellowColor = Color(0xFFF59E0B);
   static const Color _redColor = Color(0xFFEF4444);
