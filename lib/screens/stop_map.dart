@@ -10,24 +10,26 @@ import 'package:gpspro/screens/common_method.dart';
 import 'package:gpspro/theme/custom_color.dart';
 
 class StopMapPage extends StatefulWidget {
+  const StopMapPage({super.key});
+
   @override
   _StopMapPageState createState() => _StopMapPageState();
 }
 
 class _StopMapPageState extends State<StopMapPage> {
-  Completer<GoogleMapController> _controller = Completer();
+  final Completer<GoogleMapController> _controller = Completer();
   GoogleMapController? mapController;
   StreamController<int>? _postsController;
-  MapType _currentMapType = MapType.normal;
+  final MapType _currentMapType = MapType.normal;
   StopArguments? args;
-  Set<Marker> _markers = Set<Marker>();
+  Set<Marker> _markers = <Marker>{};
   Timer? _timer;
   PlayBackRoute? pb;
 
   @override
   void initState() {
-    _postsController = new StreamController();
-    _timer = new Timer.periodic(Duration(milliseconds: 1000), (timer) {
+    _postsController = StreamController();
+    _timer = Timer.periodic(Duration(milliseconds: 1000), (timer) {
       if (args != null) {
         _timer!.cancel();
         addMarkers(args!.route);
@@ -47,7 +49,7 @@ class _StopMapPageState extends State<StopMapPage> {
     controller.moveCamera(CameraUpdate.newCameraPosition(cPosition));
     var iconPath = "images/end.png";
     final Uint8List? markerIcon = await getBytesFromAsset(iconPath, 70);
-    _markers = Set<Marker>();
+    _markers = <Marker>{};
     _markers.add(Marker(
       markerId: MarkerId(pos.device_id!),
       position:
@@ -119,7 +121,7 @@ class _StopMapPageState extends State<StopMapPage> {
           onTap: (LatLng latLng) {},
         ),
         // ignore: unnecessary_null_comparison
-        pb != null ? bottomWindow() : new Container()
+        pb != null ? bottomWindow() : Container()
       ],
     );
   }
@@ -142,7 +144,7 @@ class _StopMapPageState extends State<StopMapPage> {
                       BoxShadow(
                           blurRadius: 20,
                           offset: Offset.zero,
-                          color: Colors.grey.withOpacity(0.5))
+                          color: Colors.grey.withValues(alpha: 0.5))
                     ]),
                 child: Column(
                   children: <Widget>[
@@ -189,7 +191,7 @@ class _StopMapPageState extends State<StopMapPage> {
                         Container(
                             padding: EdgeInsets.only(
                                 top: 5.0, left: 5.0, right: 10.0),
-                            child: Text(pb!.speed.toString() + " kph")),
+                            child: Text("${pb!.speed} kph")),
                       ],
                     ),
                     Row(
@@ -233,10 +235,7 @@ class _StopMapPageState extends State<StopMapPage> {
                             padding: EdgeInsets.only(
                                 top: 5.0, left: 5.0, right: 10.0),
                             child: Text(
-                              "Lat: " +
-                                  pb!.latitude.toString() +
-                                  " Lng:" +
-                                  pb!.longitude.toString(),
+                              "Lat: ${pb!.latitude} Lng:${pb!.longitude}",
                               style: TextStyle(fontSize: 11),
                             )),
                       ],

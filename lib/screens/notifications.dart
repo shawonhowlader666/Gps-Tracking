@@ -6,6 +6,8 @@ import 'package:gpspro/services/model/notification_type.dart';
 import 'package:gpspro/theme/custom_color.dart';
 
 class NotificationTypePage extends StatefulWidget {
+  const NotificationTypePage({super.key});
+
   @override
   State<StatefulWidget> createState() => _NotificationTypeState();
 }

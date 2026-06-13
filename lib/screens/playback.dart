@@ -195,7 +195,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   String playbackMoveDuration = "-";
   String playbackStopDuration = "-";
 
-  Map<MarkerId, Marker> _playbackMarkers = <MarkerId, Marker>{};
+  final Map<MarkerId, Marker> _playbackMarkers = <MarkerId, Marker>{};
   Map<MarkerId, Marker>? _eventMarkers;
   Map<MarkerId, Marker>? _parkingMarkers;
 

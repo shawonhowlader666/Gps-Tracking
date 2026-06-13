@@ -5,11 +5,11 @@ class Window extends StatefulWidget {
   final Map<String, String>? data;
 
   Window({
-    Key? key,
+    super.key,
     this.offsetX,
     this.offsetY,
     this.data,
-  }) : super(key: key);
+  });
 
   @override
   _WindowState createState() => _WindowState();
@@ -55,7 +55,7 @@ class Window extends StatefulWidget {
   class RowsWidget extends StatelessWidget {
     final String? title, value;
 
-    RowsWidget({this.title, this.value});
+    const RowsWidget({super.key, this.title, this.value});
 
     @override
     Widget build(BuildContext context) {

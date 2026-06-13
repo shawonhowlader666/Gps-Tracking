@@ -13,12 +13,12 @@ class SharePerm {
     message = json['message'];
     status = json['status'];
     errors =
-    json['errors'] != null ? new Errors.fromJson(json['errors']) : null;
+    json['errors'] != null ? Errors.fromJson(json['errors']) : null;
     perm = json['perm'];
   }
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
+    final Map<String, dynamic> data = <String, dynamic>{};
     data['statusCode'] = statusCode;
     data['message'] = message;
     data['status'] = status;
@@ -40,7 +40,7 @@ class Errors {
   }
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
+    final Map<String, dynamic> data = <String, dynamic>{};
     data['id'] = id;
     return data;
   }

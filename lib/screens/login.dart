@@ -16,6 +16,7 @@ import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/config.dart';
 import 'package:gpspro/constants/app_constants.dart';
+import 'package:gpspro/widgets/scale_button.dart';
 
 const Color kPrimaryOrange = Color(0xFF1B851C);
 const Color kLightGrey = Color(0xFFE0E0E0);
@@ -221,7 +222,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           }
         }
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       setState(() {
         isLoadingServers = false;
         availableServers = [];
@@ -554,9 +555,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           // Admin Button (Add Server)
-                          GestureDetector(
-                            // onTap: _showAddServerDialog,
-                            onTap: (){},
+                          ScaleButton(
+                            onTap: () {},
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
@@ -579,7 +579,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                             child: Row(
                               children: [
-                                GestureDetector(
+                                ScaleButton(
                                   onTap: () {
                                     setState(() {
                                       _selectedLanguageIndex = 0;
@@ -607,7 +607,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                     ),
                                   ),
                                 ),
-                                GestureDetector(
+                                ScaleButton(
                                   onTap: () {
                                     setState(() {
                                       _selectedLanguageIndex = 1;
@@ -640,7 +640,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           ),
 
                           // Support Button
-                          GestureDetector(
+                          ScaleButton(
                             onTap: () async {
                               if (WHATS_APP.isNotEmpty) {
                                 await _openWhatsAppSupport();
@@ -745,14 +745,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       const Gap(10),
 
                       Center(
-                        child: TextButton(
-                          onPressed: () {},
-                          child: Text(
-                            'Forgot Password',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: kPrimaryOrange,
-                              decoration: TextDecoration.underline,
+                        child: ScaleButton(
+                          onTap: () {},
+                          child: TextButton(
+                            onPressed: () {},
+                            child: Text(
+                              'Forgot Password',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: kPrimaryOrange,
+                                decoration: TextDecoration.underline,
+                              ),
                             ),
                           ),
                         ),
@@ -887,34 +890,37 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   Widget _buildLoginButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : _loginPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isLoading ? Colors.grey.shade400 : kPrimaryOrange,
-          disabledBackgroundColor: Colors.grey.shade400,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+    return ScaleButton(
+      onTap: isLoading ? null : _loginPressed,
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton(
+          onPressed: isLoading ? null : () {},
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isLoading ? Colors.grey.shade400 : kPrimaryOrange,
+            disabledBackgroundColor: Colors.grey.shade400,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 0,
           ),
-          elevation: 0,
-        ),
-        child: isLoading
-            ? const SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.5,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-          ),
-        )
-            : const Text(
-          'Sign In →',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
+          child: isLoading
+              ? const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          )
+              : const Text(
+            'Sign In →',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
@@ -924,7 +930,14 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   void updateToken() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     await messaging.getToken().then((value) => {_notificationToken = value!});
-    APIService.getUserData().then((value) => {APIService.activateFCM(_notificationToken)});
+    APIService.getUserData().then((user) {
+      if (user != null) {
+        if (user.id != null) UserRepository.setUserId(user.id.toString());
+        if (user.email != null) UserRepository.setEmail(user.email!);
+        if (user.username != null) UserRepository.setName(user.username!);
+      }
+      APIService.activateFCM(_notificationToken);
+    });
   }
 
   void _loginPressed() async {
@@ -954,6 +967,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     Map<String, dynamic>? successfulServer;
     int? lastStatusCode;
 
+    String? apiErrorMessage;
+
     try {
       final List<dynamic> activeServers = availableServers
           .where((s) => s['message'] == null || s['message'].toString().isEmpty)
@@ -978,27 +993,30 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           lastStatusCode = response.statusCode;
 
           if (response.statusCode == 200) {
-            final user = UserLogin.fromJson(
-              jsonDecode(response.body.replaceAll("ï»¿", "")),
-            );
+            final jsonMap = jsonDecode(response.body.replaceAll("ï»¿", ""));
+            final user = UserLogin.fromJson(jsonMap);
 
-            UserRepository.setServerUrl(server['url']);
-            UserRepository.setHash(user.userApiHash!);
-            prefs?.setString('serverType', server['type'] ?? 'free');
+            if (user.userApiHash != null) {
+              UserRepository.setServerUrl(server['url']);
+              UserRepository.setHash(user.userApiHash!);
+              prefs?.setString('serverType', server['type'] ?? 'free');
 
-            if (_rememberMe) {
-              UserRepository.setEmail(_email);
-              UserRepository.setPassword(_password);
-              prefs?.setBool('rememberMe', true);
+              if (_rememberMe) {
+                UserRepository.setEmail(_email);
+                UserRepository.setPassword(_password);
+                prefs?.setBool('rememberMe', true);
+              } else {
+                prefs?.remove('email');
+                prefs?.remove('password');
+                prefs?.setBool('rememberMe', false);
+              }
+
+              successfulServer = server;
+              loginSuccess = true;
+              break;
             } else {
-              prefs?.remove('email');
-              prefs?.remove('password');
-              prefs?.setBool('rememberMe', false);
+              apiErrorMessage = jsonMap['message']?.toString();
             }
-
-            successfulServer = server;
-            loginSuccess = true;
-            break;
           }
         } catch (_) {
           continue;
@@ -1032,7 +1050,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
       Get.offAndToNamed('/home');
     } else {
-      String message = 'Login failed. Please check credentials.';
+      String message = apiErrorMessage ?? 'Login failed. Please check credentials.';
 
       if (lastStatusCode == 401 || lastStatusCode == 400) {
         message = 'Invalid email or password';

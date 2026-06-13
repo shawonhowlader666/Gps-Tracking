@@ -7,6 +7,8 @@ import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/services/model/user.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/api_service.dart';
+import 'package:gpspro/storage/user_repository.dart';
+import 'package:gpspro/widgets/scale_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../services/model/geofence_model.dart';
@@ -18,7 +20,7 @@ class AlertListPage extends StatefulWidget {
   State<StatefulWidget> createState() => _AlertListPageState();
 }
 
-class _AlertListPageState extends State<AlertListPage> {
+class _AlertListPageState extends State<AlertListPage> with SingleTickerProviderStateMixin {
   Timer? _timer;
   SharedPreferences? prefs;
   User? user;
@@ -36,6 +38,22 @@ class _AlertListPageState extends State<AlertListPage> {
   String selectedType = "";
   final TextEditingController _nameCtl = TextEditingController();
   final TextEditingController _typeCtl = TextEditingController();
+  final TextEditingController _deviceSearchCtl = TextEditingController();
+  final TextEditingController _geofenceSearchCtl = TextEditingController();
+  
+  // Search queries
+  String deviceSearchQuery = "";
+  String geofenceSearchQuery = "";
+  String statusFilter = "all";
+  String alertSearchQuery = "";
+  bool _argsChecked = false;
+
+  // Device filtering for the main screen
+  List<String> mainSelectedDevices = [];
+  final TextEditingController _mainDeviceFilterCtl = TextEditingController();
+
+  // Pulse animation controller for loading skeleton
+  late AnimationController _pulseController;
 
   // Alert Types Configuration
   final List<Map<String, dynamic>> alertTypes = [
@@ -56,8 +74,45 @@ class _AlertListPageState extends State<AlertListPage> {
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
     _initController();
     _initialize();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_argsChecked) {
+      _argsChecked = true;
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is int) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _resetForm();
+          deviceSearchQuery = "";
+          geofenceSearchQuery = "";
+          _loadDevices();
+          _loadFences();
+          
+          selectedDevices.clear();
+          selectedDevices.add("devices[]=$args");
+
+          setState(() {
+            mainSelectedDevices.clear();
+            mainSelectedDevices.add(args.toString());
+          });
+
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) => _buildAddAlertSheet(),
+          );
+        });
+      }
+    }
   }
 
   Future<void> _initialize() async {
@@ -100,29 +155,36 @@ class _AlertListPageState extends State<AlertListPage> {
   Future<void> getUser() async {
     try {
       prefs = await SharedPreferences.getInstance();
-      String? userJson = prefs?.getString("user");
+      
+      final email = UserRepository.getEmail();
+      final userIdStr = UserRepository.getUserId();
+      final name = UserRepository.getName() ?? email ?? 'Unknown User';
 
-      if (userJson == null || userJson.isEmpty) {
-        debugPrint("User data not found in SharedPreferences");
-        await getAlerts();
-        return;
+      if (userIdStr != null) {
+        user = User(
+          id: int.tryParse(userIdStr),
+          email: email,
+          username: name,
+        );
+      } else {
+        final fetchedUser = await APIService.getUserData();
+        if (fetchedUser != null) {
+          user = fetchedUser;
+          if (user!.id != null) {
+            UserRepository.setUserId(user!.id.toString());
+          }
+          if (user!.email != null) {
+            UserRepository.setEmail(user!.email!);
+          }
+          if (user!.username != null) {
+            UserRepository.setName(user!.username!);
+          }
+        }
       }
-
-      final parsed = json.decode(userJson);
-
-      if (parsed == null) {
-        debugPrint("Failed to parse user JSON");
-        await getAlerts();
-        return;
-      }
-
-      user = User.fromJson(parsed);
 
       debugPrint("User loaded successfully: ${_getCurrentUserName()}");
-
       await getAlerts();
       if (mounted) setState(() {});
-
     } catch (e, stackTrace) {
       debugPrint("Error getting user: $e");
       debugPrint("Stack trace: $stackTrace");
@@ -131,16 +193,21 @@ class _AlertListPageState extends State<AlertListPage> {
   }
 
   String _getCurrentUserName() {
-    if (user == null) return 'Unknown User';
+    if (user == null) {
+      return UserRepository.getName() ?? UserRepository.getEmail() ?? 'Unknown User';
+    }
+    if (user!.username != null && user!.username!.isNotEmpty) {
+      return user!.username!;
+    }
     if (user!.email != null && user!.email!.isNotEmpty) {
       return user!.email!;
     }
-    return 'Unknown User';
+    return UserRepository.getName() ?? UserRepository.getEmail() ?? 'Unknown User';
   }
 
   String _getAlertUserName(Alert alert) {
     if (user != null && alert.user_id != null) {
-      if (alert.user_id.toString() == user!.toString()) {
+      if (alert.user_id.toString() == user!.id.toString()) {
         return _getCurrentUserName();
       }
     }
@@ -148,6 +215,12 @@ class _AlertListPageState extends State<AlertListPage> {
       return 'User #${alert.user_id}';
     }
     return 'Unknown User';
+  }
+
+  bool _isAlertActive(Alert alert) {
+    return alert.active.toString() == "1" ||
+        alert.active == true ||
+        alert.active.toString().toLowerCase() == "true";
   }
 
   Future<void> getAlerts() async {
@@ -164,6 +237,12 @@ class _AlertListPageState extends State<AlertListPage> {
           if (value != null) {
             alertList.clear();
             alertList.addAll(value);
+            // Sort by ID descending so that newly created alerts show at the top
+            alertList.sort((a, b) {
+              final aId = int.tryParse(a.id.toString()) ?? 0;
+              final bId = int.tryParse(b.id.toString()) ?? 0;
+              return bId.compareTo(aId);
+            });
             debugPrint("Loaded ${alertList.length} alerts");
           }
         });
@@ -181,7 +260,8 @@ class _AlertListPageState extends State<AlertListPage> {
     _showLoadingDialog();
     Map<String, String> requestBody = {
       'id': alert.id.toString(),
-      'active': "false"
+      'alert_id': alert.id.toString(),
+      'active': "0"
     };
 
     APIService.activateAlert(requestBody).then((value) {
@@ -206,7 +286,8 @@ class _AlertListPageState extends State<AlertListPage> {
     _showLoadingDialog();
     Map<String, String> requestBody = {
       'id': alert.id.toString(),
-      'active': "true"
+      'alert_id': alert.id.toString(),
+      'active': "1"
     };
 
     APIService.activateAlert(requestBody).then((value) {
@@ -231,14 +312,14 @@ class _AlertListPageState extends State<AlertListPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(5),
               ),
               child: Icon(Icons.delete_outline, color: Colors.red.shade400),
             ),
@@ -259,7 +340,7 @@ class _AlertListPageState extends State<AlertListPage> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
             ),
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
@@ -289,14 +370,14 @@ class _AlertListPageState extends State<AlertListPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(5),
               ),
               child: Icon(Icons.warning_amber_rounded, color: Colors.orange.shade400, size: 28),
             ),
@@ -348,9 +429,9 @@ class _AlertListPageState extends State<AlertListPage> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF5C8ACF),
+              backgroundColor: Theme.of(context).primaryColor,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
             child: const Text('Got it'),
@@ -467,6 +548,8 @@ class _AlertListPageState extends State<AlertListPage> {
   void _resetForm() {
     _nameCtl.clear();
     _typeCtl.clear();
+    _deviceSearchCtl.clear();
+    _geofenceSearchCtl.clear();
     selectedDevices.clear();
     selectedFenceList.clear();
     selectedType = "";
@@ -489,7 +572,7 @@ class _AlertListPageState extends State<AlertListPage> {
         ),
         backgroundColor: isError ? Colors.red.shade400 : Colors.green.shade400,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
         margin: const EdgeInsets.all(16),
         duration: Duration(seconds: isError ? 4 : 2),
       ),
@@ -500,19 +583,32 @@ class _AlertListPageState extends State<AlertListPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Center(
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Column(
+      builder: (context) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+        elevation: 5,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Please wait...'),
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor),
+                ),
+              ),
+              const SizedBox(width: 20),
+              const Text(
+                'Please wait...',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87,
+                ),
+              ),
             ],
           ),
         ),
@@ -536,6 +632,10 @@ class _AlertListPageState extends State<AlertListPage> {
     _timer?.cancel();
     _nameCtl.dispose();
     _typeCtl.dispose();
+    _deviceSearchCtl.dispose();
+    _geofenceSearchCtl.dispose();
+    _mainDeviceFilterCtl.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -571,19 +671,19 @@ class _AlertListPageState extends State<AlertListPage> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.person, size: 14, color: Colors.blue.shade700),
+                  Icon(Icons.person, size: 14, color: Theme.of(context).primaryColor),
                   const SizedBox(width: 4),
                   Text(
                     _getCurrentUserName(),
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.blue.shade700,
+                      color: Theme.of(context).primaryColor,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -591,92 +691,1047 @@ class _AlertListPageState extends State<AlertListPage> {
               ),
             ),
           ),
-        IconButton(
-          onPressed: getAlerts,
-          icon: const Icon(Icons.refresh),
-          tooltip: 'Refresh',
-        ),
+        const SizedBox(width: 8),
       ],
     );
   }
 
-  Widget _buildBody() {
-    if (isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading alerts...'),
-          ],
-        ),
-      );
-    }
-
-    if (alertList.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return RefreshIndicator(
-      onRefresh: () async => getAlerts(),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: alertList.length,
-        itemBuilder: (context, index) => _buildCleanAlertCard(alertList[index]),
-      ),
+  void _toggleQuickAlert(String type, bool turnOn) async {
+    // 1. Find if an alert of this type already exists
+    Alert? existing = alertList.firstWhereOrNull(
+      (a) => a.type.toString().toLowerCase() == type.toLowerCase()
     );
+
+    if (existing != null) {
+      // If it exists, call activateAlert or removeAlert
+      turnOn ? activateAlert(existing) : removeAlert(existing);
+    } else {
+      // If it does not exist and we want to turn it ON, we automatically create it!
+      if (turnOn) {
+        if (devicesList.isEmpty) {
+          _showSnackBar('No devices available to assign to this alert', isError: true);
+          return;
+        }
+
+        _showLoadingDialog();
+        
+        // Build the query parameters for creating a new alert for all devices by default
+        String name = "Instant ${_formatAlertType(type)} Alert";
+        
+        // Select all device IDs
+        List<String> deviceParams = [];
+        for (var dev in devicesList) {
+          deviceParams.add("devices[]=${dev.id}");
+        }
+        String devicesStr = deviceParams.join("&");
+        
+        String request = "";
+        if (type == "sos") {
+          request = "&name=${Uri.encodeComponent(name)}&type=$type&$devicesStr";
+        } else if (type == "overspeed") {
+          request = "&name=${Uri.encodeComponent(name)}&type=$type&overspeed=80&$devicesStr";
+        } else if (type == "ignition_duration") {
+          request = "&name=${Uri.encodeComponent(name)}&type=$type&ignition_duration=5&$devicesStr";
+        } else if (type == "offline_duration") {
+          request = "&name=${Uri.encodeComponent(name)}&type=$type&offline_duration=30&$devicesStr";
+        } else if (type == "start_of_movement") {
+          request = "&name=${Uri.encodeComponent(name)}&type=$type&$devicesStr";
+        }
+        
+        APIService.addAlert(request).then((value) {
+          if (mounted) {
+            Navigator.pop(context);
+            if (value.statusCode == 200) {
+              _showSnackBar('$name created and activated successfully');
+              getAlerts();
+            } else {
+              try {
+                final responseBody = json.decode(value.body);
+                String errorMsg = responseBody['message'] ?? 'Failed to create quick alert';
+                _showSnackBar(errorMsg, isError: true);
+              } catch (e) {
+                _showSnackBar('Failed to create quick alert: ${value.statusCode}', isError: true);
+              }
+            }
+          }
+        }).catchError((e) {
+          if (mounted) {
+            Navigator.pop(context);
+            _showSnackBar('Error: $e', isError: true);
+          }
+        });
+      }
+    }
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildStatCards() {
+    final deviceFilteredAlerts = alertList.where((alert) {
+      if (mainSelectedDevices.isEmpty) return true;
+      return alert.devices != null && alert.devices!.any((dev) {
+        String devId = "";
+        if (dev is Map) {
+          devId = (dev['id'] ?? '').toString();
+        } else {
+          devId = dev.toString();
+        }
+        return mainSelectedDevices.contains(devId);
+      });
+    }).toList();
+
+    final total = deviceFilteredAlerts.length;
+    final active = deviceFilteredAlerts.where((a) => _isAlertActive(a)).length;
+    final inactive = total - active;
+    final primaryThemeColor = Theme.of(context).primaryColor;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.notifications_off_outlined,
-              size: 64,
-              color: Colors.blue.shade300,
+          Expanded(
+            child: _buildStatCard(
+              title: 'Total Rules',
+              value: total.toString(),
+              color: primaryThemeColor,
+              icon: Icons.notifications_none_rounded,
+              filterType: 'all',
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'No Alerts Yet',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildStatCard(
+              title: 'Active',
+              value: active.toString(),
+              color: const Color(0xFF10B981), // Emerald Green
+              icon: Icons.check_circle_outline_rounded,
+              filterType: 'active',
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Tap the + button to create your first alert',
-            style: TextStyle(color: Colors.grey.shade600),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildStatCard(
+              title: 'Inactive',
+              value: inactive.toString(),
+              color: const Color(0xFFF59E0B), // Amber Orange
+              icon: Icons.pause_circle_outline_rounded,
+              filterType: 'inactive',
+            ),
           ),
         ],
       ),
     );
   }
 
-  // ✅ CLEAN ALERT CARD DESIGN
-  Widget _buildCleanAlertCard(Alert alert) {
-    final bool isActive = alert.active.toString() == "1";
-    final IconData typeIcon = _getAlertTypeIcon(alert.type ?? "");
+  Widget _buildStatCard({
+    required String title,
+    required String value,
+    required Color color,
+    required IconData icon,
+    required String filterType,
+  }) {
+    final bool isSelected = statusFilter == filterType;
+
+    return ScaleButton(
+      onTap: () {
+        setState(() {
+          statusFilter = filterType;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? null : color.withValues(alpha: 0.08),
+          gradient: isSelected
+              ? LinearGradient(
+                  colors: [color, color.withValues(alpha: 0.82)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(
+            color: isSelected ? color : color.withValues(alpha: 0.2),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected 
+                  ? color.withValues(alpha: 0.2)
+                  : color.withValues(alpha: 0.03),
+              blurRadius: isSelected ? 8 : 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : color,
+                  ),
+                ),
+                Icon(
+                  icon,
+                  size: 16,
+                  color: isSelected ? Colors.white : color,
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 10.5,
+                color: isSelected ? Colors.white.withValues(alpha: 0.9) : color.withValues(alpha: 0.8),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickAlertsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Text(
+            'Important Quick Alerts',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: [
+              _buildQuickAlertRow(
+                title: 'Engine Status',
+                subtitle: 'Ignition on/off notification',
+                type: 'ignition_duration',
+                icon: Icons.key_rounded,
+              ),
+              const SizedBox(height: 10),
+              _buildQuickAlertRow(
+                title: 'Over Speed',
+                subtitle: 'Limit 80 km/h threshold',
+                type: 'overspeed',
+                icon: Icons.speed_rounded,
+              ),
+              const SizedBox(height: 10),
+              _buildQuickAlertRow(
+                title: 'SOS Alarm',
+                subtitle: 'Emergency button triggering',
+                type: 'sos',
+                icon: Icons.sos_rounded,
+              ),
+              const SizedBox(height: 10),
+              _buildQuickAlertRow(
+                title: 'Offline Alert',
+                subtitle: 'Disconnect duration 30m',
+                type: 'offline_duration',
+                icon: Icons.wifi_off_rounded,
+              ),
+              const SizedBox(height: 10),
+              _buildQuickAlertRow(
+                title: 'Movement Alert',
+                subtitle: 'Start of movement notification',
+                type: 'start_of_movement',
+                icon: Icons.directions_run_rounded,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _getQuickAlertColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'ignition_duration':
+        return const Color(0xFFD97706); // Amber
+      case 'overspeed':
+        return const Color(0xFFEA580C); // Deep Orange
+      case 'sos':
+        return const Color(0xFFDC2626); // Red
+      case 'offline_duration':
+        return const Color(0xFF6366F1); // Indigo
+      case 'start_of_movement':
+        return const Color(0xFF0D9488); // Teal
+      case 'stop_duration':
+        return const Color(0xFF8B5CF6); // Purple
+      case 'idle_duration':
+        return const Color(0xFF3B82F6); // Blue
+      case 'geofence_in':
+        return const Color(0xFF10B981); // Emerald
+      case 'geofence_out':
+        return const Color(0xFFEF4444); // Rose/Red
+      case 'geofence_inout':
+        return const Color(0xFF06B6D4); // Cyan
+      case 'fuel_fill_theft':
+      case 'fuel(fill/theft)':
+        return const Color(0xFF22C55E); // Green
+      case 'driver_change_unauthorized':
+        return const Color(0xFFEC4899); // Pink
+      default:
+        return Theme.of(context).primaryColor;
+    }
+  }
+
+  Gradient? _getQuickAlertGradient(String type, bool isActive) {
+    if (!isActive) return null;
+    final alertColor = _getQuickAlertColor(type);
+    return LinearGradient(
+      colors: [
+        alertColor,
+        alertColor.withValues(alpha: 0.8),
+      ],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+  }
+
+  Widget _buildQuickAlertRow({
+    required String title,
+    required String subtitle,
+    required String type,
+    required IconData icon,
+  }) {
+    final Alert? existing = alertList.firstWhereOrNull(
+      (a) => a.type.toString().toLowerCase() == type.toLowerCase()
+    );
+    final bool isActive = existing != null && _isAlertActive(existing);
+    final alertColor = _getQuickAlertColor(type);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: isActive ? null : Colors.white,
+        gradient: _getQuickAlertGradient(type, isActive),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(
-          color: isActive ? Colors.green.shade100 : Colors.grey.shade200,
+          color: isActive 
+              ? alertColor 
+              : alertColor.withValues(alpha: 0.18),
+          width: isActive ? 1.5 : 1.0,
+        ),
+        boxShadow: [
+          // 3D Bevel top highlight reflection
+          const BoxShadow(
+            color: Colors.white,
+            blurRadius: 0,
+            offset: Offset(0, -1),
+          ),
+          // Primary drop shadow (casts downward for 3D elevation)
+          BoxShadow(
+            color: isActive 
+                ? alertColor.withValues(alpha: 0.22)
+                : alertColor.withValues(alpha: 0.08),
+            blurRadius: isActive ? 12 : 8,
+            offset: const Offset(0, 4),
+          ),
+          // Ambient shadow
+          BoxShadow(
+            color: isActive 
+                ? alertColor.withValues(alpha: 0.06)
+                : alertColor.withValues(alpha: 0.02),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), // Slim padding
+        child: Row(
+          children: [
+            // Icon Background
+            Container(
+              padding: const EdgeInsets.all(8), // Compact padding
+              decoration: BoxDecoration(
+                color: isActive 
+                    ? Colors.white.withValues(alpha: 0.25) 
+                    : alertColor.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: isActive ? Colors.white : alertColor,
+                size: 20, // Slim icon
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Text Details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: isActive ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Switch
+            Transform.scale(
+              scale: 0.8, // Slim switch
+              child: Switch(
+                value: isActive,
+                onChanged: (val) {
+                  _toggleQuickAlert(type, val);
+                },
+                activeColor: Colors.white,
+                activeTrackColor: Colors.white.withValues(alpha: 0.45),
+                inactiveThumbColor: Colors.grey.shade400,
+                inactiveTrackColor: Colors.grey.shade200,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    String displayText = "";
+    if (mainSelectedDevices.isNotEmpty) {
+      if (mainSelectedDevices.length == 1) {
+        String devId = mainSelectedDevices.first;
+        var found = devicesList.firstWhereOrNull((d) => d.id.toString() == devId);
+        displayText = found?.name ?? 'Device #$devId';
+      } else {
+        displayText = '${mainSelectedDevices.length} devices selected';
+      }
+    }
+    _mainDeviceFilterCtl.text = displayText;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: TextField(
+          readOnly: true,
+          controller: _mainDeviceFilterCtl,
+          onTap: _showMainDeviceSelectionSheet,
+          decoration: InputDecoration(
+            hintText: 'Search alert rules...',
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+            prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 20),
+            suffixIcon: mainSelectedDevices.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () {
+                      setState(() {
+                        mainSelectedDevices.clear();
+                      });
+                    },
+                  )
+                : null,
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showMainDeviceSelectionSheet() {
+    String tempSearchQuery = "";
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final filteredDevices = devicesList.where((d) {
+            final name = d.name?.toLowerCase() ?? '';
+            final id = d.id.toString();
+            final query = tempSearchQuery.toLowerCase();
+            return name.contains(query) || id.contains(query);
+          }).toList();
+
+          return DraggableScrollableSheet(
+            initialChildSize: 0.8,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (context, scrollController) {
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: Column(
+                  children: [
+                    // Handle bar
+                    Container(
+                      margin: const EdgeInsets.only(top: 12),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Icon(Icons.directions_car, color: Theme.of(context).primaryColor),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Select Vehicles',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  '${mainSelectedDevices.length} selected',
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (mainSelectedDevices.isNotEmpty)
+                            TextButton(
+                              onPressed: () {
+                                setModalState(() {
+                                  mainSelectedDevices.clear();
+                                });
+                              },
+                              child: Text(
+                                'Clear',
+                                style: TextStyle(color: Colors.red.shade400, fontSize: 13),
+                              ),
+                            ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const Divider(height: 1),
+
+                    // Search bar
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: TextField(
+                          onChanged: (val) {
+                            setModalState(() {
+                              tempSearchQuery = val;
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search devices...',
+                            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                            prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 20),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Devices list
+                    Expanded(
+                      child: filteredDevices.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.directions_car_filled, size: 48, color: Colors.grey.shade300),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'No vehicles found',
+                                    style: TextStyle(color: Colors.grey.shade500),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView(
+                              controller: scrollController,
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              children: [
+                                // Select All Row
+                                Container(
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey.shade200),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      ListTile(
+                                        leading: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(5),
+                                          ),
+                                          child: Icon(Icons.select_all, color: Theme.of(context).primaryColor, size: 20),
+                                        ),
+                                        title: const Text('Select All', style: TextStyle(fontWeight: FontWeight.w600)),
+                                        trailing: Checkbox(
+                                          value: filteredDevices.isNotEmpty &&
+                                              filteredDevices.every((d) => mainSelectedDevices.contains(d.id.toString())),
+                                          onChanged: (val) {
+                                            setModalState(() {
+                                              if (val!) {
+                                                for (var device in filteredDevices) {
+                                                  String item = device.id.toString();
+                                                  if (!mainSelectedDevices.contains(item)) {
+                                                    mainSelectedDevices.add(item);
+                                                  }
+                                                }
+                                              } else {
+                                                for (var device in filteredDevices) {
+                                                  mainSelectedDevices.remove(device.id.toString());
+                                                }
+                                              }
+                                            });
+                                          },
+                                          activeColor: Theme.of(context).primaryColor,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                        ),
+                                        onTap: () {
+                                          setModalState(() {
+                                            bool allSelected = filteredDevices.isNotEmpty &&
+                                                filteredDevices.every((d) => mainSelectedDevices.contains(d.id.toString()));
+
+                                            if (allSelected) {
+                                              for (var device in filteredDevices) {
+                                                mainSelectedDevices.remove(device.id.toString());
+                                              }
+                                            } else {
+                                              for (var device in filteredDevices) {
+                                                String item = device.id.toString();
+                                                if (!mainSelectedDevices.contains(item)) {
+                                                  mainSelectedDevices.add(item);
+                                                }
+                                              }
+                                            }
+                                          });
+                                        },
+                                      ),
+                                      const Divider(height: 1),
+                                      // Device List
+                                      ...filteredDevices.asMap().entries.map((entry) {
+                                        int idx = entry.key;
+                                        DeviceItem device = entry.value;
+                                        final isSelected = mainSelectedDevices.contains(device.id.toString());
+
+                                        return Column(
+                                          children: [
+                                            ListTile(
+                                              leading: Container(
+                                                padding: const EdgeInsets.all(8),
+                                                decoration: BoxDecoration(
+                                                  color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : Colors.grey.shade100,
+                                                  borderRadius: BorderRadius.circular(5),
+                                                ),
+                                                child: Icon(
+                                                  Icons.directions_car,
+                                                  color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+                                                  size: 20,
+                                                ),
+                                              ),
+                                              title: Text(device.name ?? 'Unknown Device'),
+                                              subtitle: Text('ID: ${device.id}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                                              trailing: Checkbox(
+                                                value: isSelected,
+                                                onChanged: (val) {
+                                                  setModalState(() {
+                                                    if (val!) {
+                                                      mainSelectedDevices.add(device.id.toString());
+                                                    } else {
+                                                      mainSelectedDevices.remove(device.id.toString());
+                                                    }
+                                                  });
+                                                },
+                                                activeColor: Theme.of(context).primaryColor,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                              ),
+                                              onTap: () {
+                                                setModalState(() {
+                                                  if (isSelected) {
+                                                    mainSelectedDevices.remove(device.id.toString());
+                                                  } else {
+                                                    mainSelectedDevices.add(device.id.toString());
+                                                  }
+                                                });
+                                              },
+                                            ),
+                                            if (idx != filteredDevices.length - 1)
+                                              const Divider(height: 1, indent: 56),
+                                          ],
+                                        );
+                                      }).toList(),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                              ],
+                            ),
+                    ),
+
+                    // Apply Button
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, -4),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              setState(() {}); // Trigger build to update the main page filter
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).primaryColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              'Apply Filter',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildRulesHeader() {
+    final primaryThemeColor = Theme.of(context).primaryColor;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'All Alert Rules',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          if (statusFilter != 'all')
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  statusFilter = 'all';
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: primaryThemeColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: primaryThemeColor.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Filter: ${statusFilter.toUpperCase()}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: primaryThemeColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.close, size: 12, color: primaryThemeColor),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    final filteredAlerts = alertList.where((alert) {
+      bool matchesDevice = true;
+      if (mainSelectedDevices.isNotEmpty) {
+        matchesDevice = alert.devices != null && alert.devices!.any((dev) {
+          String devId = "";
+          if (dev is Map) {
+            devId = (dev['id'] ?? '').toString();
+          } else {
+            devId = dev.toString();
+          }
+          return mainSelectedDevices.contains(devId);
+        });
+      }
+
+      bool matchesStatus = true;
+      if (statusFilter == 'active') {
+        matchesStatus = _isAlertActive(alert);
+      } else if (statusFilter == 'inactive') {
+        matchesStatus = !_isAlertActive(alert);
+      }
+
+      return matchesDevice && matchesStatus;
+    }).toList();
+
+    return RefreshIndicator(
+      onRefresh: () async => getAlerts(),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          // 0. Search Bar
+          _buildSearchBar(),
+
+          // 1. Alert Stats Cards
+          _buildStatCards(),
+
+          // 2. Quick Alerts Section
+          _buildQuickAlertsSection(),
+
+          // 3. Custom Alerts List or Empty state
+          _buildRulesHeader(),
+
+          if (isLoading)
+            _buildSkeletonLoader()
+          else if (filteredAlerts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.notifications_off_outlined,
+                      size: 48,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    alertList.isEmpty ? 'No Custom Alerts' : 'No matching rules found',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    alertList.isEmpty
+                        ? 'Create a custom alert to monitor your vehicles'
+                        : 'Try adjusting your search query or status filter',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: filteredAlerts.length,
+              itemBuilder: (context, index) => _buildCleanAlertCard(filteredAlerts[index]),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkeletonLoader() {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        return Opacity(
+          opacity: Tween<double>(begin: 0.35, end: 0.8).evaluate(_pulseController),
+          child: child,
+        );
+      },
+      child: ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: 4,
+        itemBuilder: (context, index) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: Colors.grey.shade200, width: 1.5),
+            ),
+            child: Row(
+              children: [
+                // Icon skeleton
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Text skeletons
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            width: 30,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Switch/Delete skeleton
+                Container(
+                  width: 36,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }  // ✅ CLEAN ALERT CARD DESIGN
+  Widget _buildCleanAlertCard(Alert alert) {
+    final bool isActive = _isAlertActive(alert);
+    final IconData typeIcon = _getAlertTypeIcon(alert.type ?? "");
+    final alertColor = _getQuickAlertColor(alert.type ?? "");
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isActive ? null : Colors.white,
+        gradient: _getQuickAlertGradient(alert.type ?? "", isActive),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(
+          color: isActive ? alertColor.withValues(alpha: 0.6) : alertColor.withValues(alpha: 0.18),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: isActive ? alertColor.withValues(alpha: 0.18) : Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -685,27 +1740,27 @@ class _AlertListPageState extends State<AlertListPage> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(5),
           onTap: () => _showAlertDetails(alert),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
               children: [
                 // Icon
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: isActive ? Colors.green.shade50 : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(10),
+                    color: isActive ? Colors.white.withValues(alpha: 0.25) : alertColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(5),
                   ),
                   child: Icon(
                     typeIcon,
-                    color: isActive ? Colors.green.shade600 : Colors.grey.shade500,
-                    size: 24,
+                    color: isActive ? Colors.white : alertColor,
+                    size: 18,
                   ),
                 ),
 
-                const SizedBox(width: 14),
+                const SizedBox(width: 10),
 
                 // Content
                 Expanded(
@@ -715,32 +1770,32 @@ class _AlertListPageState extends State<AlertListPage> {
                       // Alert Name
                       Text(
                         alert.name ?? 'Unnamed Alert',
-                        style: const TextStyle(
-                          fontSize: 15,
+                        style: TextStyle(
+                          fontSize: 14.5,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          color: isActive ? Colors.white : Colors.black87,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 3),
 
                       // Type and Status
                       Row(
                         children: [
                           // Type Badge
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                             decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
+                              color: isActive ? Colors.white.withValues(alpha: 0.2) : alertColor.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               _formatAlertType(alert.type ?? ""),
                               style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.blue.shade700,
-                                fontWeight: FontWeight.w500,
+                                fontSize: 9,
+                                color: isActive ? Colors.white : alertColor,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
@@ -748,36 +1803,40 @@ class _AlertListPageState extends State<AlertListPage> {
 
                           // Status Indicator
                           Container(
-                            width: 6,
-                            height: 6,
+                            width: 5,
+                            height: 5,
                             decoration: BoxDecoration(
-                              color: isActive ? Colors.green : Colors.grey,
+                              color: isActive ? Colors.white : alertColor,
                               shape: BoxShape.circle,
                             ),
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 3),
                           Text(
                             isActive ? 'Active' : 'Inactive',
                             style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
+                              fontSize: 10,
+                              color: isActive ? Colors.white.withValues(alpha: 0.9) : Colors.grey.shade600,
                             ),
                           ),
                         ],
                       ),
 
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 3),
 
                       // Devices Count
                       Row(
                         children: [
-                          Icon(Icons.directions_car, size: 12, color: Colors.grey.shade500),
-                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.directions_car, 
+                            size: 11, 
+                            color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade500
+                          ),
+                          const SizedBox(width: 3),
                           Text(
                             '${alert.devices?.length ?? 0} devices',
                             style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
+                              fontSize: 10,
+                              color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade600,
                             ),
                           ),
                         ],
@@ -790,16 +1849,19 @@ class _AlertListPageState extends State<AlertListPage> {
 
                 // Actions
                 Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // Switch
                     Transform.scale(
-                      scale: 0.85,
+                      scale: 0.75,
                       child: Switch(
                         value: isActive,
                         onChanged: (value) {
                           value ? activateAlert(alert) : removeAlert(alert);
                         },
-                        activeThumbColor: Colors.green.shade600,
+                        activeThumbColor: Colors.white,
+                        activeTrackColor: Colors.white.withValues(alpha: 0.45),
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
@@ -807,12 +1869,12 @@ class _AlertListPageState extends State<AlertListPage> {
                     // Delete Button
                     IconButton(
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                       onPressed: () => deleteAlert(alert.id!),
                       icon: Icon(
                         Icons.delete_outline,
-                        color: Colors.red.shade400,
-                        size: 20,
+                        color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade400,
+                        size: 18,
                       ),
                     ),
                   ],
@@ -826,7 +1888,7 @@ class _AlertListPageState extends State<AlertListPage> {
   }
 
   void _showAlertDetails(Alert alert) {
-    final bool isActive = alert.active.toString() == "1";
+    final bool isActive = _isAlertActive(alert);
     final String userName = _getAlertUserName(alert);
 
     showModalBottomSheet(
@@ -864,12 +1926,12 @@ class _AlertListPageState extends State<AlertListPage> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: isActive ? Colors.blue.shade50 : Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
+                          color: isActive ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(5),
                         ),
                         child: Icon(
                           _getAlertTypeIcon(alert.type ?? ""),
-                          color: isActive ? const Color(0xFF5C8ACF) : Colors.grey,
+                          color: isActive ? Theme.of(context).primaryColor : Colors.grey,
                           size: 28,
                         ),
                       ),
@@ -968,11 +2030,11 @@ class _AlertListPageState extends State<AlertListPage> {
                               icon: Icon(isActive ? Icons.pause : Icons.play_arrow),
                               label: Text(isActive ? 'Deactivate' : 'Activate'),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: isActive ? Colors.orange : Colors.green,
-                                side: BorderSide(color: isActive ? Colors.orange : Colors.green),
+                                foregroundColor: isActive ? Colors.orange : Theme.of(context).primaryColor,
+                                side: BorderSide(color: isActive ? Colors.orange : Theme.of(context).primaryColor),
                                 padding: const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(5),
                                 ),
                               ),
                             ),
@@ -991,7 +2053,7 @@ class _AlertListPageState extends State<AlertListPage> {
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(5),
                                 ),
                               ),
                             ),
@@ -1027,7 +2089,7 @@ class _AlertListPageState extends State<AlertListPage> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(
@@ -1044,10 +2106,10 @@ class _AlertListPageState extends State<AlertListPage> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(8),
+              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(5),
             ),
-            child: Icon(icon, size: 18, color: const Color(0xFF5C8ACF)),
+            child: Icon(icon, size: 18, color: Theme.of(context).primaryColor),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1086,7 +2148,7 @@ class _AlertListPageState extends State<AlertListPage> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Wrap(
@@ -1101,22 +2163,23 @@ class _AlertListPageState extends State<AlertListPage> {
             deviceName = found?.name ?? 'Device #$device';
           }
 
+          final primaryThemeColor = Theme.of(context).primaryColor;
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(8),
+              color: primaryThemeColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(5),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.directions_car, size: 16, color: Colors.blue.shade700),
+                Icon(Icons.directions_car, size: 16, color: primaryThemeColor),
                 const SizedBox(width: 6),
                 Text(
                   deviceName,
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.blue.shade700,
+                    color: primaryThemeColor,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1137,7 +2200,7 @@ class _AlertListPageState extends State<AlertListPage> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Wrap(
@@ -1152,22 +2215,23 @@ class _AlertListPageState extends State<AlertListPage> {
             fenceName = found?.name ?? 'Geofence #$fence';
           }
 
+          final primaryThemeColor = Theme.of(context).primaryColor;
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              borderRadius: BorderRadius.circular(8),
+              color: primaryThemeColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(5),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.fence, size: 16, color: Colors.green.shade700),
+                Icon(Icons.fence, size: 16, color: primaryThemeColor),
                 const SizedBox(width: 6),
                 Text(
                   fenceName,
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.green.shade700,
+                    color: primaryThemeColor,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1184,7 +2248,7 @@ class _AlertListPageState extends State<AlertListPage> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
@@ -1209,11 +2273,12 @@ class _AlertListPageState extends State<AlertListPage> {
   }
 
   Widget _buildStatusBadge(bool isActive) {
+    final primaryThemeColor = Theme.of(context).primaryColor;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isActive ? Colors.green.shade50 : Colors.red.shade50,
-        borderRadius: BorderRadius.circular(6),
+        color: isActive ? primaryThemeColor.withValues(alpha: 0.1) : Colors.red.shade50,
+        borderRadius: BorderRadius.circular(5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1222,7 +2287,7 @@ class _AlertListPageState extends State<AlertListPage> {
             width: 6,
             height: 6,
             decoration: BoxDecoration(
-              color: isActive ? Colors.green : Colors.red,
+              color: isActive ? primaryThemeColor : Colors.red,
               shape: BoxShape.circle,
             ),
           ),
@@ -1231,7 +2296,7 @@ class _AlertListPageState extends State<AlertListPage> {
             isActive ? 'Active' : 'Inactive',
             style: TextStyle(
               fontSize: 11,
-              color: isActive ? Colors.green.shade700 : Colors.red.shade700,
+              color: isActive ? primaryThemeColor : Colors.red.shade700,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1262,7 +2327,7 @@ class _AlertListPageState extends State<AlertListPage> {
       case 'geofence_inout':
         return Icons.swap_horiz;
       case 'start_of_movement':
-        return Icons.play_arrow;
+        return Icons.directions_run_rounded;
       case 'sos':
         return Icons.sos;
       case 'fuel_fill_theft':
@@ -1283,16 +2348,33 @@ class _AlertListPageState extends State<AlertListPage> {
   }
 
   Widget _buildFAB() {
-    return FloatingActionButton.extended(
-      onPressed: () => _showAddAlertBottomSheet(),
-      backgroundColor: const Color(0xFF5C8ACF),
-      icon: const Icon(Icons.add, color: Colors.white),
-      label: const Text('Add Alert', style: TextStyle(color: Colors.white)),
+    return SizedBox(
+      height: 38,
+      child: FloatingActionButton.extended(
+        onPressed: () => _showAddAlertBottomSheet(),
+        backgroundColor: Theme.of(context).primaryColor,
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(5),
+        ),
+        icon: const Icon(Icons.add, color: Colors.white, size: 18),
+        label: const Text(
+          'ADD ALERT',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
     );
   }
 
   void _showAddAlertBottomSheet() {
     _resetForm();
+    deviceSearchQuery = "";
+    geofenceSearchQuery = "";
     _loadDevices();
     _loadFences();
 
@@ -1338,10 +2420,10 @@ class _AlertListPageState extends State<AlertListPage> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(12),
+                            color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(5),
                           ),
-                          child: const Icon(Icons.add_alert, color: Color(0xFF5C8ACF)),
+                          child: Icon(Icons.add_alert, color: Theme.of(context).primaryColor),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -1446,11 +2528,11 @@ class _AlertListPageState extends State<AlertListPage> {
                         child: ElevatedButton(
                           onPressed: addAlert,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF5C8ACF),
+                            backgroundColor: Theme.of(context).primaryColor,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(5),
                             ),
                             elevation: 0,
                           ),
@@ -1501,7 +2583,7 @@ class _AlertListPageState extends State<AlertListPage> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: TextField(
@@ -1542,10 +2624,10 @@ class _AlertListPageState extends State<AlertListPage> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF5C8ACF) : Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(12),
+              color: isSelected ? Theme.of(context).primaryColor : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(5),
               border: Border.all(
-                color: isSelected ? const Color(0xFF5C8ACF) : Colors.grey.shade300,
+                color: isSelected ? Theme.of(context).primaryColor : Colors.grey.shade300,
                 width: 2,
               ),
             ),
@@ -1586,7 +2668,7 @@ class _AlertListPageState extends State<AlertListPage> {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(5),
           border: Border.all(color: Colors.grey.shade300),
         ),
         child: Column(
@@ -1602,63 +2684,171 @@ class _AlertListPageState extends State<AlertListPage> {
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade200),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: fenceList.asMap().entries.map((entry) {
-          int idx = entry.key;
-          Geofence fence = entry.value;
-          final isSelected = selectedFenceList.contains("geofences[]=${fence.id}");
+    final filteredFences = fenceList.where((f) {
+      final name = f.name?.toLowerCase() ?? '';
+      final id = f.id.toString();
+      final query = geofenceSearchQuery.toLowerCase();
+      return name.contains(query) || id.contains(query);
+    }).toList();
 
-          return Column(
+    return Column(
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _geofenceSearchCtl,
+            onChanged: (val) {
+              setSheetState(() {
+                geofenceSearchQuery = val;
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Search geofences...',
+              prefixIcon: const Icon(Icons.search, color: Colors.grey),
+              suffixIcon: geofenceSearchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        setSheetState(() {
+                          _geofenceSearchCtl.clear();
+                          geofenceSearchQuery = "";
+                        });
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: Column(
             children: [
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.blue.shade50 : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
+              if (filteredFences.isNotEmpty) ...[
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Icon(Icons.select_all, color: Theme.of(context).primaryColor, size: 20),
                   ),
-                  child: Icon(
-                    Icons.fence,
-                    color: isSelected ? const Color(0xFF5C8ACF) : Colors.grey,
-                    size: 20,
+                  title: const Text('Select All', style: TextStyle(fontWeight: FontWeight.w600)),
+                  trailing: Checkbox(
+                    value: filteredFences.isNotEmpty &&
+                        filteredFences.every((f) => selectedFenceList.contains("geofences[]=${f.id}")),
+                    onChanged: (val) {
+                      setSheetState(() {
+                        if (val!) {
+                          for (var fence in filteredFences) {
+                            String item = "geofences[]=${fence.id}";
+                            if (!selectedFenceList.contains(item)) {
+                              selectedFenceList.add(item);
+                            }
+                          }
+                        } else {
+                          for (var fence in filteredFences) {
+                            selectedFenceList.remove("geofences[]=${fence.id}");
+                          }
+                        }
+                      });
+                    },
+                    activeColor: Theme.of(context).primaryColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                   ),
-                ),
-                title: Text(fence.name ?? 'Unnamed Geofence'),
-                trailing: Checkbox(
-                  value: isSelected,
-                  onChanged: (val) {
+                  onTap: () {
                     setSheetState(() {
-                      if (val!) {
-                        selectedFenceList.add("geofences[]=${fence.id}");
+                      bool allSelected = filteredFences.isNotEmpty &&
+                          filteredFences.every((f) => selectedFenceList.contains("geofences[]=${f.id}"));
+
+                      if (allSelected) {
+                        for (var fence in filteredFences) {
+                          selectedFenceList.remove("geofences[]=${fence.id}");
+                        }
                       } else {
-                        selectedFenceList.remove("geofences[]=${fence.id}");
+                        for (var fence in filteredFences) {
+                          String item = "geofences[]=${fence.id}";
+                          if (!selectedFenceList.contains(item)) {
+                            selectedFenceList.add(item);
+                          }
+                        }
                       }
                     });
                   },
-                  activeColor: const Color(0xFF5C8ACF),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                 ),
-                onTap: () {
-                  setSheetState(() {
-                    if (isSelected) {
-                      selectedFenceList.remove("geofences[]=${fence.id}");
-                    } else {
-                      selectedFenceList.add("geofences[]=${fence.id}");
-                    }
-                  });
-                },
-              ),
-              if (idx != fenceList.length - 1)
                 Divider(height: 1, color: Colors.grey.shade200),
+              ],
+              ...filteredFences.asMap().entries.map((entry) {
+                int idx = entry.key;
+                Geofence fence = entry.value;
+                final isSelected = selectedFenceList.contains("geofences[]=${fence.id}");
+
+                return Column(
+                  children: [
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Icon(
+                          Icons.fence,
+                          color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(fence.name ?? 'Unnamed Geofence'),
+                      trailing: Checkbox(
+                        value: isSelected,
+                        onChanged: (val) {
+                          setSheetState(() {
+                            if (val!) {
+                              selectedFenceList.add("geofences[]=${fence.id}");
+                            } else {
+                              selectedFenceList.remove("geofences[]=${fence.id}");
+                            }
+                          });
+                        },
+                        activeColor: Theme.of(context).primaryColor,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                      onTap: () {
+                        setSheetState(() {
+                          if (isSelected) {
+                            selectedFenceList.remove("geofences[]=${fence.id}");
+                          } else {
+                            selectedFenceList.add("geofences[]=${fence.id}");
+                          }
+                        });
+                      },
+                    ),
+                    if (idx != filteredFences.length - 1)
+                      Divider(height: 1, color: Colors.grey.shade200),
+                  ],
+                );
+              }).toList(),
             ],
-          );
-        }).toList(),
-      ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1668,7 +2858,7 @@ class _AlertListPageState extends State<AlertListPage> {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(5),
           border: Border.all(color: Colors.grey.shade300),
         ),
         child: Column(
@@ -1684,109 +2874,172 @@ class _AlertListPageState extends State<AlertListPage> {
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade200),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          // Select All Header
-          ListTile(
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
+    final filteredDevices = devicesList.where((d) {
+      final name = d.name?.toLowerCase() ?? '';
+      final id = d.id.toString();
+      final query = deviceSearchQuery.toLowerCase();
+      return name.contains(query) || id.contains(query);
+    }).toList();
+
+    return Column(
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
               ),
-              child: const Icon(Icons.select_all, color: Color(0xFF5C8ACF), size: 20),
-            ),
-            title: const Text('Select All', style: TextStyle(fontWeight: FontWeight.w600)),
-            trailing: Checkbox(
-              value: selectedDevices.length == devicesList.length && devicesList.isNotEmpty,
-              onChanged: (val) {
-                setSheetState(() {
-                  if (val!) {
-                    selectedDevices.clear();
-                    for (var device in devicesList) {
-                      selectedDevices.add("devices[]=${device.id}");
-                    }
-                  } else {
-                    selectedDevices.clear();
-                  }
-                });
-              },
-              activeColor: const Color(0xFF5C8ACF),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-            ),
-            onTap: () {
+            ],
+          ),
+          child: TextField(
+            controller: _deviceSearchCtl,
+            onChanged: (val) {
               setSheetState(() {
-                if (selectedDevices.length == devicesList.length) {
-                  selectedDevices.clear();
-                } else {
-                  selectedDevices.clear();
-                  for (var device in devicesList) {
-                    selectedDevices.add("devices[]=${device.id}");
-                  }
-                }
+                deviceSearchQuery = val;
               });
             },
+            decoration: InputDecoration(
+              hintText: 'Search devices...',
+              prefixIcon: const Icon(Icons.search, color: Colors.grey),
+              suffixIcon: deviceSearchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        setSheetState(() {
+                          _deviceSearchCtl.clear();
+                          deviceSearchQuery = "";
+                        });
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
           ),
-          Divider(height: 1, color: Colors.grey.shade200),
-          // Device List
-          ...devicesList.asMap().entries.map((entry) {
-            int idx = entry.key;
-            DeviceItem device = entry.value;
-            final isSelected = selectedDevices.contains("devices[]=${device.id}");
-
-            return Column(
-              children: [
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.green.shade50 : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.directions_car,
-                      color: isSelected ? Colors.green : Colors.grey,
-                      size: 20,
-                    ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: Column(
+            children: [
+              // Select All Header
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(5),
                   ),
-                  title: Text(device.name ?? 'Unknown Device'),
-                  subtitle: Text('ID: ${device.id}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                  trailing: Checkbox(
-                    value: isSelected,
-                    onChanged: (val) {
-                      setSheetState(() {
-                        if (val!) {
-                          selectedDevices.add("devices[]=${device.id}");
-                        } else {
+                  child: Icon(Icons.select_all, color: Theme.of(context).primaryColor, size: 20),
+                ),
+                title: const Text('Select All', style: TextStyle(fontWeight: FontWeight.w600)),
+                trailing: Checkbox(
+                  value: filteredDevices.isNotEmpty &&
+                      filteredDevices.every((d) => selectedDevices.contains("devices[]=${d.id}")),
+                  onChanged: (val) {
+                    setSheetState(() {
+                      if (val!) {
+                        for (var device in filteredDevices) {
+                          String item = "devices[]=${device.id}";
+                          if (!selectedDevices.contains(item)) {
+                            selectedDevices.add(item);
+                          }
+                        }
+                      } else {
+                        for (var device in filteredDevices) {
                           selectedDevices.remove("devices[]=${device.id}");
                         }
-                      });
-                    },
-                    activeColor: const Color(0xFF5C8ACF),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                  ),
-                  onTap: () {
-                    setSheetState(() {
-                      if (isSelected) {
-                        selectedDevices.remove("devices[]=${device.id}");
-                      } else {
-                        selectedDevices.add("devices[]=${device.id}");
                       }
                     });
                   },
+                  activeColor: Theme.of(context).primaryColor,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                 ),
-                if (idx != devicesList.length - 1)
-                  Divider(height: 1, indent: 56, color: Colors.grey.shade200),
-              ],
-            );
-          }),
-        ],
-      ),
+                onTap: () {
+                  setSheetState(() {
+                    bool allSelected = filteredDevices.isNotEmpty &&
+                        filteredDevices.every((d) => selectedDevices.contains("devices[]=${d.id}"));
+
+                    if (allSelected) {
+                      for (var device in filteredDevices) {
+                        selectedDevices.remove("devices[]=${device.id}");
+                      }
+                    } else {
+                      for (var device in filteredDevices) {
+                        String item = "devices[]=${device.id}";
+                        if (!selectedDevices.contains(item)) {
+                          selectedDevices.add(item);
+                        }
+                      }
+                    }
+                  });
+                },
+              ),
+              Divider(height: 1, color: Colors.grey.shade200),
+              // Device List
+              ...filteredDevices.asMap().entries.map((entry) {
+                int idx = entry.key;
+                DeviceItem device = entry.value;
+                final isSelected = selectedDevices.contains("devices[]=${device.id}");
+
+                return Column(
+                  children: [
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Icon(
+                          Icons.directions_car,
+                          color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(device.name ?? 'Unknown Device'),
+                      subtitle: Text('ID: ${device.id}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                      trailing: Checkbox(
+                        value: isSelected,
+                        onChanged: (val) {
+                          setSheetState(() {
+                            if (val!) {
+                              selectedDevices.add("devices[]=${device.id}");
+                            } else {
+                              selectedDevices.remove("devices[]=${device.id}");
+                            }
+                          });
+                        },
+                        activeColor: Theme.of(context).primaryColor,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                      onTap: () {
+                        setSheetState(() {
+                          if (isSelected) {
+                            selectedDevices.remove("devices[]=${device.id}");
+                          } else {
+                            selectedDevices.add("devices[]=${device.id}");
+                          }
+                        });
+                      },
+                    ),
+                    if (idx != filteredDevices.length - 1)
+                      Divider(height: 1, indent: 56, color: Colors.grey.shade200),
+                  ],
+                );
+              }),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1836,3 +3089,4 @@ class _AlertListPageState extends State<AlertListPage> {
     }
   }
 }
+

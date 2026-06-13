@@ -5,7 +5,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:get/get.dart';
 import 'package:gpspro/config.dart';
 import 'package:gpspro/constants/app_constants.dart';
 import 'package:gpspro/screens/server_maintenance_screen.dart';
@@ -279,26 +278,35 @@ class _SplashScreenPageState extends State<SplashScreenPage>
       UserRepository.getPassword(),
     ).then((response) {
       if (response != null && response.statusCode == 200) {
-        UserLogin user = UserLogin.fromJson(
-          jsonDecode(response.body.replaceAll("ï»¿", "")),
-        );
-        UserRepository.setHash(user.userApiHash!);
-        updateToken();
-        _updateStatus('Welcome back!');
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) Navigator.pushReplacementNamed(context, '/home');
-        });
-      } else {
-        if (mounted) Navigator.pushReplacementNamed(context, '/login');
+        final jsonMap = jsonDecode(response.body.replaceAll("ï»¿", ""));
+        UserLogin user = UserLogin.fromJson(jsonMap);
+        if (user.userApiHash != null) {
+          UserRepository.setHash(user.userApiHash!);
+          updateToken();
+          _updateStatus('Welcome back!');
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) Navigator.pushReplacementNamed(context, '/home');
+          });
+          return;
+        }
       }
+      if (mounted) Navigator.pushReplacementNamed(context, '/login');
+    }).catchError((error) {
+      if (mounted) Navigator.pushReplacementNamed(context, '/login');
     });
   }
 
   void updateToken() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     await messaging.getToken().then((value) => {_notificationToken = value!});
-    APIService.getUserData()
-        .then((value) => {APIService.activateFCM(_notificationToken)});
+    APIService.getUserData().then((user) {
+      if (user != null) {
+        if (user.id != null) UserRepository.setUserId(user.id.toString());
+        if (user.email != null) UserRepository.setEmail(user.email!);
+        if (user.username != null) UserRepository.setName(user.username!);
+      }
+      APIService.activateFCM(_notificationToken);
+    });
   }
 
   @override

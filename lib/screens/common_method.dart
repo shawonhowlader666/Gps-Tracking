@@ -116,7 +116,7 @@ Future<Uint8List?> getBytesFromBytes(var data, int width) async {
 LatLngBounds boundsFromLatLngList(Set<Marker> list) {
   assert(list.isNotEmpty);
   double? x0, x1, y0, y1;
-  list.forEach((value) {
+  for (var value in list) {
     if (x0 == null) {
       x0 = x1 = value.position.latitude;
       y0 = y1 = value.position.longitude;
@@ -126,14 +126,14 @@ LatLngBounds boundsFromLatLngList(Set<Marker> list) {
       if (value.position.longitude > y1!) y1 = value.position.longitude;
       if (value.position.longitude < y0!) y0 = value.position.longitude;
     }
-  });
+  }
   return LatLngBounds(northeast: LatLng(x1!, y1!), southwest: LatLng(x0!, y0!));
 }
 
 LatLngBounds boundsFromLatLngGeofenceList(Set<Marker> list) {
-  assert(list.length > 0);
+  assert(list.isNotEmpty);
   double? x0, x1, y0, y1;
-  list.forEach((value) {
+  for (var value in list) {
     if (x0 == null) {
       x0 = x1 = value.position.latitude;
       y0 = y1 = value.position.longitude;
@@ -143,7 +143,7 @@ LatLngBounds boundsFromLatLngGeofenceList(Set<Marker> list) {
       if (value.position.longitude > y1!) y1 = value.position.longitude;
       if (value.position.longitude < y0!) y0 = value.position.longitude;
     }
-  });
+  }
   return LatLngBounds(northeast: LatLng(x1!, y1!), southwest: LatLng(x0!, y0!));
 }
 

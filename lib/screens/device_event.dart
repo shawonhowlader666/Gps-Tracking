@@ -11,6 +11,8 @@ import 'package:gpspro/theme/custom_color.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class DeviceEventPage extends StatefulWidget {
+  const DeviceEventPage({super.key});
+
   @override
   State<StatefulWidget> createState() => _DeviceEventPageState();
 }
@@ -37,7 +39,7 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
     super.initState();
   }
 
-  getReport() {
+  void getReport() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       // ignore: unnecessary_null_comparison
       if (args != null) {
@@ -141,7 +143,7 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
                           ],
                         ),
                         leading: Icon(Icons.notifications),
-                        trailing: Container(
+                        trailing: SizedBox(
                           width: 80,
                           child: Text(
                               eventItem.time != null ? eventItem.time! : "",

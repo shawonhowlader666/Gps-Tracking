@@ -11,6 +11,7 @@ import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
+import 'package:gpspro/arguments/fence_args.dart';
 
 class GeofenceAddPage extends StatefulWidget {
   const GeofenceAddPage({super.key});
@@ -54,6 +55,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
   bool _showControlPanel = false;
   bool _isSubmitting = false;
   bool _isLoading = true;
+  bool _argsChecked = false;
 
   // Constants
   static const double _minRadius = 50;
@@ -64,6 +66,36 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
     super.initState();
     _loadMapStyle();
     _getCurrentLocation();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_argsChecked) {
+      _argsChecked = true;
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is FenceArguments && args.device != null) {
+        final device = args.device!;
+        if (!_selectedDevices.any((d) => d.id == device.id)) {
+          _selectedDevices.add(device);
+          if (device.lat != null && device.lng != null) {
+            _geofenceCenter = LatLng(
+              double.parse(device.lat.toString()),
+              double.parse(device.lng.toString()),
+            );
+            _showControlPanel = true;
+            _updateGeofenceShape();
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              mapController?.animateCamera(
+                CameraUpdate.newCameraPosition(
+                  CameraPosition(target: _geofenceCenter!, zoom: 15),
+                ),
+              );
+            });
+          }
+        }
+      }
+    }
   }
 
   void _loadMapStyle() async {
@@ -252,7 +284,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
             height: MediaQuery.of(context).size.height * 0.6,
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(5)),
             ),
             child: Column(
               children: [
@@ -355,7 +387,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                       fillColor: Colors.grey[100],
                       contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(5),
                         borderSide: BorderSide.none,
                       ),
                     ),
@@ -363,6 +395,70 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                 ),
 
                 const Divider(height: 1),
+
+                // Select All Header (only if list is not empty)
+                if (list.isNotEmpty) ...[
+                  ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                    leading: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: CustomColor.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Icon(Icons.select_all, color: CustomColor.primary, size: 20),
+                    ),
+                    title: const Text(
+                      'Select All',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    trailing: Checkbox(
+                      value: list.where((d) => d.deviceData?.active.toString() == "1").isNotEmpty &&
+                          list.where((d) => d.deviceData?.active.toString() == "1").every((d) => _selectedDevices.any((sd) => sd.id == d.id)),
+                      onChanged: (val) {
+                        setState(() {
+                          final activeList = list.where((d) => d.deviceData?.active.toString() == "1").toList();
+                          if (val!) {
+                            for (var device in activeList) {
+                              if (!_selectedDevices.any((d) => d.id == device.id)) {
+                                _selectedDevices.add(device);
+                              }
+                            }
+                          } else {
+                            for (var device in activeList) {
+                              _selectedDevices.removeWhere((d) => d.id == device.id);
+                            }
+                          }
+                        });
+                        setModalState(() {});
+                      },
+                      activeColor: CustomColor.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                    onTap: () {
+                      final activeList = list.where((d) => d.deviceData?.active.toString() == "1").toList();
+                      final isAllSelected = activeList.isNotEmpty &&
+                          activeList.every((d) => _selectedDevices.any((sd) => sd.id == d.id));
+                      setState(() {
+                        if (isAllSelected) {
+                          for (var device in activeList) {
+                            _selectedDevices.removeWhere((d) => d.id == device.id);
+                          }
+                        } else {
+                          for (var device in activeList) {
+                            if (!_selectedDevices.any((d) => d.id == device.id)) {
+                              _selectedDevices.add(device);
+                            }
+                          }
+                        }
+                      });
+                      setModalState(() {});
+                    },
+                  ),
+                  const Divider(height: 1),
+                ],
 
                 // Device list
                 Expanded(
@@ -413,7 +509,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                                 color: isSelected
                                     ? CustomColor.primary.withValues(alpha: 0.15)
                                     : Colors.grey[100],
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(5),
                               ),
                               child: Icon(
                                 Icons.directions_car,
@@ -481,7 +577,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(5),
                         ),
                       ),
                       child: Text(
@@ -578,7 +674,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
   }
 
   String _colorToHex(Color color) {
-    return '#${color.value.toRadixString(16).substring(2)}';
+    return '#${color.toARGB32().toRadixString(16).substring(2)}';
   }
 
   @override
@@ -677,7 +773,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
         height: 38,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(5),
           boxShadow: [
             BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8),
           ],
@@ -713,7 +809,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
         height: 38,
         decoration: BoxDecoration(
           color: isSelected ? CustomColor.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(5),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -772,11 +868,11 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
   Widget _buildControlButton(IconData icon, VoidCallback onPressed) {
     return Material(
       elevation: 2,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(5),
       color: Colors.white,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(5),
         child: Container(
           width: 36,
           height: 36,
@@ -796,7 +892,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
         padding: EdgeInsets.fromLTRB(16, 14, 16, MediaQuery.of(context).padding.bottom + 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.08),
@@ -836,15 +932,15 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                       fillColor: Colors.grey[50],
                       contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(5),
                         borderSide: BorderSide(color: Colors.grey[300]!),
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(5),
                         borderSide: BorderSide(color: Colors.grey[200]!),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(5),
                         borderSide: BorderSide(color: CustomColor.primary),
                       ),
                     ),
@@ -864,7 +960,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                         color: _selectedDevices.isEmpty
                             ? Colors.grey[50]
                             : CustomColor.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(5),
                         border: Border.all(
                           color: _selectedDevices.isEmpty
                               ? Colors.grey[200]!
@@ -887,12 +983,11 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                                   ? 'Vehicles'
                                   : '${_selectedDevices.length} selected',
                               style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: _selectedDevices.isEmpty
-                                    ? Colors.grey[500]
-                                    : CustomColor.primary,
-                              ),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: _selectedDevices.isEmpty
+                                      ? Colors.grey[500]
+                                      : CustomColor.primary),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -946,7 +1041,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: CustomColor.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(5),
                     ),
                     child: Text(
                       '${_radius.toInt()}m',
@@ -1039,7 +1134,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(5),
                       ),
                     ),
                     child: _isSubmitting

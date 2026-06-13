@@ -52,25 +52,25 @@ Widget FenceCard(Geofence f, BuildContext context, StateSetter setState) {
     leading: Checkbox(
         //ignore: unnecessary_null_comparison
         value: selectedFenceList != null
-            ? selectedFenceList.contains("geofences[]=" + f.id.toString())
+            ? selectedFenceList.contains("geofences[]=${f.id}")
                 ? true
                 : false
             : false,
         onChanged: (value) {
           if (value!) {
             setState(() {
-              selectedFenceList.add("geofences[]=" + f.id.toString());
+              selectedFenceList.add("geofences[]=${f.id}");
             });
           } else {
             setState(() {
-              selectedFenceList.remove("geofences[]=" + f.id.toString());
+              selectedFenceList.remove("geofences[]=${f.id}");
             });
           }
         }),
     title: Row(
       mainAxisAlignment: MainAxisAlignment.start,
       children: <Widget>[
-        new Text(f.name!, style: TextStyle(fontSize: 13.0)),
+        Text(f.name!, style: TextStyle(fontSize: 13.0)),
       ],
     ),
   );

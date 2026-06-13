@@ -11,11 +11,11 @@ class CustomReportTab extends StatefulWidget {
   final String? presetPeriod;
 
   const CustomReportTab({
-    Key? key,
+    super.key,
     required this.deviceId,
     required this.deviceName,
     this.presetPeriod,
-  }) : super(key: key);
+  });
 
   @override
   State<CustomReportTab> createState() => _CustomReportTabState();
@@ -213,7 +213,7 @@ class _CustomReportTabState extends State<CustomReportTab>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF3F51B5).withOpacity(0.08),
+              color: const Color(0xFF3F51B5).withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -343,7 +343,7 @@ class _CustomReportTabState extends State<CustomReportTab>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3F51B5).withOpacity(0.1),
+                  color: const Color(0xFF3F51B5).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.assessment, color: Color(0xFF3F51B5), size: 20),
@@ -402,7 +402,7 @@ class _CustomReportTabState extends State<CustomReportTab>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 18, color: color),

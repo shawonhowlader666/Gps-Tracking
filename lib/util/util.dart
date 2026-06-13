@@ -128,47 +128,47 @@ class Util {
     DateTime lastUpdate = DateTime.parse(date);
     String month, day;
     if (lastUpdate.month < 10) {
-      month = "0" + lastUpdate.month.toString();
+      month = "0${lastUpdate.month}";
     } else {
       month = lastUpdate.month.toString();
     }
 
     if (lastUpdate.day < 10) {
-      day = "0" + lastUpdate.day.toString();
+      day = "0${lastUpdate.day}";
     } else {
       day = lastUpdate.day.toString();
     }
 
-    return lastUpdate.year.toString() + "-" + month + "-" + day;
+    return "${lastUpdate.year}-$month-$day";
   }
 
   static String formatTimeReport(String date) {
     DateTime lastUpdate = DateTime.parse(date);
     String hour, minute;
     if (lastUpdate.month < 10) {
-      hour = "0" + lastUpdate.month.toString();
+      hour = "0${lastUpdate.month}";
     } else {
       minute = lastUpdate.month.toString();
     }
 
     if (lastUpdate.hour < 10) {
-      hour = "0" + lastUpdate.hour.toString();
+      hour = "0${lastUpdate.hour}";
     } else {
       hour = lastUpdate.hour.toString();
     }
 
     if (lastUpdate.minute < 10) {
-      minute = "0" + lastUpdate.minute.toString();
+      minute = "0${lastUpdate.minute}";
     } else {
       minute = lastUpdate.minute.toString();
     }
-    return hour + ":" + minute + ":00";
+    return "$hour:$minute:00";
   }
 
   static LatLngBounds boundsFromLatLngList(Set<Marker> list) {
     assert(list.isNotEmpty);
     double? x0, x1, y0, y1;
-    list.forEach((value) {
+    for (var value in list) {
       if (x0 == null) {
         x0 = x1 = value.position.latitude;
         y0 = y1 = value.position.longitude;
@@ -178,7 +178,7 @@ class Util {
         if (value.position.longitude > y1!) y1 = value.position.longitude;
         if (value.position.longitude < y0!) y0 = value.position.longitude;
       }
-    });
+    }
     return LatLngBounds(
         northeast: LatLng(x1!, y1!), southwest: LatLng(x0!, y0!));
   }
@@ -231,7 +231,7 @@ class Util {
       String infoText,
       Color color,
       double rotateDegree,
-      bool _showTitle) async {
+      bool showTitle) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
 
@@ -239,7 +239,7 @@ class Util {
     Size canvasSize = const Size(700.0, 200.0);
     Size markerSize = const Size(250.0, 120.0);
     TextPainter? textPainter;
-    if (_showTitle) {
+    if (showTitle) {
       // Add info text
       textPainter = TextPainter(textDirection: m.TextDirection.ltr);
       textPainter.text = TextSpan(
@@ -291,7 +291,7 @@ class Util {
     paintImage(canvas: canvas, image: image, rect: oval, fit: BoxFit.fitHeight);
 
     canvas.restore();
-    if (_showTitle) {
+    if (showTitle) {
       // Add info box stroke
       canvas.drawPath(
           Path()
@@ -395,7 +395,7 @@ class Util {
       String infoText,
       Color color,
       double rotateDegree,
-      bool _showTitle) async {
+      bool showTitle) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
 
@@ -403,7 +403,7 @@ class Util {
     Size canvasSize = const Size(700.0, 200.0);
     Size markerSize = const Size(250.0, 120.0);
     TextPainter? textPainter;
-    if (_showTitle) {
+    if (showTitle) {
       // Add info text
       textPainter = TextPainter(textDirection: m.TextDirection.ltr);
       textPainter.text = TextSpan(
@@ -459,7 +459,7 @@ class Util {
         canvas: canvas, image: image!, rect: oval, fit: BoxFit.fitHeight);
 
     canvas.restore();
-    if (_showTitle) {
+    if (showTitle) {
       // Add info box stroke
       canvas.drawPath(
           Path()
@@ -544,7 +544,7 @@ class Util {
   }
 
   static Future<BitmapDescriptor> getMarkerIcon(String imagePath) async {
-    final String imageUrl = UserRepository.getServerUrl()! + "/" + imagePath;
+    final String imageUrl = "${UserRepository.getServerUrl()!}/$imagePath";
     final File imageFile = await DefaultCacheManager().getSingleFile(imageUrl);
     final Uint8List bytes = await imageFile.readAsBytes();
     return BitmapDescriptor.bytes(bytes);

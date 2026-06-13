@@ -12,7 +12,7 @@ import 'package:gpspro/widgets/banner_ad_widget.dart';
 class LockUnlockScreen extends StatefulWidget {
   final DeviceItem device;
 
-  const LockUnlockScreen({Key? key, required this.device}) : super(key: key);
+  const LockUnlockScreen({super.key, required this.device});
 
   @override
   _LockUnlockScreenState createState() => _LockUnlockScreenState();
@@ -20,20 +20,26 @@ class LockUnlockScreen extends StatefulWidget {
 
 class _LockUnlockScreenState extends State<LockUnlockScreen>
     with SingleTickerProviderStateMixin {
-  List<String> _commands = <String>[];
-  List<String> _commandsValue = <String>[];
+  final List<String> _commands = <String>[];
+  final List<String> _commandsValue = <String>[];
   int _selectedCommand = 0;
   String _commandSelected = "";
   double _dialogCommandHeight = 150.0;
-  TextEditingController _customCommand = TextEditingController();
+  final TextEditingController _customCommand = TextEditingController();
   bool _isLoading = false;
   bool _isEngineOn = false;
+  bool _isLocked = false;
+  String? _lockCommandType;
+  String? _unlockCommandType;
+  String? _lockCommandId;
+  String? _unlockCommandId;
   late AnimationController _animationController;
 
   @override
   void initState() {
     super.initState();
     _checkEngineStatus();
+    _loadLockUnlockCommands();
 
     _animationController = AnimationController(
       vsync: this,
@@ -48,7 +54,86 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     super.dispose();
   }
 
+  String? _getRawParameter(String key) {
+    if (widget.device == null) return null;
+    
+    // 1. Try to search in device.sensors list
+    final sensors = widget.device.sensors;
+    if (sensors != null) {
+      for (var s in sensors) {
+        if (s is Map) {
+          final name = (s['name'] ?? '').toString().toLowerCase();
+          if (name.contains(key.toLowerCase())) {
+            final val = s['value']?.toString();
+            if (val != null && val.trim().isNotEmpty) {
+              return val;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Try to search in deviceData.sensors
+    final ddSensors = widget.device.deviceData?.sensors;
+    if (ddSensors != null) {
+      for (var s in ddSensors) {
+        if (s is Map) {
+          final name = (s['name'] ?? '').toString().toLowerCase();
+          if (name.contains(key.toLowerCase())) {
+            final val = s['value']?.toString();
+            if (val != null && val.trim().isNotEmpty) {
+              return val;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Try to extract from traccar.other (XML or JSON)
+    final other = widget.device.deviceData?.traccar?.other;
+    if (other != null && other.isNotEmpty) {
+      final xmlMatch = RegExp('<$key>(.*?)</$key>', caseSensitive: false).firstMatch(other);
+      if (xmlMatch != null && xmlMatch.group(1) != null) {
+        final val = xmlMatch.group(1);
+        if (val != null && val.trim().isNotEmpty) {
+          return val;
+        }
+      }
+      final jsonMatch = RegExp('["\']?$key["\']?\\s*:\\s*(true|false|"[^"]*"|\'[^\']*\'|\\d+\\.?\\d*)', caseSensitive: false).firstMatch(other);
+      if (jsonMatch != null && jsonMatch.group(1) != null) {
+        final val = jsonMatch.group(1)!.replaceAll('"', '').replaceAll("'", '');
+        if (val.trim().isNotEmpty) {
+          return val;
+        }
+      }
+    }
+
+    // 4. Try from deviceData.parameters or currents
+    final params = widget.device.deviceData?.parameters;
+    if (params != null && params.isNotEmpty) {
+      final jsonMatch = RegExp('["\']?$key["\']?\\s*:\\s*(true|false|"[^"]*"|\'[^\']*\'|\\d+\\.?\\d*)', caseSensitive: false).firstMatch(params);
+      if (jsonMatch != null && jsonMatch.group(1) != null) {
+        final val = jsonMatch.group(1)!.replaceAll('"', '').replaceAll("'", '');
+        if (val.trim().isNotEmpty) {
+          return val;
+        }
+      }
+    }
+
+    return null;
+  }
+
   void _checkEngineStatus() {
+    // 1. Determine Locked/Secured Status
+    final lockVal = _getRawParameter('blocked') ?? _getRawParameter('lock');
+    if (lockVal != null) {
+      final lv = lockVal.toLowerCase().trim();
+      setState(() => _isLocked = (lv == 'true' || lv == '1' || lv == 'blocked' || lv == 'lock'));
+    } else {
+      setState(() => _isLocked = false);
+    }
+
+    // 2. Determine Engine/Ignition Status
     if (widget.device.engineStatus != null) {
       final status = widget.device.engineStatus;
       if (status is bool) {
@@ -75,6 +160,34 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     }
   }
 
+  void _loadLockUnlockCommands() {
+    APIService.getSavedCommands(widget.device.id.toString()).then((value) {
+      if (value != null) {
+        try {
+          final List<dynamic> list = json.decode(value.body);
+          for (var element in list) {
+            if (element is Map) {
+              final title = (element["title"] ?? "").toString().toLowerCase();
+              final type = (element["type"] ?? "").toString();
+              final id = (element["id"] ?? "").toString();
+              if (title.contains("unlock")) {
+                _unlockCommandType = type;
+                _unlockCommandId = id;
+              } else if (title.contains("lock")) {
+                _lockCommandType = type;
+                _lockCommandId = id;
+              }
+            }
+          }
+          debugPrint("Mapped Lock command: $_lockCommandType (ID: $_lockCommandId)");
+          debugPrint("Mapped Unlock command: $_unlockCommandType (ID: $_unlockCommandId)");
+        } catch (e) {
+          debugPrint("Error loading saved commands: $e");
+        }
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -84,7 +197,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         elevation: 0,
         backgroundColor: Colors.transparent,
         title: const Text(
-          'Engine Control',
+          'Lock / Unlock',
           style: TextStyle(
             color: Color(0xFF0F172A),
             fontWeight: FontWeight.w700,
@@ -151,7 +264,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w900,
-                                    color: const Color(0xFF0F172A).withOpacity(0.4),
+                                    color: const Color(0xFF0F172A).withValues(alpha: 0.4),
                                     letterSpacing: 1.5,
                                   ),
                                 ),
@@ -207,17 +320,17 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: _isEngineOn
-                          ? const Color(0xFF10B981).withOpacity(0.08 * (1 - value))
-                          : const Color(0xFFEF4444).withOpacity(0.08 * (1 - value)),
+                      color: !_isLocked
+                          ? const Color(0xFF10B981).withValues(alpha: 0.08 * (1 - value))
+                          : const Color(0xFFEF4444).withValues(alpha: 0.08 * (1 - value)),
                       blurRadius: 20,
                       spreadRadius: 8 * value,
                     ),
                   ],
                   border: Border.all(
-                    color: _isEngineOn
-                        ? const Color(0xFF10B981).withOpacity(0.15 + (0.35 * (1 - value)))
-                        : const Color(0xFFEF4444).withOpacity(0.15 + (0.35 * (1 - value))),
+                    color: !_isLocked
+                        ? const Color(0xFF10B981).withValues(alpha: 0.15 + (0.35 * (1 - value)))
+                        : const Color(0xFFEF4444).withValues(alpha: 0.15 + (0.35 * (1 - value))),
                     width: 1.5,
                   ),
                 ),
@@ -231,9 +344,9 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: _isEngineOn
-                    ? const Color(0xFF10B981).withOpacity(0.1)
-                    : const Color(0xFFEF4444).withOpacity(0.1),
+                color: !_isLocked
+                    ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                    : const Color(0xFFEF4444).withValues(alpha: 0.1),
                 width: 3,
               ),
             ),
@@ -252,15 +365,15 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
               ],
               border: Border.all(
-                color: _isEngineOn
-                    ? const Color(0xFF10B981).withOpacity(0.8)
-                    : const Color(0xFFEF4444).withOpacity(0.8),
+                color: !_isLocked
+                    ? const Color(0xFF10B981).withValues(alpha: 0.8)
+                    : const Color(0xFFEF4444).withValues(alpha: 0.8),
                 width: 2,
               ),
             ),
@@ -268,18 +381,18 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 m.Icon(
-                  _isEngineOn ? Icons.play_arrow_rounded : Icons.lock_outline_rounded,
-                  color: _isEngineOn ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  _isLocked ? Icons.lock_outline_rounded : Icons.lock_open_rounded,
+                  color: !_isLocked ? const Color(0xFF10B981) : const Color(0xFFEF4444),
                   size: 34,
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _isEngineOn ? "RUNNING" : "SECURED",
+                  _isLocked ? "SECURED" : "UNLOCKED",
                   style: TextStyle(
                     fontSize: 9.5,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 1.5,
-                    color: _isEngineOn ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                    color: !_isLocked ? const Color(0xFF10B981) : const Color(0xFFEF4444),
                   ),
                 ),
               ],
@@ -303,7 +416,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -317,7 +430,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: CustomColor.primary.withOpacity(0.08),
+                  color: CustomColor.primary.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
                 child: m.Icon(
@@ -366,7 +479,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
             children: [
               _buildQuickStat('GPS SIGNAL', 'ONLINE', Icons.wifi_rounded, const Color(0xFF10B981)),
               _buildQuickStat('IGNITION', _isEngineOn ? 'ON' : 'OFF', Icons.power_rounded, _isEngineOn ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
-              _buildQuickStat('SECURITY', _isEngineOn ? 'READY' : 'ARMED', Icons.shield_rounded, _isEngineOn ? CustomColor.primary : const Color(0xFFF59E0B)),
+              _buildQuickStat('SECURITY', _isLocked ? 'ARMED' : 'READY', Icons.shield_rounded, _isLocked ? const Color(0xFFF59E0B) : const Color(0xFF10B981)),
             ],
           ),
         ],
@@ -403,28 +516,38 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   }
 
   Widget _buildCircularButton({required bool isUnlockButton}) {
-    final bool isActive = (isUnlockButton == _isEngineOn);
+    final bool isActive = isUnlockButton ? !_isLocked : _isLocked;
     
     // Core color scheme definitions
     final Color themeColor = isUnlockButton ? const Color(0xFF16A34A) : const Color(0xFFDC2626); // green / red
     
     // Base light background and border colors
-    final Color baseBgColor = isUnlockButton ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2); // light green / light red
+    final Color baseBgColor = isUnlockButton ? const Color(0xFF86EFAC) : const Color(0xFFFCA5A5); // light green / light red
     final Color baseBorderColor = isUnlockButton ? const Color(0xFF86EFAC) : const Color(0xFFFCA5A5);
 
-    // Apply active/inactive opacity values to always maintain full color fill style
-    final Color bgColor = isActive ? baseBgColor : baseBgColor.withOpacity(0.35);
-    final Color borderColor = isActive ? baseBorderColor : baseBorderColor.withOpacity(0.3);
-    final Color textIconColor = isActive ? themeColor : themeColor.withOpacity(0.45);
+    // Apply active/inactive colors
+    final Color bgColor = isActive 
+        ? (isUnlockButton ? const Color(0xFF16A34A) : const Color(0xFFDC2626)) 
+        : baseBgColor;
+        
+    final Color borderColor = isActive 
+        ? (isUnlockButton ? const Color(0xFF16A34A) : const Color(0xFFDC2626)) 
+        : baseBorderColor;
 
-    final IconData iconData = Icons.power_settings_new_rounded;
-    final String title = isUnlockButton ? 'ENGINE ON' : 'ENGINE OFF';
-    final String subtitle = isUnlockButton ? 'Unlock / Run' : 'Lock / Stop';
+    final Color textIconColor = isActive ? Colors.white : Colors.white.withValues(alpha: 0.65);
+
+    final IconData iconData = isUnlockButton ? Icons.lock_open_rounded : Icons.lock_rounded;
+    final String title = isUnlockButton ? 'UNLOCK' : 'LOCK';
+    final String subtitle = isUnlockButton ? 'Unlock Vehicle' : 'Lock Vehicle';
 
     return GestureDetector(
       onTap: () {
         if (!_isLoading && !isActive) {
-          sendEngineCommand(isUnlockButton ? 'engineResume' : 'engineStop');
+          sendEngineCommand(
+            isUnlockButton ? (_unlockCommandType ?? 'engineResume') : (_lockCommandType ?? 'engineStop'),
+            isUnlockButton ? _unlockCommandId : _lockCommandId,
+            isUnlockButton,
+          );
         }
       },
       child: Column(
@@ -443,7 +566,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -474,7 +597,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               fontSize: 13,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.8,
-              color: textIconColor,
+              color: themeColor,
             ),
             textAlign: TextAlign.center,
           ),
@@ -502,7 +625,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.01),
+            color: Colors.black.withValues(alpha: 0.01),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -544,7 +667,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
   Widget _buildLoadingOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.4),
+      color: Colors.black.withValues(alpha: 0.4),
       child: Center(
         child: Container(
           padding: const EdgeInsets.all(32),
@@ -553,7 +676,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 20,
               ),
             ],
@@ -582,16 +705,17 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   }
 
   void _toggleEngine() {
-    final commandType = _isEngineOn ? 'engineStop' : 'engineResume';
-    sendEngineCommand(commandType);
+    final commandType = _isLocked ? (_unlockCommandType ?? 'engineResume') : (_lockCommandType ?? 'engineStop');
+    final commandId = _isLocked ? _unlockCommandId : _lockCommandId;
+    sendEngineCommand(commandType, commandId, _isLocked);
   }
 
-  void sendEngineCommand(String commandType) async {
+  void sendEngineCommand(String commandType, String? commandId, bool isUnlockAction) async {
     setState(() => _isLoading = true);
 
     try {
       Map<String, String> requestBody = <String, String>{
-        'id': "",
+        'id': commandId ?? "",
         'device_id': widget.device.id.toString(),
         'type': commandType
       };
@@ -599,14 +723,32 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       final res = await APIService.sendCommands(requestBody);
 
       if (res.statusCode == 200) {
+        // Parse the body to check for JSON status
+        Map<String, dynamic>? responseJson;
+        try {
+          responseJson = json.decode(res.body);
+        } catch (_) {}
+
+        if (responseJson != null && responseJson.containsKey('status') && responseJson['status'] == 0) {
+          Fluttertoast.showToast(
+            msg: responseJson['message'] ?? 'Failed to send command',
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: const Color(0xFFEF4444),
+            textColor: Colors.white,
+          );
+          return;
+        }
+
         setState(() {
-          _isEngineOn = commandType == 'engineResume';
+          _isLocked = !isUnlockAction;
+          _isEngineOn = isUnlockAction ? _isEngineOn : false;
         });
 
         Fluttertoast.showToast(
-          msg: commandType == 'engineStop'
-              ? 'Engine locked successfully'
-              : 'Engine unlocked successfully',
+          msg: !isUnlockAction
+              ? 'Vehicle locked successfully'
+              : 'Vehicle unlocked successfully',
           toastLength: Toast.LENGTH_SHORT,
           gravity: ToastGravity.BOTTOM,
           backgroundColor: const Color(0xFF22C55E),

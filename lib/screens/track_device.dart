@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer';
 import 'dart:math' as m;
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
+import 'package:gpspro/widgets/scale_button.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -348,6 +350,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     final deviceId = widget.device!.id!;
 
+    // Diagnostic log to investigate satellite count and sensor values
+    debugPrint("--- DIAGNOSTICS CHECK ---");
+    debugPrint("Device Sensors: ${device?.sensors}");
+    debugPrint("Device Parameters: ${device?.deviceData?.parameters}");
+    debugPrint("Traccar Other: ${device?.deviceData?.traccar?.other}");
+    debugPrint("-------------------------");
+
     try {
       final current = DateTime.now();
       final year = current.year;
@@ -378,7 +387,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
                   double distance = double.parse(history.distance_sum!.replaceAll(RegExp(r'[^0-9.]'), ''));
                   double hours = _parseDurationToHours(history.move_duration!);
                   if (hours > 0) {
-                    avgSpeed = (distance / hours).toStringAsFixed(1) + " km/h";
+                    avgSpeed = "${(distance / hours).toStringAsFixed(1)} km/h";
                   }
                 } catch (_) {}
               }
@@ -402,7 +411,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       // Fetch report
       try {
         final report = await ReportService.getTodayReportData(deviceId: deviceId);
-        if (report != null && report.isNotEmpty && mounted && !_isDisposed) {
+        if (report.isNotEmpty && mounted && !_isDisposed) {
           setState(() {
             todayData = report;
             todayEngineHours = report.engineHours ?? "--";
@@ -468,7 +477,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
         if (s is Map) {
           final name = (s['name'] ?? '').toString().toLowerCase();
           if (name.contains(key.toLowerCase())) {
-            return s['value']?.toString();
+            final val = s['value']?.toString();
+            if (val != null && val.trim().isNotEmpty) {
+              return val;
+            }
           }
         }
       }
@@ -481,7 +493,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
         if (s is Map) {
           final name = (s['name'] ?? '').toString().toLowerCase();
           if (name.contains(key.toLowerCase())) {
-            return s['value']?.toString();
+            final val = s['value']?.toString();
+            if (val != null && val.trim().isNotEmpty) {
+              return val;
+            }
           }
         }
       }
@@ -492,20 +507,29 @@ class _TrackDeviceState extends State<TrackDevicePage>
     if (other != null && other.isNotEmpty) {
       final xmlMatch = RegExp('<$key>(.*?)</$key>', caseSensitive: false).firstMatch(other);
       if (xmlMatch != null && xmlMatch.group(1) != null) {
-        return xmlMatch.group(1);
+        final val = xmlMatch.group(1);
+        if (val != null && val.trim().isNotEmpty) {
+          return val;
+        }
       }
-      final jsonMatch = RegExp('"$key"\\s*:\\s*(true|false|"[^"]*"|\\d+\\.?\\d*)', caseSensitive: false).firstMatch(other);
+      final jsonMatch = RegExp('["\']?$key["\']?\\s*:\\s*(true|false|"[^"]*"|\'[^\']*\'|\\d+\\.?\\d*)', caseSensitive: false).firstMatch(other);
       if (jsonMatch != null && jsonMatch.group(1) != null) {
-        return jsonMatch.group(1)!.replaceAll('"', '');
+        final val = jsonMatch.group(1)!.replaceAll('"', '').replaceAll("'", '');
+        if (val.trim().isNotEmpty) {
+          return val;
+        }
       }
     }
 
     // 4. Try from deviceData.parameters or currents
     final params = device!.deviceData?.parameters;
     if (params != null && params.isNotEmpty) {
-      final jsonMatch = RegExp('"$key"\\s*:\\s*(true|false|"[^"]*"|\\d+\\.?\\d*)', caseSensitive: false).firstMatch(params);
+      final jsonMatch = RegExp('["\']?$key["\']?\\s*:\\s*(true|false|"[^"]*"|\'[^\']*\'|\\d+\\.?\\d*)', caseSensitive: false).firstMatch(params);
       if (jsonMatch != null && jsonMatch.group(1) != null) {
-        return jsonMatch.group(1)!.replaceAll('"', '');
+        final val = jsonMatch.group(1)!.replaceAll('"', '').replaceAll("'", '');
+        if (val.trim().isNotEmpty) {
+          return val;
+        }
       }
     }
 
@@ -564,7 +588,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   String getSatelliteCount() {
-    return _getRawParameter('sat') ?? _getRawParameter('satellite') ?? '--';
+    return _getRawParameter('sat') ?? 
+           _getRawParameter('satellite') ?? 
+           _getRawParameter('satellites') ?? 
+           _getRawParameter('satVisible') ?? 
+           _getRawParameter('gpsSats') ?? 
+           '--';
   }
 
   // ==================== SMOOTH MARKER UPDATE ====================
@@ -951,6 +980,186 @@ class _TrackDeviceState extends State<TrackDevicePage>
     if (device != null) Get.to(() => LockUnlockScreen(device: device!));
   }
 
+  void _showDiagnosticsDialog(BuildContext context) {
+    if (device == null) return;
+    
+    // Parse traccar.other
+    Map<String, dynamic> traccarParams = {};
+    final other = device!.deviceData?.traccar?.other;
+    if (other != null && other.isNotEmpty) {
+      try {
+        traccarParams = Util.convertXmlToJson(other);
+      } catch (_) {
+        // Try parsing as JSON
+        try {
+          traccarParams = json.decode(other);
+        } catch (_) {}
+      }
+    }
+
+    // Parse parameters
+    Map<String, dynamic> rawParams = {};
+    final params = device!.deviceData?.parameters;
+    if (params != null && params.isNotEmpty) {
+      try {
+        rawParams = json.decode(params);
+      } catch (_) {
+        // Fallback: manually parse simple key-value pairs
+        final matches = RegExp('["\']?(\\w+)["\']?\\s*:\\s*(true|false|"[^"]*"|\'[^\']*\'|\\d+\\.?\\d*)', caseSensitive: false).allMatches(params);
+        for (var m in matches) {
+          if (m.groupCount >= 2) {
+            final key = m.group(1)!;
+            final val = m.group(2)!.replaceAll('"', '').replaceAll("'", '');
+            rawParams[key] = val;
+          }
+        }
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Icon(Icons.analytics_rounded, color: CustomColor.primaryColor, size: 24),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Device Telemetry Diagnostics',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Raw GPRS parameter values currently reported by the device.',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildDiagSection('Sensors', device!.sensors ?? []),
+                      _buildDiagSection('GPRS Parameters', rawParams),
+                      _buildDiagSection('Telemetry (Traccar)', traccarParams),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CustomColor.primaryColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDiagSection(String title, dynamic data) {
+    if (data == null || (data is Map && data.isEmpty) || (data is List && data.isEmpty)) {
+      return const SizedBox.shrink();
+    }
+
+    List<Widget> items = [];
+    if (data is Map) {
+      data.forEach((key, val) {
+        items.add(_buildDiagRow(key.toString(), val.toString()));
+      });
+    } else if (data is List) {
+      for (var item in data) {
+        if (item is Map) {
+          items.add(_buildDiagRow(
+            (item['name'] ?? 'Unknown').toString(),
+            (item['value'] ?? '--').toString(),
+          ));
+        }
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 16, bottom: 8),
+          child: Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+              letterSpacing: 1.0,
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            children: items,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDiagRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _shareLocation() {
     if (device?.lat == null) return;
     final url =
@@ -1170,35 +1379,50 @@ class _TrackDeviceState extends State<TrackDevicePage>
     final satVal = getSatelliteCount();
 
     final List<Widget> cards = [
-      _StatusCard(
-        icon: Icons.power,
-        label: 'Engine',
-        value: engineVal,
-        color: engineVal == 'On' ? Colors.green : Colors.amber,
+      ScaleButton(
+        onTap: () => _showDiagnosticsDialog(context),
+        child: _StatusCard(
+          icon: Icons.power,
+          label: 'Engine',
+          value: engineVal,
+          color: engineVal == 'On' ? Colors.green : Colors.amber,
+        ),
       ),
-      _StatusCard(
-        icon: lockVal == 'Locked' ? Icons.lock : Icons.lock_open,
-        label: 'Lock',
-        value: lockVal,
-        color: lockVal == 'Locked' ? Colors.red : Colors.blue,
+      ScaleButton(
+        onTap: _openLock,
+        child: _StatusCard(
+          icon: lockVal == 'Locked' ? Icons.lock : Icons.lock_open,
+          label: 'Lock',
+          value: lockVal,
+          color: lockVal == 'Locked' ? Colors.red : Colors.blue,
+        ),
       ),
-      _StatusCard(
-        icon: Icons.bolt,
-        label: 'Charge',
-        value: chargeVal,
-        color: chargeVal == 'Charging' ? Colors.orange : Colors.grey,
+      ScaleButton(
+        onTap: () => _showDiagnosticsDialog(context),
+        child: _StatusCard(
+          icon: Icons.bolt,
+          label: 'Charge',
+          value: chargeVal,
+          color: chargeVal == 'Charging' ? Colors.orange : Colors.grey,
+        ),
       ),
-      _StatusCard(
-        icon: Icons.battery_charging_full,
-        label: 'Voltage',
-        value: voltVal,
-        color: Colors.teal,
+      ScaleButton(
+        onTap: () => _showDiagnosticsDialog(context),
+        child: _StatusCard(
+          icon: Icons.battery_charging_full,
+          label: 'Voltage',
+          value: voltVal,
+          color: Colors.teal,
+        ),
       ),
-      _StatusCard(
-        icon: Icons.satellite_alt,
-        label: 'Sats',
-        value: satVal,
-        color: Colors.indigo,
+      ScaleButton(
+        onTap: () => _showDiagnosticsDialog(context),
+        child: _StatusCard(
+          icon: Icons.satellite_alt,
+          label: 'Sats',
+          value: satVal,
+          color: Colors.indigo,
+        ),
       ),
     ];
 
@@ -1580,8 +1804,7 @@ class _MapButton extends StatelessWidget {
     required this.onTap,
     this.selected = false,
     this.iconColor,
-    this.backgroundColor,
-  });
+  }) : backgroundColor = null;
 
   @override
   Widget build(BuildContext context) {
@@ -1613,7 +1836,7 @@ class _Speedometer extends StatelessWidget {
   final int speed;
   final int maxSpeed;
 
-  const _Speedometer({required this.speed, this.maxSpeed = 140});
+  const _Speedometer({required this.speed}) : maxSpeed = 140;
 
   Color get statusColor {
     if (speed >= 120) return const Color(0xFFE53935);

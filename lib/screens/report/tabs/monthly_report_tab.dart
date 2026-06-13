@@ -14,11 +14,11 @@ class MonthlyReportTab extends StatefulWidget {
   final DeviceItem? device;
 
   const MonthlyReportTab({
-    Key? key,
+    super.key,
     required this.deviceId,
     required this.deviceName,
     this.device,
-  }) : super(key: key);
+  });
 
   @override
   State<MonthlyReportTab> createState() => _MonthlyReportTabState();
@@ -254,7 +254,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: onTap != null
-              ? const Color(0xFF3F51B5).withOpacity(0.1)
+              ? const Color(0xFF3F51B5).withValues(alpha: 0.1)
               : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(8),
         ),
@@ -334,7 +334,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
         if (_dailyReports.isEmpty && !_isLoadingDaily)
           _buildEmptyDays()
         else
-          ..._dailyReports.map((day) => _buildDayCard(day)).toList(),
+          ..._dailyReports.map((day) => _buildDayCard(day)),
       ],
     );
   }
@@ -483,8 +483,8 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
               color: isToday
                   ? const Color(0xFF3F51B5)
                   : isWeekend
-                  ? Colors.orange.withOpacity(0.1)
-                  : const Color(0xFF3F51B5).withOpacity(0.1),
+                  ? Colors.orange.withValues(alpha: 0.1)
+                  : const Color(0xFF3F51B5).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(

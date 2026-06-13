@@ -14,13 +14,13 @@ class ReportScreen extends StatefulWidget {
   final String? presetPeriod;
 
   const ReportScreen({
-    Key? key,
+    super.key,
     required this.deviceId,
     required this.deviceName,
     this.device,  // ADD THIS
     this.initialTab = 0,
     this.presetPeriod,
-  }) : super(key: key);
+  });
 
   @override
   State<ReportScreen> createState() => _ReportScreenState();

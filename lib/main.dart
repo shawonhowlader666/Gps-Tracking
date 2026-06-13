@@ -447,7 +447,11 @@ class _MyAppPageState extends State<MyApp> with WidgetsBindingObserver {
             navigatorKey: navigatorKey,
             theme: ThemeData(
               useMaterial3: true,
-              primarySwatch: CustomColor.primaryColor,
+              primaryColor: CustomColor.primary,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: CustomColor.primary,
+                primary: CustomColor.primary,
+              ),
               visualDensity: VisualDensity.adaptivePlatformDensity,
               textTheme: GoogleFonts.rethinkSansTextTheme(),
               appBarTheme: const AppBarTheme(

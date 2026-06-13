@@ -16,10 +16,10 @@ class MultiPeriodReportScreen extends StatefulWidget {
   final String deviceName;
 
   const MultiPeriodReportScreen({
-    Key? key,
+    super.key,
     required this.deviceId,
     required this.deviceName,
-  }) : super(key: key);
+  });
 
   @override
   State<MultiPeriodReportScreen> createState() => _MultiPeriodReportScreenState();

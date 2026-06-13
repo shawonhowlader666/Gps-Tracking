@@ -10,6 +10,8 @@ import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/theme/custom_color.dart';
 
 class ReportTripViewPage extends StatefulWidget {
+  const ReportTripViewPage({super.key});
+
   @override
   State<StatefulWidget> createState() => _ReportTripViewPageState();
 }
@@ -34,7 +36,7 @@ class _ReportTripViewPageState extends State<ReportTripViewPage> {
     super.initState();
   }
 
-  getReport() {
+  void getReport() {
     _timer = Timer.periodic(Duration(milliseconds: 1000), (timer) {
       if (args != null) {
         _timer!.cancel();
@@ -240,7 +242,7 @@ class _ReportTripViewPageState extends State<ReportTripViewPage> {
                     )),
                     Expanded(
                         child: Text(
-                      fuelConsume != null ? fuelConsume : "-",
+                      fuelConsume ?? "-",
                       style: TextStyle(fontSize: 15),
                     )),
                   ],
@@ -286,26 +288,17 @@ class _ReportTripViewPageState extends State<ReportTripViewPage> {
                   children: [
                     Expanded(
                         child: Text(
-                      ("positionDistance").tr +
-                          ": " +
-                          t.distance.toString() +
-                          " km",
+                      "${("positionDistance").tr}: ${t.distance} km",
                       style: TextStyle(fontSize: 11),
                     )),
                     Expanded(
                         child: Text(
-                      ("reportAverageSpeed").tr +
-                          ": " +
-                          t.average_speed.toString() +
-                          " kph",
+                      "${("reportAverageSpeed").tr}: ${t.average_speed} kph",
                       style: TextStyle(fontSize: 11),
                     )),
                     Expanded(
                         child: Text(
-                      ("reportMaximumSpeed").tr +
-                          ": " +
-                          t.top_speed.toString() +
-                          " kph",
+                      "${("reportMaximumSpeed").tr}: ${t.top_speed} kph",
                       style: TextStyle(fontSize: 11),
                     )),
                   ],
@@ -315,14 +308,12 @@ class _ReportTripViewPageState extends State<ReportTripViewPage> {
                   children: [
                     Expanded(
                         child: Text(
-                      ("reportDuration").tr + ": " + t.time.toString(),
+                      "${("reportDuration").tr}: ${t.time}",
                       style: TextStyle(fontSize: 11),
                     )),
                     Expanded(
                         child: Text(
-                      ("reportSpentFuel").tr +
-                          ": " +
-                          t.fuel_consumption.toString(),
+                      "${("reportSpentFuel").tr}: ${t.fuel_consumption}",
                       style: TextStyle(fontSize: 11),
                     )),
                   ],

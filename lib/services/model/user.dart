@@ -1,5 +1,7 @@
 class User extends Object {
+  int? id;
   String? email;
+  String? username;
   String? expiration_date;
   dynamic days_left;
   String? plan;
@@ -7,7 +9,9 @@ class User extends Object {
   int? group_id;
 
   User(
-      {this.email,
+      {this.id,
+      this.email,
+      this.username,
       this.expiration_date,
       this.days_left,
       this.plan,
@@ -15,7 +19,9 @@ class User extends Object {
       this.group_id});
 
   User.fromJson(Map<String, dynamic> json) {
+    id = json["id"];
     email = json["email"];
+    username = json["username"] ?? json["name"];
     expiration_date = json["expiration_date"];
     days_left = json["days_left"];
     plan = json["plan"];
@@ -24,7 +30,9 @@ class User extends Object {
   }
 
   Map<String, dynamic> toJson() => {
+        'id': id,
         'email': email,
+        'username': username,
         'expiration_date': expiration_date,
         'days_left': days_left,
         'plan': plan,

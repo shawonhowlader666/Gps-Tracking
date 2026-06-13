@@ -22,6 +22,7 @@ import 'package:gpspro/services/model/single_device.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/widgets/address.dart';
 import 'package:gpspro/widgets/banner_ad_widget.dart';
+import 'package:gpspro/widgets/scale_button.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/payment_service.dart';
@@ -201,10 +202,13 @@ class _DevicePageState extends State<DevicePage> {
       if (status is int) return status == 1;
       if (status is String) {
         final s = status.toLowerCase().trim();
-        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s))
+        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s)) {
           return true;
+        }
         if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
-            .contains(s)) return false;
+            .contains(s)) {
+          return false;
+        }
       }
     }
 
@@ -230,9 +234,13 @@ class _DevicePageState extends State<DevicePage> {
             if (value is String) {
               final v = value.toLowerCase().trim();
               if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
-                  .contains(v)) return true;
+                  .contains(v)) {
+                return true;
+              }
               if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
-                  .contains(v)) return false;
+                  .contains(v)) {
+                return false;
+              }
             }
           }
         } catch (e) {
@@ -421,6 +429,137 @@ class _DevicePageState extends State<DevicePage> {
       case DeviceStatus.offline:
         return Icons.signal_wifi_off;
     }
+  }
+
+  String? _getRawParameter(DeviceItem? device, String key) {
+    if (device == null) return null;
+    
+    // 1. Try to search in device.sensors list
+    final sensors = device.sensors;
+    if (sensors != null) {
+      for (var s in sensors) {
+        if (s is Map) {
+          final name = (s['name'] ?? '').toString().toLowerCase();
+          if (name.contains(key.toLowerCase())) {
+            final val = s['value']?.toString();
+            if (val != null && val.trim().isNotEmpty) {
+              return val;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Try to search in deviceData.sensors
+    final ddSensors = device.deviceData?.sensors;
+    if (ddSensors != null) {
+      for (var s in ddSensors) {
+        if (s is Map) {
+          final name = (s['name'] ?? '').toString().toLowerCase();
+          if (name.contains(key.toLowerCase())) {
+            final val = s['value']?.toString();
+            if (val != null && val.trim().isNotEmpty) {
+              return val;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Try to extract from traccar.other (XML or JSON)
+    final other = device.deviceData?.traccar?.other;
+    if (other != null && other.isNotEmpty) {
+      final xmlMatch = RegExp('<$key>(.*?)</$key>', caseSensitive: false).firstMatch(other);
+      if (xmlMatch != null && xmlMatch.group(1) != null) {
+        final val = xmlMatch.group(1);
+        if (val != null && val.trim().isNotEmpty) {
+          return val;
+        }
+      }
+      final jsonMatch = RegExp('["\']?$key["\']?\\s*:\\s*(true|false|"[^"]*"|\'[^\']*\'|\\d+\\.?\\d*)', caseSensitive: false).firstMatch(other);
+      if (jsonMatch != null && jsonMatch.group(1) != null) {
+        final val = jsonMatch.group(1)!.replaceAll('"', '').replaceAll("'", '');
+        if (val.trim().isNotEmpty) {
+          return val;
+        }
+      }
+    }
+
+    // 4. Try from deviceData.parameters or currents
+    final params = device.deviceData?.parameters;
+    if (params != null && params.isNotEmpty) {
+      final jsonMatch = RegExp('["\']?$key["\']?\\s*:\\s*(true|false|"[^"]*"|\'[^\']*\'|\\d+\\.?\\d*)', caseSensitive: false).firstMatch(params);
+      if (jsonMatch != null && jsonMatch.group(1) != null) {
+        final val = jsonMatch.group(1)!.replaceAll('"', '').replaceAll("'", '');
+        if (val.trim().isNotEmpty) {
+          return val;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  Widget _buildSignalWidget(DeviceItem? device) {
+    if (device == null) return const SizedBox.shrink();
+    final rssiVal = _getRawParameter(device, 'rssi') ?? _getRawParameter(device, 'signal') ?? _getRawParameter(device, 'gsm');
+    if (rssiVal == null || rssiVal.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
+    int bars = 0;
+    try {
+      final val = double.parse(rssiVal).toInt();
+      if (val > 20) {
+        bars = 5;
+      } else {
+        bars = val.clamp(0, 5);
+      }
+    } catch (_) {
+      bars = 4;
+    }
+
+    // Determine signal color based on strength
+    Color sigColor = Colors.grey;
+    if (bars >= 4) {
+      sigColor = const Color(0xFF10B981); // Green
+    } else if (bars == 3) {
+      sigColor = const Color(0xFFF59E0B); // Orange/Amber
+    } else {
+      sigColor = const Color(0xFFEF4444); // Red
+    }
+
+    IconData signalIcon = Icons.signal_cellular_alt;
+    if (bars == 0) {
+      signalIcon = Icons.signal_cellular_null;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(width: 8),
+        Container(
+          width: 1.5,
+          height: 10,
+          color: Colors.grey[300],
+        ),
+        const SizedBox(width: 8),
+        Icon(
+          signalIcon,
+          size: 14,
+          color: sigColor,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          rssiVal,
+          style: TextStyle(
+            color: sigColor,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -820,6 +959,7 @@ class _DevicePageState extends State<DevicePage> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            _buildSignalWidget(device),
                           ],
                         ),
                       ],
@@ -925,7 +1065,7 @@ class _DevicePageState extends State<DevicePage> {
                 _buildBottomButton(
                   icon: Icons.more_horiz,
                   label: 'more'.tr,
-                  onTap: () => _showMoreOptions(context, device),
+                  onTap: () => _showMoreOptions(device),
                 ),
               ],
             ),
@@ -976,22 +1116,26 @@ class _DevicePageState extends State<DevicePage> {
     required VoidCallback onTap,
   }) {
     return Expanded(
-      child: InkWell(
+      child: ScaleButton(
         onTap: onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20, color: Colors.black54),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w500,
+        child: Container(
+          color: Colors.transparent, // Ensures the entire area is tappable
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20, color: Colors.black54),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -2370,8 +2514,9 @@ class _DevicePageState extends State<DevicePage> {
   IconData _getVehicleIcon(DeviceItem device) {
     final iconType = device.deviceData?.iconType?.toLowerCase() ?? '';
     if (iconType.contains('truck')) return Icons.local_shipping;
-    if (iconType.contains('bike') || iconType.contains('motorcycle'))
+    if (iconType.contains('bike') || iconType.contains('motorcycle')) {
       return Icons.two_wheeler;
+    }
     if (iconType.contains('bus')) return Icons.directions_bus;
     return Icons.directions_car;
   }
@@ -2503,13 +2648,13 @@ class _DevicePageState extends State<DevicePage> {
     launchUrl(Uri.parse('mailto:$email'));
   }
 
-  void _showMoreOptions(BuildContext context, DeviceItem device) {
+  void _showMoreOptions(DeviceItem device) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Container(
+      builder: (sheetContext) => Container(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2539,7 +2684,7 @@ class _DevicePageState extends State<DevicePage> {
                   'Report',
                   Colors.indigo,
                       () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     _showReport(device);
                   },
                 ),
@@ -2548,7 +2693,7 @@ class _DevicePageState extends State<DevicePage> {
                   'Call',
                   _greenColor,
                       () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     _callDeviceSim(device);
                   },
                 ),
@@ -2557,7 +2702,7 @@ class _DevicePageState extends State<DevicePage> {
                   'Lock',
                   _yellowColor,
                       () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     Get.to(() => LockUnlockScreen(device: device));
                   },
                 ),
@@ -2566,7 +2711,7 @@ class _DevicePageState extends State<DevicePage> {
                   'Share',
                   _primaryBlue,
                       () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     _showShareDialog(context, device);
                   },
                 ),
@@ -2581,7 +2726,7 @@ class _DevicePageState extends State<DevicePage> {
                   'Navigate',
                   Colors.teal,
                       () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     _navigate(device);
                   },
                 ),
@@ -2590,11 +2735,28 @@ class _DevicePageState extends State<DevicePage> {
                   'Edit Device',
                   _greyColor,
                       () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     _getEditDeviceData(device.id);
                   },
                 ),
-                const SizedBox(width: 70),
+                _buildOptionItem(
+                  Icons.sos,
+                  'sosNumber'.tr,
+                  Colors.redAccent,
+                      () {
+                    Navigator.pop(sheetContext);
+                    _showSOSDialog(device);
+                  },
+                ),
+                _buildOptionItem(
+                  Icons.add_alert_outlined,
+                  'Add Alert',
+                  Theme.of(context).primaryColor,
+                      () {
+                    Navigator.pop(sheetContext);
+                    Navigator.pushNamed(context, "/alertList", arguments: device.id);
+                  },
+                ),
               ],
             ),
             const Gap(20),
@@ -2687,6 +2849,235 @@ class _DevicePageState extends State<DevicePage> {
       );
     }
   }
+
+  void _showSOSDialog(DeviceItem device) {
+    final TextEditingController phoneController = TextEditingController();
+    final TextEditingController commandController = TextEditingController();
+
+    // Common protocols/formats for GPS trackers
+    final List<Map<String, String>> protocols = [
+      {
+        'name': 'Concox / GT06 / TK103 (sos,A,number#)',
+        'format': 'sos,A,{phone}#',
+      },
+      {
+        'name': 'SinoTrack (101#number#)',
+        'format': '101#{phone}#',
+      },
+      {
+        'name': 'Coban / TK Star (admin123456 number)',
+        'format': 'admin123456 {phone}',
+      },
+      {
+        'name': 'Concox Alternative (SOS,1,number#)',
+        'format': 'SOS,1,{phone}#',
+      },
+      {
+        'name': 'Custom Command (Raw)',
+        'format': '{phone}',
+      },
+    ];
+
+    int selectedProtocolIndex = 0;
+
+    void updateCommandText() {
+      final phone = phoneController.text.trim();
+      final format = protocols[selectedProtocolIndex]['format']!;
+      if (phone.isEmpty) {
+        commandController.text = '';
+      } else {
+        commandController.text = format.replaceAll('{phone}', phone);
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.sos, color: Colors.redAccent, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'sosNumber'.tr,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Set up the phone number to receive emergency SOS alerts/calls from the tracker.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+                const Gap(16),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      updateCommandText();
+                    });
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'SOS Phone Number',
+                    hintText: 'Enter phone number...',
+                    prefixIcon: const Icon(Icons.phone_outlined),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+                const Gap(16),
+                DropdownButtonFormField<int>(
+                  value: selectedProtocolIndex,
+                  decoration: InputDecoration(
+                    labelText: 'Tracker Command Format',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  items: protocols.asMap().entries.map((entry) {
+                    return DropdownMenuItem<int>(
+                      value: entry.key,
+                      child: Text(
+                        entry.value['name']!,
+                        style: const TextStyle(fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() {
+                        selectedProtocolIndex = value;
+                        updateCommandText();
+                      });
+                    }
+                  },
+                ),
+                const Gap(16),
+                TextField(
+                  controller: commandController,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'GPRS Command to Send',
+                    helperText: 'Verify the command before sending.',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('cancel'.tr, style: TextStyle(color: Colors.grey[600])),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final phone = phoneController.text.trim();
+                final command = commandController.text.trim();
+                if (phone.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a phone number.')),
+                  );
+                  return;
+                }
+                if (command.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Command cannot be empty.')),
+                  );
+                  return;
+                }
+
+                Navigator.pop(context);
+                showProgress(true, context);
+
+                try {
+                  final requestBody = <String, String>{
+                    'id': '',
+                    'device_id': device.id.toString(),
+                    'type': 'custom',
+                    'data': command,
+                  };
+
+                  final res = await APIService.sendCommands(requestBody);
+                  showProgress(false, context);
+
+                  if (res.statusCode == 200) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            const Icon(Icons.check_circle, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Text('command_sent'.tr),
+                          ],
+                        ),
+                        backgroundColor: _greenColor,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            const Icon(Icons.error, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Text('errorMsg'.tr),
+                          ],
+                        ),
+                        backgroundColor: _redColor,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  showProgress(false, context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.error, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text('connectionError'.tr),
+                        ],
+                      ),
+                      backgroundColor: _redColor,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.send, size: 16),
+              label: Text('sendCommand'.tr),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   void _showShareDialog(BuildContext context, DeviceItem device) {
     final options = [

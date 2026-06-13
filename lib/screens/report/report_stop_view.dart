@@ -10,8 +10,10 @@ import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/theme/custom_color.dart';
 
 class ReportStopViewPage extends StatefulWidget {
+  const ReportStopViewPage({super.key});
+
   @override
-  State<StatefulWidget> createState() => new _ReportStopViewPageState();
+  State<StatefulWidget> createState() => _ReportStopViewPageState();
 }
 
 class _ReportStopViewPageState extends State<ReportStopViewPage> {
@@ -24,13 +26,13 @@ class _ReportStopViewPageState extends State<ReportStopViewPage> {
 
   @override
   void initState() {
-    _postsController = new StreamController();
+    _postsController = StreamController();
     getReport();
     super.initState();
   }
 
-  getReport() {
-    _timer = new Timer.periodic(Duration(milliseconds: 1000), (timer) {
+  void getReport() {
+    _timer = Timer.periodic(Duration(milliseconds: 1000), (timer) {
       if (args != null) {
         _timer!.cancel();
         APIService.getHistory(args!.id.toString(), args!.fromDate,
@@ -169,14 +171,12 @@ class _ReportStopViewPageState extends State<ReportStopViewPage> {
                   children: [
                     Expanded(
                         child: Text(
-                      ("reportDuration").tr + ": " + t.time.toString(),
+                      "${("reportDuration").tr}: ${t.time}",
                       style: TextStyle(fontSize: 11),
                     )),
                     Expanded(
                         child: Text(
-                      ("reportSpentFuel").tr +
-                          ": " +
-                          t.fuel_consumption.toString(),
+                      "${("reportSpentFuel").tr}: ${t.fuel_consumption}",
                       style: TextStyle(fontSize: 11),
                     )),
                   ],

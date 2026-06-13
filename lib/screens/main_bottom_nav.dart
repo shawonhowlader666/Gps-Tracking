@@ -11,6 +11,8 @@ import 'package:gpspro/screens/settings.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 
 class MainBottomNav extends StatefulWidget {
+  const MainBottomNav({super.key});
+
   @override
   State<StatefulWidget> createState() => _MainBottomNavState();
 }

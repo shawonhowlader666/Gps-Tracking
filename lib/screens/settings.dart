@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gpspro/screens/payment_list.dart';
+import 'package:gpspro/widgets/scale_button.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -276,7 +277,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       child: Row(
         children: [
-          GestureDetector(
+          ScaleButton(
             onTap: _pickImage,
             child: Stack(
               children: [
@@ -461,7 +462,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildLogoutButton() {
-    return GestureDetector(
+    return ScaleButton(
       onTap: () => _showLogoutDialog(),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

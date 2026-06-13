@@ -15,15 +15,17 @@ import 'package:gpspro/theme/custom_color.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class DeviceDashboard extends StatefulWidget {
+  const DeviceDashboard({super.key});
+
   @override
   _DeviceDashboardState createState() => _DeviceDashboardState();
 }
 
 class _DeviceDashboardState extends State<DeviceDashboard> {
   static DeviceArguments? args;
-  final TextEditingController _customCommand = new TextEditingController();
-  List<String> _commands = <String>[];
-  List<String> _commandsValue = <String>[];
+  final TextEditingController _customCommand = TextEditingController();
+  final List<String> _commands = <String>[];
+  final List<String> _commandsValue = <String>[];
   int _selectedCommand = 0;
   String _commandSelected = "";
   int _selectedperiod = 0;
@@ -160,7 +162,7 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
       ),
       child: StatefulBuilder(
         builder: (BuildContext context, StateSetter setState) {
-          return new Container(
+          return SizedBox(
             height: _dialogHeight,
             width: 300.0,
             child: Column(
@@ -175,10 +177,10 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                         mainAxisAlignment: MainAxisAlignment.start,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: <Widget>[
-                          new Row(
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.start,
                             children: <Widget>[
-                              new Radio(
+                              Radio(
                                 value: 0,
                                 groupValue: _selectedperiod,
                                 onChanged: (value) {
@@ -189,16 +191,16 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                                   });
                                 },
                               ),
-                              new Text(
+                              Text(
                                 ('reportToday').tr,
-                                style: new TextStyle(fontSize: 16.0),
+                                style: TextStyle(fontSize: 16.0),
                               ),
                             ],
                           ),
-                          new Row(
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.start,
                             children: <Widget>[
-                              new Radio(
+                              Radio(
                                 value: 1,
                                 groupValue: _selectedperiod,
                                 onChanged: (value) {
@@ -209,16 +211,16 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                                   });
                                 },
                               ),
-                              new Text(
+                              Text(
                                 ('reportYesterday').tr,
-                                style: new TextStyle(fontSize: 16.0),
+                                style: TextStyle(fontSize: 16.0),
                               ),
                             ],
                           ),
-                          new Row(
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.start,
                             children: <Widget>[
-                              new Radio(
+                              Radio(
                                 value: 2,
                                 groupValue: _selectedperiod,
                                 onChanged: (value) {
@@ -229,16 +231,16 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                                   });
                                 },
                               ),
-                              new Text(
+                              Text(
                                 ('reportThisWeek').tr,
-                                style: new TextStyle(fontSize: 16.0),
+                                style: TextStyle(fontSize: 16.0),
                               ),
                             ],
                           ),
-                          new Row(
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.start,
                             children: <Widget>[
-                              new Radio(
+                              Radio(
                                 value: 3,
                                 groupValue: _selectedperiod,
                                 onChanged: (value) {
@@ -249,15 +251,15 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                                   });
                                 },
                               ),
-                              new Text(
+                              Text(
                                 ('reportCustom').tr,
-                                style: new TextStyle(fontSize: 16.0),
+                                style: TextStyle(fontSize: 16.0),
                               ),
                             ],
                           ),
                           _selectedperiod == 3
-                              ? new Container(
-                                  child: new Column(
+                              ? Container(
+                                  child: Column(
                                   children: <Widget>[
                                     Row(
                                       mainAxisAlignment:
@@ -323,8 +325,8 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                                     )
                                   ],
                                 ))
-                              : new Container(),
-                          new Row(
+                              : Container(),
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: <Widget>[
                               ElevatedButton(
@@ -379,10 +381,11 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
         initialDate: _selectedFromDate,
         firstDate: DateTime(2015, 8),
         lastDate: DateTime(2101));
-    if (picked != null && picked != _selectedFromDate)
+    if (picked != null && picked != _selectedFromDate) {
       setState(() {
         _selectedFromDate = picked;
       });
+    }
   }
 
   Future<void> _selectToDate(BuildContext context, StateSetter setState) async {
@@ -391,10 +394,11 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
         initialDate: _selectedToDate,
         firstDate: DateTime(2015, 8),
         lastDate: DateTime(2101));
-    if (picked != null && picked != _selectedToDate)
+    if (picked != null && picked != _selectedToDate) {
       setState(() {
         _selectedToDate = picked;
       });
+    }
   }
 
   Future<void> _selectFromTime(
@@ -405,14 +409,15 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
       builder: (BuildContext context, Widget? child) {
         return Directionality(
           textDirection: TextDirection.rtl,
-          child: child != null ? child : new Container(),
+          child: child ?? new Container(),
         );
       },
     );
-    if (picked != null && picked != _selectedFromTime)
+    if (picked != null && picked != _selectedFromTime) {
       setState(() {
         _selectedFromTime = picked;
       });
+    }
   }
 
   Future<void> _selectToTime(BuildContext context, setState) async {
@@ -422,14 +427,15 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
       builder: (BuildContext context, Widget? child) {
         return Directionality(
           textDirection: TextDirection.rtl,
-          child: child != null ? child : new Container(),
+          child: child ?? new Container(),
         );
       },
     );
-    if (picked != null && picked != _selectedToTime)
+    if (picked != null && picked != _selectedToTime) {
       setState(() {
         _selectedToTime = picked;
       });
+    }
   }
 
   void showCommandDialog(BuildContext context) {
@@ -446,7 +452,7 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                 if (value != null)
                   {
                     list = json.decode(value.body)["commands"],
-                    if (_commands.length == 0)
+                    if (_commands.isEmpty)
                       {
                         list.forEach((element) {
                           _commands.add(element.title!);
@@ -457,7 +463,7 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                   },
               });
 
-          return Container(
+          return SizedBox(
             height: _dialogCommandHeight,
             width: 300.0,
             child: Column(
@@ -472,23 +478,23 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                         mainAxisAlignment: MainAxisAlignment.start,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: <Widget>[
-                          new Row(
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: <Widget>[
-                              new Text(('commandTitle').tr),
+                              Text(('commandTitle').tr),
                             ],
                           ),
-                          new Row(
+                          Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: <Widget>[
-                                _commands.length > 0
-                                    ? new DropdownButton<String>(
-                                        hint: new Text(('select_command').tr),
+                                _commands.isNotEmpty
+                                    ? DropdownButton<String>(
+                                        hint: Text(('select_command').tr),
                                         value: _commands[_selectedCommand],
                                         items: _commands.map((String value) {
-                                          return new DropdownMenuItem<String>(
+                                          return DropdownMenuItem<String>(
                                             value: value,
-                                            child: new Text(
+                                            child: Text(
                                               (value).tr,
                                               style: TextStyle(),
                                               overflow: TextOverflow.ellipsis,
@@ -510,18 +516,18 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                                           });
                                         },
                                       )
-                                    : new CircularProgressIndicator(),
+                                    : CircularProgressIndicator(),
                               ]),
                           _commandSelected == "Custom Command"
-                              ? new Container(
-                                  child: new TextField(
+                              ? Container(
+                                  child: TextField(
                                     controller: _customCommand,
-                                    decoration: new InputDecoration(
+                                    decoration: InputDecoration(
                                         labelText: ('commandCustom').tr),
                                   ),
                                 )
-                              : new Container(),
-                          new Row(
+                              : Container(),
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: <Widget>[
                               ElevatedButton(
@@ -580,7 +586,7 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
           APIService.getSavedCommands(args!.id.toString()).then((value) => {
                 {
                   list = json.decode(value!.body),
-                  if (_commands.length == 0)
+                  if (_commands.isEmpty)
                     {
                       list.forEach((element) {
                         _commands.add(element["title"]);
@@ -604,7 +610,7 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                 }
               });
 
-          return Container(
+          return SizedBox(
             height: _dialogCommandHeight,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.start,
@@ -618,23 +624,23 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                         mainAxisAlignment: MainAxisAlignment.start,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: <Widget>[
-                          new Row(
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: <Widget>[
-                              new Text(('commandTitle').tr),
+                              Text(('commandTitle').tr),
                             ],
                           ),
-                          new Row(
+                          Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: <Widget>[
-                                _commands.length > 0
-                                    ? new DropdownButton<String>(
-                                        hint: new Text(('select_command').tr),
+                                _commands.isNotEmpty
+                                    ? DropdownButton<String>(
+                                        hint: Text(('select_command').tr),
                                         value: _commands[_selectedCommand],
                                         items: _commands.map((String value) {
-                                          return new DropdownMenuItem<String>(
+                                          return DropdownMenuItem<String>(
                                             value: value,
-                                            child: new Text(
+                                            child: Text(
                                               (value).tr,
                                               style: TextStyle(fontSize: 12),
                                               maxLines: 2,
@@ -657,18 +663,18 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
                                           });
                                         },
                                       )
-                                    : new CircularProgressIndicator(),
+                                    : CircularProgressIndicator(),
                               ]),
                           _commandSelected == "Custom Command"
-                              ? new Container(
-                                  child: new TextField(
+                              ? Container(
+                                  child: TextField(
                                     controller: _customCommand,
-                                    decoration: new InputDecoration(
+                                    decoration: InputDecoration(
                                         labelText: ('commandCustom').tr),
                                   ),
                                 )
-                              : new Container(),
-                          new Row(
+                              : Container(),
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: <Widget>[
                               ElevatedButton(
@@ -771,7 +777,7 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
 
     String month;
     if (current.month < 10) {
-      month = "0" + current.month.toString();
+      month = "0${current.month}";
     } else {
       month = current.month.toString();
     }
@@ -786,7 +792,7 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
       print(dayCon);
       if (current.day < 10) {
         if (dayCon < 10) {
-          today = "0" + dayCon.toString();
+          today = "0$dayCon";
         } else {
           today = dayCon.toString();
         }
@@ -807,7 +813,7 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
 
       int dayCon = current.day - 1;
       if (current.day < 10) {
-        yesterday = "0" + dayCon.toString();
+        yesterday = "0$dayCon";
       } else {
         yesterday = dayCon.toString();
       }
@@ -831,12 +837,12 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
       int dayCon = current.day - current.weekday;
       int currentDay = current.day;
       if (dayCon < 10) {
-        sevenDay = "0" + dayCon.abs().toString();
+        sevenDay = "0${dayCon.abs()}";
       } else {
         sevenDay = dayCon.toString();
       }
       if (currentDay < 10) {
-        currentDayString = "0" + currentDay.toString();
+        currentDayString = "0$currentDay";
       } else {
         currentDayString = currentDay.toString();
       }
@@ -858,39 +864,39 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
     } else {
       String startMonth, endMoth;
       if (_selectedFromDate.month < 10) {
-        startMonth = "0" + _selectedFromDate.month.toString();
+        startMonth = "0${_selectedFromDate.month}";
       } else {
         startMonth = _selectedFromDate.month.toString();
       }
 
       if (_selectedToDate.month < 10) {
-        endMoth = "0" + _selectedToDate.month.toString();
+        endMoth = "0${_selectedToDate.month}";
       } else {
         endMoth = _selectedToDate.month.toString();
       }
 
       String startHour, endHour;
       if (_selectedFromTime.hour < 10) {
-        startHour = "0" + _selectedFromTime.hour.toString();
+        startHour = "0${_selectedFromTime.hour}";
       } else {
         startHour = _selectedFromTime.hour.toString();
       }
 
       String startMin, endMin;
       if (_selectedFromTime.minute < 10) {
-        startMin = "0" + _selectedFromTime.minute.toString();
+        startMin = "0${_selectedFromTime.minute}";
       } else {
         startMin = _selectedFromTime.minute.toString();
       }
 
       if (_selectedFromTime.minute < 10) {
-        endMin = "0" + _selectedToTime.minute.toString();
+        endMin = "0${_selectedToTime.minute}";
       } else {
         endMin = _selectedToTime.minute.toString();
       }
 
       if (_selectedToTime.hour < 10) {
-        endHour = "0" + _selectedToTime.hour.toString();
+        endHour = "0${_selectedToTime.hour}";
       } else {
         endHour = _selectedToTime.hour.toString();
       }
@@ -900,7 +906,7 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
         if (_selectedFromDate.day == 10) {
           startDay = _selectedFromDate.day.toString();
         } else {
-          startDay = "0" + _selectedFromDate.day.toString();
+          startDay = "0${_selectedFromDate.day}";
         }
       } else {
         startDay = _selectedFromDate.day.toString();
@@ -910,7 +916,7 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
         if (_selectedToDate.day == 10) {
           endDay = _selectedToDate.day.toString();
         } else {
-          endDay = "0" + _selectedToDate.day.toString();
+          endDay = "0${_selectedToDate.day}";
         }
       } else {
         endDay = _selectedToDate.day.toString();

@@ -4,7 +4,7 @@ import '../services/admob_service.dart';
 import '../config.dart';
 
 class BannerAdWidget extends StatefulWidget {
-  const BannerAdWidget({Key? key, this.forceShow = false}) : super(key: key);
+  const BannerAdWidget({super.key, this.forceShow = false});
 final bool forceShow;
   @override
   State<BannerAdWidget> createState() => _BannerAdWidgetState();

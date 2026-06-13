@@ -6,10 +6,10 @@ class StreetViewScreen extends StatefulWidget {
   final double longitude;
 
   const StreetViewScreen({
-    Key? key,
+    super.key,
     required this.latitude,
     required this.longitude,
-  }) : super(key: key);
+  });
 
   @override
   State<StreetViewScreen> createState() => _StreetViewScreenState();

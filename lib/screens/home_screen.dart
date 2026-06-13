@@ -338,9 +338,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             if (value is String) {
               final v = value.toLowerCase().trim();
               if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
-                  .contains(v)) return true;
+                  .contains(v)) {
+                return true;
+              }
               if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
-                  .contains(v)) return false;
+                  .contains(v)) {
+                return false;
+              }
             }
           }
         } catch (e) {
@@ -1787,7 +1791,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               offset: const Offset(0, 2),
               blurRadius: 4,
             ),

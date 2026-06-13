@@ -17,6 +17,8 @@ import 'package:gpspro/widgets/address.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class DeviceSelection extends StatefulWidget {
+  const DeviceSelection({super.key});
+
   @override
   State<StatefulWidget> createState() => _DevicePageState();
 }
@@ -24,12 +26,12 @@ class DeviceSelection extends StatefulWidget {
 class _DevicePageState extends State<DeviceSelection> {
   TextEditingController searchCtl = TextEditingController();
   List<DeviceItem> devicesList = [];
-  List<dynamic> _searchResult = [];
+  final List<dynamic> _searchResult = [];
   Locale? myLocale;
 
   String selectedIndex = "all";
 
-  final Map<String, Widget> segmentMap = LinkedHashMap();
+  final Map<String, Widget> segmentMap = {};
 
   List<BottomMenu> bottomMenu = [];
   SingleDevice? sd;
@@ -85,11 +87,11 @@ class _DevicePageState extends State<DeviceSelection> {
         return;
       }
 
-      devicesList.forEach((device) {
+      for (var device in devicesList) {
         if (device.name!.toLowerCase().contains(text.toLowerCase())) {
           _searchResult.add(device);
         }
-      });
+      }
       setState(() {});
     }
 

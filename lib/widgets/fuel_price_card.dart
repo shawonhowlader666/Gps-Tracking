@@ -4,7 +4,7 @@ import 'package:gpspro/config.dart';
 import 'package:gpspro/widgets/common.dart';
 
 class FuelPriceCard extends StatelessWidget {
-  FuelPriceCard({super.key});
+  const FuelPriceCard({super.key});
 
   @override
   Widget build(BuildContext context) {

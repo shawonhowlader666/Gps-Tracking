@@ -13,8 +13,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 class ReportTripPage extends StatefulWidget {
+  const ReportTripPage({super.key});
+
   @override
-  State<StatefulWidget> createState() => new _ReportTripPageState();
+  State<StatefulWidget> createState() => _ReportTripPageState();
 }
 
 class _ReportTripPageState extends State<ReportTripPage> {
@@ -22,27 +24,27 @@ class _ReportTripPageState extends State<ReportTripPage> {
   static ReportArguments? args;
   StreamController<int>? _postsController;
   bool isLoading = true;
-  static var httpClient = new HttpClient();
+  static var httpClient = HttpClient();
   File? file;
   String? url;
 
   @override
   void initState() {
-    _postsController = new StreamController();
+    _postsController = StreamController();
     getReport();
     super.initState();
   }
 
-  getReport() {}
+  void getReport() {}
 
-  downloadReport(String url, String filename) async {
-    Random random = new Random();
+  Future<File?>? downloadReport(String url, String filename) async {
+    Random random = Random();
     random.nextInt(100);
     print(url);
     var request = await httpClient.getUrl(Uri.parse(url));
     var response = await request.close();
     var bytes = await consolidateHttpClientResponseBytes(response);
-    writeFile(bytes, filename + DateTime.now().millisecond.toString() + ".pdf");
+    writeFile(bytes, "$filename${DateTime.now().millisecond}.pdf");
     _postsController!.add(1);
     await file!.writeAsBytes(bytes);
     Fluttertoast.showToast(
@@ -58,7 +60,7 @@ class _ReportTripPageState extends State<ReportTripPage> {
 
   Future<void> writeToFile(Uint8List data, String path) {
     final buffer = data.buffer;
-    return new File(path).writeAsBytes(
+    return File(path).writeAsBytes(
         buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
   }
 
@@ -71,7 +73,7 @@ class _ReportTripPageState extends State<ReportTripPage> {
     // the downloads folder path
     Directory? tempDir = await getDownloadsDirectory();
     String tempPath = tempDir!.path;
-    var filePath = tempPath + '/$name';
+    var filePath = '$tempPath/$name';
     //
 
     // the data
@@ -103,12 +105,12 @@ class _ReportTripPageState extends State<ReportTripPage> {
           centerTitle: false,
           elevation: 0,
         ),
-        floatingActionButton: new FloatingActionButton(
-          child: const Icon(Icons.download_rounded),
+        floatingActionButton: FloatingActionButton(
           elevation: 0,
           onPressed: () {
             downloadReport(url!, "work");
           },
+          child: const Icon(Icons.download_rounded),
         ),
         body: StreamBuilder<int>(
             stream: _postsController!.stream,

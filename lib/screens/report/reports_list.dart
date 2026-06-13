@@ -169,7 +169,7 @@ class _ReportListPageState extends State<ReportListPage> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: primaryColor.withOpacity(0.1),
+              color: primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
@@ -222,13 +222,13 @@ class _ReportListPageState extends State<ReportListPage> {
         color: cardBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isFeatured ? color.withOpacity(0.3) : Colors.grey[200]!,
+          color: isFeatured ? color.withValues(alpha: 0.3) : Colors.grey[200]!,
           width: isFeatured ? 1.5 : 1,
         ),
         gradient: isFeatured
             ? LinearGradient(
           colors: [
-            color.withOpacity(0.05),
+            color.withValues(alpha: 0.05),
             cardBg,
           ],
           begin: Alignment.topLeft,
@@ -250,7 +250,7 @@ class _ReportListPageState extends State<ReportListPage> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -287,7 +287,7 @@ class _ReportListPageState extends State<ReportListPage> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: color.withOpacity(0.15),
+                                color: color.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
@@ -318,7 +318,7 @@ class _ReportListPageState extends State<ReportListPage> {
                 // Arrow
                 Icon(
                   Icons.chevron_right,
-                  color: isFeatured ? color.withOpacity(0.5) : Colors.grey[400],
+                  color: isFeatured ? color.withValues(alpha: 0.5) : Colors.grey[400],
                   size: 22,
                 ),
               ],

@@ -14,8 +14,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 class ReportStopPage extends StatefulWidget {
+  const ReportStopPage({super.key});
+
   @override
-  State<StatefulWidget> createState() => new _ReportStopPageState();
+  State<StatefulWidget> createState() => _ReportStopPageState();
 }
 
 class _ReportStopPageState extends State<ReportStopPage> {
@@ -24,19 +26,19 @@ class _ReportStopPageState extends State<ReportStopPage> {
   StreamController<int>? _postsController;
   bool isLoading = true;
   Timer? _timer;
-  static var httpClient = new HttpClient();
+  static var httpClient = HttpClient();
   File? file;
   String? url;
 
   @override
   void initState() {
-    _postsController = new StreamController();
+    _postsController = StreamController();
     getReport();
     super.initState();
   }
 
-  getReport() {
-    _timer = new Timer.periodic(Duration(seconds: 1), (timer) {
+  void getReport() {
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (args != null) {
         timer.cancel();
         APIService.getReportStop(
@@ -59,7 +61,7 @@ class _ReportStopPageState extends State<ReportStopPage> {
   }
 
   Future<File?> _downloadFile(String url, String filename) async {
-    Random random = new Random();
+    Random random = Random();
     int randomNumber = random.nextInt(100);
     print(url);
     if (url != null) {
@@ -67,7 +69,7 @@ class _ReportStopPageState extends State<ReportStopPage> {
       var response = await request.close();
       var bytes = await consolidateHttpClientResponseBytes(response);
       String dir = (await getApplicationDocumentsDirectory()).path;
-      File pdffile = new File('$dir/$filename-$randomNumber.pdf');
+      File pdffile = File('$dir/$filename-$randomNumber.pdf');
       //Navigator.pop(context); // Load from assets
       file = pdffile;
       _postsController!.add(1);
@@ -78,39 +80,34 @@ class _ReportStopPageState extends State<ReportStopPage> {
       _postsController!.add(0);
       setState(() {});
     }
+    return null;
   }
 
-  downloadReport(String url, String filename) async {
-    Random random = new Random();
+  Future<File?>? downloadReport(String url, String filename) async {
+    Random random = Random();
     int randomNumber = random.nextInt(100);
     print(url);
-    if (url != null) {
-      var request = await httpClient.getUrl(Uri.parse(url));
-      var response = await request.close();
-      var bytes = await consolidateHttpClientResponseBytes(response);
-      writeFile(
-          bytes, filename + DateTime.now().millisecond.toString() + ".pdf");
-      _postsController!.add(1);
-      await file!.writeAsBytes(bytes);
-      Fluttertoast.showToast(
-          msg: ("excelDownloaded").tr,
-          toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.BOTTOM,
-          timeInSecForIosWeb: 1,
-          backgroundColor: Colors.black54,
-          textColor: Colors.white,
-          fontSize: 16.0);
-      return file;
-    } else {
-      isLoading = false;
-      _postsController!.add(0);
-      setState(() {});
-    }
+    var request = await httpClient.getUrl(Uri.parse(url));
+    var response = await request.close();
+    var bytes = await consolidateHttpClientResponseBytes(response);
+    writeFile(
+        bytes, filename + DateTime.now().millisecond.toString() + ".pdf");
+    _postsController!.add(1);
+    await file!.writeAsBytes(bytes);
+    Fluttertoast.showToast(
+        msg: ("excelDownloaded").tr,
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        timeInSecForIosWeb: 1,
+        backgroundColor: Colors.black54,
+        textColor: Colors.white,
+        fontSize: 16.0);
+    return file;
   }
 
   Future<void> writeToFile(Uint8List data, String path) {
     final buffer = data.buffer;
-    return new File(path).writeAsBytes(
+    return File(path).writeAsBytes(
         buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
   }
 
@@ -123,7 +120,7 @@ class _ReportStopPageState extends State<ReportStopPage> {
     // the downloads folder path
     Directory? tempDir = await getDownloadsDirectory();
     String tempPath = tempDir!.path;
-    var filePath = tempPath + '/$name';
+    var filePath = '$tempPath/$name';
     //
 
     // the data
@@ -155,12 +152,12 @@ class _ReportStopPageState extends State<ReportStopPage> {
           centerTitle: false,
           elevation: 0,
         ),
-        floatingActionButton: new FloatingActionButton(
-          child: const Icon(Icons.download_rounded),
+        floatingActionButton: FloatingActionButton(
           elevation: 0,
           onPressed: () {
             downloadReport(url!, "stop");
           },
+          child: const Icon(Icons.download_rounded),
         ),
         body: StreamBuilder<int>(
             stream: _postsController!.stream,

@@ -31,6 +31,8 @@ class TravelRecord {
 }
 
 class ReportSummaryPage extends StatefulWidget {
+  const ReportSummaryPage({super.key});
+
   @override
   State<StatefulWidget> createState() => _ReportSummaryPageState();
 }
@@ -43,7 +45,7 @@ class _ReportSummaryPageState extends State<ReportSummaryPage> {
   File? file;
   String? url;
   String extractedText = "loadingPDF".tr;
-  String _na = "notAvailable".tr;
+  final String _na = "notAvailable".tr;
   bool isExtracting = false;
   List<TravelRecord> travelRecords = [];
   String reportPeriod = '';
@@ -312,7 +314,7 @@ class _ReportSummaryPageState extends State<ReportSummaryPage> {
     }
   }
 
-  getReport() {
+  void getReport() {
     _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (args != null) {
         timer.cancel();
@@ -397,7 +399,7 @@ class _ReportSummaryPageState extends State<ReportSummaryPage> {
   }
 
   Widget _buildFilterChips() {
-    return Container(
+    return SizedBox(
       height: 60,
       child: ListView(
         scrollDirection: Axis.horizontal,
@@ -474,7 +476,7 @@ class _ReportSummaryPageState extends State<ReportSummaryPage> {
         children: [
           _buildReportHeader(),
           SizedBox(height: 20),
-          ...travelRecords.map((record) => _buildTravelCard(record)).toList(),
+          ...travelRecords.map((record) => _buildTravelCard(record)),
         ],
       ),
     );

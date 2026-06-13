@@ -9,7 +9,7 @@ import 'package:gpspro/services/model/user.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/ui/custom_icon.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'geofence_list.dart';
+import 'package:gpspro/arguments/fence_args.dart';
 
 class GeofencePage extends StatefulWidget {
   const GeofencePage({super.key});
@@ -151,7 +151,7 @@ class _GeofencePageState extends State<GeofencePage> {
       _circles.add(Circle(
           circleId: CircleId("circle"),
           fillColor: Color(0x40189ad3),
-          strokeColor: Color(0),
+          strokeColor: Color(0x00000000),
           strokeWidth: 2,
           center: _position!,
           radius: radius));

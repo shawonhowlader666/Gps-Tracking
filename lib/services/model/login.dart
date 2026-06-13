@@ -14,7 +14,7 @@ class UserLogin {
   }
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = Map<String, dynamic>();
+    final Map<String, dynamic> data = <String, dynamic>{};
     data['status'] = status;
     data['user_api_hash'] = userApiHash;
     if (permissions != null) {
@@ -252,7 +252,7 @@ class Permissions {
   }
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = Map<String, dynamic>();
+    final Map<String, dynamic> data = <String, dynamic>{};
     if (devices != null) {
       data['devices'] = devices!.toJson();
     }
@@ -415,7 +415,7 @@ class Devices {
   }
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = Map<String, dynamic>();
+    final Map<String, dynamic> data = <String, dynamic>{};
     data['view'] = view;
     data['edit'] = edit;
     data['remove'] = remove;

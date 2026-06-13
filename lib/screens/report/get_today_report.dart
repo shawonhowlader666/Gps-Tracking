@@ -382,7 +382,7 @@ class ReportService {
         final pageText = extractor.extractText(startPageIndex: i, endPageIndex: i);
         text += pageText ?? '';
         text += '\n';
-        log('📄 [ReportService] Page ${i + 1} extracted (${pageText?.length ?? 0} chars)');
+        log('📄 [ReportService] Page ${i + 1} extracted (${pageText.length ?? 0} chars)');
       }
 
       document.dispose();

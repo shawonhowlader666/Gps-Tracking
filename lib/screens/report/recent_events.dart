@@ -5,6 +5,8 @@ import 'package:gpspro/services/model/event.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 
 class EventsPage extends StatefulWidget {
+  const EventsPage({super.key});
+
   @override
   State<EventsPage> createState() => _EventsPageState();
 }

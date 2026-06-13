@@ -28,7 +28,7 @@ class APIService {
     try {
       serverURL = url;
       final response = await http.post(
-          Uri.parse("${serverURL! + "/api/login?email=" + email}&password=" +
+          Uri.parse("${"${serverURL!}/api/login?email=" + email}&password=" +
               password),
           headers: headers);
       updateCookie(response);
@@ -42,7 +42,7 @@ class APIService {
     }
   }
 
-  static updateCookie(http.Response response) {
+  static void updateCookie(http.Response response) {
     String rawCookie = response.headers['set-cookie'].toString();
     // ignore: unnecessary_null_comparison
     if (rawCookie != null) {
@@ -79,8 +79,7 @@ class APIService {
   static Future<RouteReport?> getReport(
       String deviceID, String fromDate, String toDate, int type) async {
     final response = await http.get(Uri.parse(
-        "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0&send_to_email=" +
-            UserRepository.getEmail()!));
+        "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0&send_to_email=${UserRepository.getEmail()!}"));
     if (response.statusCode == 200) {
       return RouteReport.fromJson(
           json.decode(response.body.replaceAll("ï»¿", "")));
@@ -92,8 +91,7 @@ class APIService {
   static Future<RouteReport?> getReportStop(
       String deviceID, String fromDate, String toDate, int type) async {
     final response = await http.get(Uri.parse(
-        "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&geofences[]=0&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0&send_to_email=" +
-            UserRepository.getEmail()!));
+        "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&geofences[]=0&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0&send_to_email=${UserRepository.getEmail()!}"));
     print("Response");
     print(response.body);
     if (response.statusCode == 200) {
@@ -309,7 +307,7 @@ class APIService {
       if (list.isNotEmpty) {
         return list.map((model) => Alert.fromJson(model)).toList();
       } else {
-        return null;
+        return [];
       }
     } else {
       return null;
@@ -436,7 +434,7 @@ class APIService {
         "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
-            "${serverURL! + "/api/sharing?user_api_hash=${UserRepository.getHash()}&active=1&name=" + name + "&expiration_date=" + expirationDate}&delete_after_expiration=1&devices%5B%5D=" +
+            "${"${serverURL!}/api/sharing?user_api_hash=${UserRepository.getHash()}&active=1&name=" + name + "&expiration_date=" + expirationDate}&delete_after_expiration=1&devices%5B%5D=" +
                 deviceId),
         headers: headers);
     if (response.statusCode == 200) {
@@ -577,8 +575,7 @@ class APIService {
         "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
-            "$serverURL/api/add_alert?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}" +
-                request),
+            "$serverURL/api/add_alert?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}$request"),
         headers: headers);
     print(response.request);
     print(response.body);
@@ -589,9 +586,7 @@ class APIService {
     headers['content-type'] =
         "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.get(
-        Uri.parse(serverURL! +
-            "/api/destroy_alert?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&alert_id=" +
-            id.toString()),
+        Uri.parse("${serverURL!}/api/destroy_alert?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&alert_id=$id"),
         headers: headers);
     print(response.request);
     return response;
@@ -601,17 +596,7 @@ class APIService {
       String fromTime, String toDate, String toTime) async {
     headers['Accept'] = "application/json";
     final response = await http.get(
-        Uri.parse(serverURL! +
-            "/api/get_events?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&from_date=" +
-            fromDate +
-            "&from_time=" +
-            fromTime +
-            "&to_date=" +
-            toDate +
-            "&to_time=" +
-            toTime +
-            "&device_id=" +
-            id),
+        Uri.parse("${serverURL!}/api/get_events?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&from_date=$fromDate&from_time=$fromTime&to_date=$toDate&to_time=$toTime&device_id=$id"),
         headers: headers);
     if (response.statusCode == 200) {
       Iterable list =
@@ -630,8 +615,7 @@ class APIService {
     headers['content-type'] =
         "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
-        Uri.parse(serverURL! +
-            "/api/change_active_geofence?user_api_hash=${UserRepository.getHash()}"),
+        Uri.parse("${serverURL!}/api/change_active_geofence?user_api_hash=${UserRepository.getHash()}"),
         body: val,
         headers: headers);
     return response;
@@ -639,18 +623,7 @@ class APIService {
 
   static Future<RouteReport?> getReportGeofence(
       String deviceID, String fromDate, String toDate, int type) async {
-    final response = await http.get(Uri.parse(serverURL! +
-        "/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=" +
-        fromDate +
-        "&devices[]=" +
-        deviceID +
-        "&geofences[]=0" +
-        "&date_to=" +
-        toDate +
-        "&format=pdf" +
-        "&type=" +
-        type.toString() +
-        "&daily=0&weekly=0&monthly=0"));
+    final response = await http.get(Uri.parse("${serverURL!}/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&geofences[]=0&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0"));
     print(response.body);
     if (response.statusCode == 200) {
       return RouteReport.fromJson(

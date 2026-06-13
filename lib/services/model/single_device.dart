@@ -1,4 +1,3 @@
-import 'dart:developer';
 
 class SingleDevice extends Object {
   dynamic device_id;

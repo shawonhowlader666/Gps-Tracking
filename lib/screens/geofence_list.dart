@@ -6,6 +6,9 @@ import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/model/geofence_model.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/theme/custom_color.dart';
+import 'package:gpspro/arguments/fence_args.dart';
+import 'package:gpspro/arguments/report_args.dart';
+import 'package:gpspro/services/model/device_item.dart' hide Icon;
 
 class GeofenceListPage extends StatefulWidget {
   const GeofenceListPage({super.key});
@@ -22,6 +25,20 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
   String searchQuery = '';
   String filterType = 'all';
   DataController dataController = Get.find<DataController>();
+  DeviceItem? activeDevice;
+  bool _argsChecked = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_argsChecked) {
+      _argsChecked = true;
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is ReportArguments) {
+        activeDevice = args.deviceItem;
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -332,7 +349,7 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
           final result = await Navigator.pushNamed(
             context,
             "/geofenceAdd",
-            arguments: FenceArguments(fenceModel: Geofence()),
+            arguments: FenceArguments(fenceModel: Geofence(), device: activeDevice),
           );
           if (result == true) {
             getFences();
@@ -549,7 +566,7 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                     final result = await Navigator.pushNamed(
                       context,
                       "/geofenceAdd",
-                      arguments: FenceArguments(fenceModel: Geofence()),
+                      arguments: FenceArguments(fenceModel: Geofence(), device: activeDevice),
                     );
                     if (result == true) {
                       getFences();
@@ -841,7 +858,7 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                     final result = await Navigator.pushNamed(
                       context,
                       "/geofenceAdd",
-                      arguments: FenceArguments(fenceModel: fence),
+                      arguments: FenceArguments(fenceModel: fence, device: activeDevice),
                     );
                     if (result == true) {
                       getFences();
@@ -894,9 +911,4 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     );
   }
 }
-
-class FenceArguments {
-  final Geofence? fenceModel;
-
-  FenceArguments({this.fenceModel});
-}
+

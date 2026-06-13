@@ -127,7 +127,7 @@ class _MapPageState extends State<MapPage> {
                     Polygon polygon = Polygon(
                         strokeWidth: 2,
                         polygonId: id,
-                        fillColor: Colors.blueAccent.withOpacity(0.5),
+                        fillColor: Colors.blueAccent.withValues(alpha: 0.5),
                         geodesic: true,
                         points: polylineCoordinatesGeoFences);
                     polygons[id] = polygon;
@@ -167,7 +167,7 @@ class _MapPageState extends State<MapPage> {
         element.items!.forEach((element) async {
           if (element.deviceData!.active.toString() == "1") {
             Util.fetchAndCacheImages(
-                    UserRepository.getServerUrl()! + "/" + element.icon!.path!)
+                    "${UserRepository.getServerUrl()!}/${element.icon!.path!}")
                 .then((_) async {
               BitmapDescriptor markerIcon;
               bool rotation = true;
@@ -309,7 +309,7 @@ class _MapPageState extends State<MapPage> {
 
           if (element.deviceData!.active.toString() == "1") {
             Util.fetchAndCacheImages(
-                    UserRepository.getServerUrl()! + "/" + element.icon!.path!)
+                    "${UserRepository.getServerUrl()!}/${element.icon!.path!}")
                 .then((_) async {
               BitmapDescriptor markerIcon;
               if (element.iconType == "arrow") {
@@ -403,7 +403,7 @@ class _MapPageState extends State<MapPage> {
           element.items!.forEach((element) async {
             if (element.deviceData!.active.toString() == "1") {
               _markers.removeWhere(
-                  (m) => m.markerId.value == "t_" + element.id.toString());
+                  (m) => m.markerId.value == "t_${element.id}");
             }
           });
         }
@@ -526,7 +526,7 @@ class _MapPageState extends State<MapPage> {
     zoom: 4,
   );
 
-  onSearchTextChanged(String text) async {
+  Future<void> onSearchTextChanged(String text) async {
     _searchResult.clear();
 
     if (text.toLowerCase().isEmpty) {
