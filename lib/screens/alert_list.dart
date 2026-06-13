@@ -838,13 +838,15 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
       },
       child: CustomPaint(
         foregroundPainter: GappedBorderPainter(
-          color: isSelected ? color : color.withValues(alpha: 0.55),
+          color: isSelected ? color : color.withValues(alpha: 0.75),
           strokeWidth: isSelected ? 1.8 : 1.2,
           borderRadius: 5,
           gapSize: 18,
         ),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+        child: ReflectiveAnimationWrapper(
+          borderRadius: 5,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: isSelected ? null : color.withValues(alpha: 0.08),
@@ -900,8 +902,9 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildQuickAlertsSection() {
     return Column(
@@ -1022,12 +1025,14 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
 
     return CustomPaint(
       foregroundPainter: GappedBorderPainter(
-        color: isActive ? alertColor : alertColor.withValues(alpha: 0.55),
+        color: isActive ? alertColor : alertColor.withValues(alpha: 0.75),
         strokeWidth: isActive ? 1.8 : 1.2,
         borderRadius: 5,
         gapSize: 18,
       ),
-      child: Container(
+      child: ReflectiveAnimationWrapper(
+        borderRadius: 5,
+        child: Container(
         decoration: BoxDecoration(
           color: isActive ? null : alertColor.withValues(alpha: 0.12),
           gradient: _getQuickAlertGradient(type, isActive),
@@ -1120,8 +1125,9 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSearchBar() {
     String displayText = "";
@@ -1728,12 +1734,14 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
       padding: const EdgeInsets.only(bottom: 8),
       child: CustomPaint(
         foregroundPainter: GappedBorderPainter(
-          color: isActive ? alertColor : alertColor.withValues(alpha: 0.55),
+          color: isActive ? alertColor : alertColor.withValues(alpha: 0.75),
           strokeWidth: isActive ? 1.8 : 1.2,
           borderRadius: 5,
           gapSize: 18,
         ),
-        child: Container(
+        child: ReflectiveAnimationWrapper(
+          borderRadius: 5,
+          child: Container(
           decoration: BoxDecoration(
             color: isActive ? null : alertColor.withValues(alpha: 0.1),
             gradient: _getQuickAlertGradient(alert.type ?? "", isActive),
@@ -1894,7 +1902,9 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
         ),
       ),
     ),
-  );
+  ),
+),
+);
 }
 
   void _showAlertDetails(Alert alert) {
@@ -3100,6 +3110,172 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
       default:
         return 'Enter value';
     }
+  }
+}
+
+class GappedBorderPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double borderRadius;
+  final double gapSize;
+
+  GappedBorderPainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.borderRadius,
+    required this.gapSize,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final halfStroke = strokeWidth / 2;
+    final w = size.width - halfStroke;
+    final h = size.height - halfStroke;
+    final startOffset = halfStroke;
+    final r = borderRadius;
+    final g = gapSize;
+
+    // Segment 1: Top and Right (from x = g on top side, around top-right, down to y = h - g on right side)
+    final path1 = Path();
+    path1.moveTo(g, startOffset);
+    path1.lineTo(w - r, startOffset);
+    path1.arcToPoint(
+      Offset(w, startOffset + r),
+      radius: Radius.circular(r),
+      clockwise: true,
+    );
+    path1.lineTo(w, h - g);
+
+    // Segment 2: Bottom and Left (from x = w - g on bottom side, around bottom-left, up to y = g on left side)
+    final path2 = Path();
+    path2.moveTo(w - g, h);
+    path2.lineTo(startOffset + r, h);
+    path2.arcToPoint(
+      Offset(startOffset, h - r),
+      radius: Radius.circular(r),
+      clockwise: true,
+    );
+    path2.lineTo(startOffset, g);
+
+    canvas.drawPath(path1, paint);
+    canvas.drawPath(path2, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant GappedBorderPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.borderRadius != borderRadius ||
+        oldDelegate.gapSize != gapSize;
+  }
+}
+
+class ReflectiveAnimationWrapper extends StatefulWidget {
+  final Widget child;
+  final double borderRadius;
+  final bool isAnimated;
+
+  const ReflectiveAnimationWrapper({
+    super.key,
+    required this.child,
+    this.borderRadius = 5,
+    this.isAnimated = true,
+  });
+
+  @override
+  State<ReflectiveAnimationWrapper> createState() => _ReflectiveAnimationWrapperState();
+}
+
+class _ReflectiveAnimationWrapperState extends State<ReflectiveAnimationWrapper>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    );
+    if (widget.isAnimated) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isAnimated) return widget.child;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            widget.child,
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(widget.borderRadius),
+                child: CustomPaint(
+                  painter: _ReflectionSweepPainter(
+                    progress: _controller.value,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ReflectionSweepPainter extends CustomPainter {
+  final double progress;
+
+  _ReflectionSweepPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    final widthOfSweep = 80.0;
+    final startX = -widthOfSweep * 2;
+    final endX = size.width + widthOfSweep * 3;
+    final currentX = startX + (endX - startX) * progress;
+
+    paint.shader = LinearGradient(
+      begin: const Alignment(-2.0, -1.0),
+      end: const Alignment(2.0, 1.0),
+      colors: [
+        Colors.white.withValues(alpha: 0.0),
+        Colors.white.withValues(alpha: 0.02),
+        Colors.white.withValues(alpha: 0.22), // Shine peak
+        Colors.white.withValues(alpha: 0.02),
+        Colors.white.withValues(alpha: 0.0),
+      ],
+      stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
+    ).createShader(
+      Rect.fromLTWH(currentX - widthOfSweep / 2, 0, widthOfSweep, size.height),
+    );
+
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReflectionSweepPainter oldDelegate) {
+    return oldDelegate.progress != progress;
   }
 }
 

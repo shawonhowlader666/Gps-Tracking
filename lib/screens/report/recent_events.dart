@@ -192,13 +192,13 @@ class _EventsPageState extends State<EventsPage> {
             width: 100,
             height: 100,
             decoration: BoxDecoration(
-              color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
+              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.notifications_none_rounded,
               size: 50,
-              color: Color(0xFF6C63FF),
+              color: Theme.of(context).primaryColor,
             ),
           ),
           const SizedBox(height: 24),

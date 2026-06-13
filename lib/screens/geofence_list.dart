@@ -612,23 +612,29 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     final List<Map<String, dynamic>>? devices = fenceDevices[fenceId];
     final int deviceCount = devices?.length ?? 0;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isActive ? CustomColor.primary.withValues(alpha: 0.3) : Colors.grey.shade200,
-          width: 1.5,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: CustomPaint(
+        foregroundPainter: GappedBorderPainter(
+          color: isActive ? CustomColor.primary : Colors.grey.shade400,
+          strokeWidth: isActive ? 1.8 : 1.2,
+          borderRadius: 14,
+          gapSize: 24,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+        child: ReflectiveAnimationWrapper(
+          borderRadius: 14,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
       child: Column(
         children: [
           // Main Content
@@ -878,8 +884,11 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  ),
+),
+);
+}
 
   Widget _buildInfoChip({
     required IconData icon,
@@ -909,6 +918,172 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
         ],
       ),
     );
+  }
+}
+
+class GappedBorderPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double borderRadius;
+  final double gapSize;
+
+  GappedBorderPainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.borderRadius,
+    required this.gapSize,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final halfStroke = strokeWidth / 2;
+    final w = size.width - halfStroke;
+    final h = size.height - halfStroke;
+    final startOffset = halfStroke;
+    final r = borderRadius;
+    final g = gapSize;
+
+    // Segment 1: Top and Right (from x = g on top side, around top-right, down to y = h - g on right side)
+    final path1 = Path();
+    path1.moveTo(g, startOffset);
+    path1.lineTo(w - r, startOffset);
+    path1.arcToPoint(
+      Offset(w, startOffset + r),
+      radius: Radius.circular(r),
+      clockwise: true,
+    );
+    path1.lineTo(w, h - g);
+
+    // Segment 2: Bottom and Left (from x = w - g on bottom side, around bottom-left, up to y = g on left side)
+    final path2 = Path();
+    path2.moveTo(w - g, h);
+    path2.lineTo(startOffset + r, h);
+    path2.arcToPoint(
+      Offset(startOffset, h - r),
+      radius: Radius.circular(r),
+      clockwise: true,
+    );
+    path2.lineTo(startOffset, g);
+
+    canvas.drawPath(path1, paint);
+    canvas.drawPath(path2, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant GappedBorderPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.borderRadius != borderRadius ||
+        oldDelegate.gapSize != gapSize;
+  }
+}
+
+class ReflectiveAnimationWrapper extends StatefulWidget {
+  final Widget child;
+  final double borderRadius;
+  final bool isAnimated;
+
+  const ReflectiveAnimationWrapper({
+    super.key,
+    required this.child,
+    this.borderRadius = 5,
+    this.isAnimated = true,
+  });
+
+  @override
+  State<ReflectiveAnimationWrapper> createState() => _ReflectiveAnimationWrapperState();
+}
+
+class _ReflectiveAnimationWrapperState extends State<ReflectiveAnimationWrapper>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    );
+    if (widget.isAnimated) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isAnimated) return widget.child;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            widget.child,
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(widget.borderRadius),
+                child: CustomPaint(
+                  painter: _ReflectionSweepPainter(
+                    progress: _controller.value,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ReflectionSweepPainter extends CustomPainter {
+  final double progress;
+
+  _ReflectionSweepPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    final widthOfSweep = 80.0;
+    final startX = -widthOfSweep * 2;
+    final endX = size.width + widthOfSweep * 3;
+    final currentX = startX + (endX - startX) * progress;
+
+    paint.shader = LinearGradient(
+      begin: const Alignment(-2.0, -1.0),
+      end: const Alignment(2.0, 1.0),
+      colors: [
+        Colors.white.withValues(alpha: 0.0),
+        Colors.white.withValues(alpha: 0.02),
+        Colors.white.withValues(alpha: 0.22), // Shine peak
+        Colors.white.withValues(alpha: 0.02),
+        Colors.white.withValues(alpha: 0.0),
+      ],
+      stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
+    ).createShader(
+      Rect.fromLTWH(currentX - widthOfSweep / 2, 0, widthOfSweep, size.height),
+    );
+
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReflectionSweepPainter oldDelegate) {
+    return oldDelegate.progress != progress;
   }
 }
 

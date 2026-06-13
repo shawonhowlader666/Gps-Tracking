@@ -992,7 +992,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
               ),
               const SizedBox(width: 8),
               Text(
-                'Secure GPS Tracking',
+                'ORBITGPS',
                 style: TextStyle(
                   fontSize: 11,
                   color: _primaryColor.withValues(alpha: 0.6),
