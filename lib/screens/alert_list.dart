@@ -836,64 +836,68 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
           statusFilter = filterType;
         });
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? null : color.withValues(alpha: 0.08),
-          gradient: isSelected
-              ? LinearGradient(
-                  colors: [color, color.withValues(alpha: 0.82)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          borderRadius: BorderRadius.circular(5),
-          border: Border.all(
-            color: isSelected ? color : color.withValues(alpha: 0.2),
-            width: isSelected ? 1.5 : 1.0,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isSelected 
-                  ? color.withValues(alpha: 0.2)
-                  : color.withValues(alpha: 0.03),
-              blurRadius: isSelected ? 8 : 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
+      child: CustomPaint(
+        foregroundPainter: GappedBorderPainter(
+          color: isSelected ? color : color.withValues(alpha: 0.55),
+          strokeWidth: isSelected ? 1.8 : 1.2,
+          borderRadius: 5,
+          gapSize: 18,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? null : color.withValues(alpha: 0.08),
+            gradient: isSelected
+                ? LinearGradient(
+                    colors: [color, color.withValues(alpha: 0.82)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(5),
+            boxShadow: [
+              BoxShadow(
+                color: isSelected 
+                    ? color.withValues(alpha: 0.2)
+                    : color.withValues(alpha: 0.03),
+                blurRadius: isSelected ? 8 : 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : color,
+                    ),
+                  ),
+                  Icon(
+                    icon,
+                    size: 16,
                     color: isSelected ? Colors.white : color,
                   ),
-                ),
-                Icon(
-                  icon,
-                  size: 16,
-                  color: isSelected ? Colors.white : color,
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 10.5,
-                color: isSelected ? Colors.white.withValues(alpha: 0.9) : color.withValues(alpha: 0.8),
-                fontWeight: FontWeight.bold,
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: isSelected ? Colors.white.withValues(alpha: 0.9) : color.withValues(alpha: 0.8),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1016,102 +1020,104 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
     final bool isActive = existing != null && _isAlertActive(existing);
     final alertColor = _getQuickAlertColor(type);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isActive ? null : alertColor.withValues(alpha: 0.12),
-        gradient: _getQuickAlertGradient(type, isActive),
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(
-          color: isActive 
-              ? alertColor 
-              : alertColor.withValues(alpha: 0.45),
-          width: isActive ? 1.5 : 1.0,
-        ),
-        boxShadow: [
-          // 3D Bevel top highlight reflection
-          const BoxShadow(
-            color: Colors.white,
-            blurRadius: 0,
-            offset: Offset(0, -1),
-          ),
-          // Primary drop shadow (casts downward for 3D elevation)
-          BoxShadow(
-            color: isActive 
-                ? alertColor.withValues(alpha: 0.22)
-                : alertColor.withValues(alpha: 0.05),
-            blurRadius: isActive ? 12 : 8,
-            offset: const Offset(0, 4),
-          ),
-          // Ambient shadow
-          BoxShadow(
-            color: isActive 
-                ? alertColor.withValues(alpha: 0.06)
-                : alertColor.withValues(alpha: 0.01),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
+    return CustomPaint(
+      foregroundPainter: GappedBorderPainter(
+        color: isActive ? alertColor : alertColor.withValues(alpha: 0.55),
+        strokeWidth: isActive ? 1.8 : 1.2,
+        borderRadius: 5,
+        gapSize: 18,
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), // Slim padding
-        child: Row(
-          children: [
-            // Icon Background
-            Container(
-              padding: const EdgeInsets.all(8), // Compact padding
-              decoration: BoxDecoration(
-                color: isActive 
-                    ? Colors.white.withValues(alpha: 0.25) 
-                    : alertColor.withValues(alpha: 0.22),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                color: isActive ? Colors.white : alertColor,
-                size: 20, // Slim icon
-              ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isActive ? null : alertColor.withValues(alpha: 0.12),
+          gradient: _getQuickAlertGradient(type, isActive),
+          borderRadius: BorderRadius.circular(5),
+          boxShadow: [
+            // 3D Bevel top highlight reflection
+            const BoxShadow(
+              color: Colors.white,
+              blurRadius: 0,
+              offset: Offset(0, -1),
             ),
-            const SizedBox(width: 12),
-            // Text Details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: isActive ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
+            // Primary drop shadow (casts downward for 3D elevation)
+            BoxShadow(
+              color: isActive 
+                  ? alertColor.withValues(alpha: 0.22)
+                  : alertColor.withValues(alpha: 0.05),
+              blurRadius: isActive ? 12 : 8,
+              offset: const Offset(0, 4),
             ),
-            // Switch
-            Transform.scale(
-              scale: 0.8, // Slim switch
-              child: Switch(
-                value: isActive,
-                onChanged: (val) {
-                  _toggleQuickAlert(type, val);
-                },
-                activeColor: Colors.white,
-                activeTrackColor: Colors.white.withValues(alpha: 0.45),
-                inactiveThumbColor: Colors.grey.shade400,
-                inactiveTrackColor: Colors.grey.shade200,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
+            // Ambient shadow
+            BoxShadow(
+              color: isActive 
+                  ? alertColor.withValues(alpha: 0.06)
+                  : alertColor.withValues(alpha: 0.01),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), // Slim padding
+          child: Row(
+            children: [
+              // Icon Background
+              Container(
+                padding: const EdgeInsets.all(8), // Compact padding
+                decoration: BoxDecoration(
+                  color: isActive 
+                      ? Colors.white.withValues(alpha: 0.25) 
+                      : alertColor.withValues(alpha: 0.22),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: isActive ? Colors.white : alertColor,
+                  size: 20, // Slim icon
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Text Details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: isActive ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Switch
+              Transform.scale(
+                scale: 0.8, // Slim switch
+                child: Switch(
+                  value: isActive,
+                  onChanged: (val) {
+                    _toggleQuickAlert(type, val);
+                  },
+                  activeColor: Colors.white,
+                  activeTrackColor: Colors.white.withValues(alpha: 0.45),
+                  inactiveThumbColor: Colors.grey.shade400,
+                  inactiveTrackColor: Colors.grey.shade200,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1718,26 +1724,30 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
     final IconData typeIcon = _getAlertTypeIcon(alert.type ?? "");
     final alertColor = _getQuickAlertColor(alert.type ?? "");
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: isActive ? null : alertColor.withValues(alpha: 0.1),
-        gradient: _getQuickAlertGradient(alert.type ?? "", isActive),
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(
-          color: isActive ? alertColor.withValues(alpha: 0.6) : alertColor.withValues(alpha: 0.45),
-          width: 1.5,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: CustomPaint(
+        foregroundPainter: GappedBorderPainter(
+          color: isActive ? alertColor : alertColor.withValues(alpha: 0.55),
+          strokeWidth: isActive ? 1.8 : 1.2,
+          borderRadius: 5,
+          gapSize: 18,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isActive ? alertColor.withValues(alpha: 0.18) : Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isActive ? null : alertColor.withValues(alpha: 0.1),
+            gradient: _getQuickAlertGradient(alert.type ?? "", isActive),
+            borderRadius: BorderRadius.circular(5),
+            boxShadow: [
+              BoxShadow(
+                color: isActive ? alertColor.withValues(alpha: 0.18) : Colors.black.withValues(alpha: 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
+          child: Material(
+            color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(5),
           onTap: () => _showAlertDetails(alert),
@@ -1883,8 +1893,9 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showAlertDetails(Alert alert) {
     final bool isActive = _isAlertActive(alert);
