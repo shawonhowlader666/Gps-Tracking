@@ -1024,7 +1024,7 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
         border: Border.all(
           color: isActive 
               ? alertColor 
-              : alertColor.withValues(alpha: 0.18),
+              : alertColor.withValues(alpha: 0.35),
           width: isActive ? 1.5 : 1.0,
         ),
         boxShadow: [
@@ -1062,12 +1062,12 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
               decoration: BoxDecoration(
                 color: isActive 
                     ? Colors.white.withValues(alpha: 0.25) 
-                    : alertColor.withValues(alpha: 0.15),
+                    : alertColor.withValues(alpha: 0.3),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 icon,
-                color: isActive ? Colors.white : alertColor,
+                color: isActive ? Colors.white : alertColor.withValues(alpha: 0.95),
                 size: 20, // Slim icon
               ),
             ),
@@ -1725,7 +1725,7 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
         gradient: _getQuickAlertGradient(alert.type ?? "", isActive),
         borderRadius: BorderRadius.circular(5),
         border: Border.all(
-          color: isActive ? alertColor.withValues(alpha: 0.6) : alertColor.withValues(alpha: 0.18),
+          color: isActive ? alertColor.withValues(alpha: 0.6) : alertColor.withValues(alpha: 0.35),
           width: 1.5,
         ),
         boxShadow: [
@@ -1749,12 +1749,12 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: isActive ? Colors.white.withValues(alpha: 0.25) : alertColor.withValues(alpha: 0.15),
+                    color: isActive ? Colors.white.withValues(alpha: 0.25) : alertColor.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(5),
                   ),
                   child: Icon(
                     typeIcon,
-                    color: isActive ? Colors.white : alertColor,
+                    color: isActive ? Colors.white : alertColor.withValues(alpha: 0.95),
                     size: 18,
                   ),
                 ),
@@ -1786,7 +1786,7 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                             decoration: BoxDecoration(
-                              color: isActive ? Colors.white.withValues(alpha: 0.2) : alertColor.withValues(alpha: 0.15),
+                              color: isActive ? Colors.white.withValues(alpha: 0.2) : alertColor.withValues(alpha: 0.3),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
