@@ -1574,52 +1574,51 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
           _buildQuickAlertsSection(),
 
           // 3. Custom Alerts List or Empty state
-          _buildRulesHeader(),
-
-          if (isLoading)
-            _buildSkeletonLoader()
-          else if (filteredAlerts.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
+          if (alertList.isNotEmpty) ...[
+            _buildRulesHeader(),
+            if (isLoading)
+              _buildSkeletonLoader()
+            else if (filteredAlerts.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.notifications_off_outlined,
+                        size: 48,
+                        color: Theme.of(context).primaryColor,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.notifications_off_outlined,
-                      size: 48,
-                      color: Theme.of(context).primaryColor,
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No matching rules found',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    alertList.isEmpty ? 'No Custom Alerts' : 'No matching rules found',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    alertList.isEmpty
-                        ? 'Create a custom alert to monitor your vehicles'
-                        : 'Try adjusting your search query or status filter',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Try adjusting your search query or status filter',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: filteredAlerts.length,
+                itemBuilder: (context, index) => _buildCleanAlertCard(filteredAlerts[index]),
               ),
-            )
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: filteredAlerts.length,
-              itemBuilder: (context, index) => _buildCleanAlertCard(filteredAlerts[index]),
-            ),
+          ],
         ],
       ),
     );
@@ -2348,23 +2347,26 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
   }
 
   Widget _buildFAB() {
-    return SizedBox(
-      height: 38,
-      child: FloatingActionButton.extended(
-        onPressed: () => _showAddAlertBottomSheet(),
-        backgroundColor: Theme.of(context).primaryColor,
-        elevation: 3,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(5),
-        ),
-        icon: const Icon(Icons.add, color: Colors.white, size: 18),
-        label: const Text(
-          'ADD ALERT',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20.0),
+      child: SizedBox(
+        height: 38,
+        child: FloatingActionButton.extended(
+          onPressed: () => _showAddAlertBottomSheet(),
+          backgroundColor: Theme.of(context).primaryColor,
+          elevation: 3,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(5),
+          ),
+          icon: const Icon(Icons.add, color: Colors.white, size: 18),
+          label: const Text(
+            'ADD ALERT',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
           ),
         ),
       ),
