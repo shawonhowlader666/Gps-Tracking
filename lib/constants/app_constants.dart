@@ -7,7 +7,7 @@ class AppConstants {
 
   // Logo Path
   static const String logoPath = 'images/onfleet_logo.png';
-  static const String appIcon = 'images/onfleet_logo.png';
+  static const String appIcon = 'images/onfleet_icon.png';
 }
 
 class ShimmerAppTitle extends StatelessWidget {
