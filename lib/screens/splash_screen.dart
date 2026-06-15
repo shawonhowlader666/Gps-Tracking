@@ -229,7 +229,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
         SHOW_ADS = false;
         WHATS_APP = '+880 1912-609087';
         PHONE_NO = '+880 1912-609087';
-        EMAIL = 'privacy@orbitgps.com';
+        EMAIL = 'privacy@onfleetgps.com';
         adsFrequency = 2;
         APP_VERSION = '1.0.0';
         BANNER_IMAGE = [];
@@ -1024,7 +1024,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
               ),
               const SizedBox(width: 8),
               Text(
-                'ORBITGPS',
+                'ONFLEET GPS',
                 style: TextStyle(
                   fontSize: 11,
                   color: _primaryColor.withValues(alpha: 0.6),

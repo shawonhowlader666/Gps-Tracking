@@ -1,4 +1,4 @@
-package com.orbitgps.app
+package com.onfleetgps.app
 
 import io.flutter.embedding.android.FlutterActivity
 

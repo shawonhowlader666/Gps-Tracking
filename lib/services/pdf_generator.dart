@@ -20,9 +20,9 @@ class PDFGenerator {
   static const PdfColor cardColor = PdfColor.fromInt(0xFFFFFFFF);
 
   // Company Details
-  static const String companyName = 'ORBITGPS';
+  static const String companyName = 'ONFLEET GPS';
   static const String companyTagline = 'Advanced Tracking Solution';
-  static const String logoPath = 'images/orbit_logo_text.png';
+  static const String logoPath = 'images/onfleet_logo.png';
 
   // Load logo image
   static Future<Uint8List?> _loadLogo() async {

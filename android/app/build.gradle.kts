@@ -26,7 +26,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.orbitgps.app"
+    namespace = "com.onfleetgps.app"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 
@@ -49,7 +49,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.orbitgps.app"
+        applicationId = "com.onfleetgps.app"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = flutterVersionCode.toInt()

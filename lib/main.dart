@@ -183,7 +183,7 @@ Future<void> showForegroundNotification(RemoteMessage message) async {
     styleInformation: BigTextStyleInformation(
       body,
       contentTitle: '$emoji $title',
-      summaryText: 'ORBITGPS',
+      summaryText: 'ONFLEET GPS',
     ),
   );
 

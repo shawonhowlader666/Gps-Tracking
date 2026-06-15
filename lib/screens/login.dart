@@ -797,7 +797,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
   Widget _buildAppTitle() {
     return Image.asset(
-      'images/orbit_logo_text.png',
+      'images/onfleet_logo.png',
       height: 38,
       fit: BoxFit.contain,
     );

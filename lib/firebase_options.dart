@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '58525743652',
     projectId: 'trust-me-cd5ac',
     storageBucket: 'trust-me-cd5ac.firebasestorage.app',
-    iosBundleId: 'com.orbitgps.app',
+    iosBundleId: 'com.onfleetgps.app',
   );
 
 }

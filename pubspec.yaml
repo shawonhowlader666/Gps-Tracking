@@ -129,7 +129,7 @@ dependency_overrides:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "images/trust_logo.png"
+  image_path: "images/onfleet_logo.png"
 
 flutter:
   uses-material-design: true

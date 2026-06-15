@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 class AppConstants {
   // App Name
-  static const String appName = 'ORBITGPS';
+  static const String appName = 'ONFLEET GPS';
   static const String appTagline = 'Advanced Tracking Solution';
 
   // Logo Path
-  static const String logoPath = 'images/trust_logo.png';
-  static const String appIcon = 'images/trust_logo.png';
+  static const String logoPath = 'images/onfleet_logo.png';
+  static const String appIcon = 'images/onfleet_logo.png';
 }
 
 class ShimmerAppTitle extends StatelessWidget {

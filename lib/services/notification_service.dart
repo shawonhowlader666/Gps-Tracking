@@ -297,7 +297,7 @@ class NotificationService {
         styleInformation: BigTextStyleInformation(
           body,
           contentTitle: title,
-          summaryText: 'ORBITGPS',
+          summaryText: 'ONFLEET GPS',
         ),
       );
 
