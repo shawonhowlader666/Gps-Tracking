@@ -1019,7 +1019,7 @@ class PDFGenerator {
       Directory? directory;
 
       if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download/TrustMe_Invoices');
+        directory = Directory('/storage/emulated/0/Download/Onfleet_Invoices');
 
         if (!await directory.exists()) {
           await directory.create(recursive: true);

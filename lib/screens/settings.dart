@@ -897,7 +897,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         'Contact Us',
                         'For privacy concerns or to exercise your rights:\n\n'
                             'Email: privacy@onfleetgps.com\n'
-                            'Website: https://souvik600.github.io/trustmegps-privacy-policy/\n'
+                            'Website: https://onfleetgps.com/privacy-policy/\n'
                             'Phone: +880-1912609087\n'
                             'Address: [Your Company Address]',
                       ),
