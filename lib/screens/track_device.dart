@@ -537,13 +537,16 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   String getEngineStatus() {
+    if (_isEngineOn(device!)) {
+      return 'On';
+    }
     String? val = _getRawParameter('ignition') ?? _getRawParameter('engine');
     if (val != null) {
       val = val.toLowerCase().trim();
       if (val == 'true' || val == '1' || val == 'on') return 'On';
       if (val == 'false' || val == '0' || val == 'off') return 'Off';
     }
-    return _isEngineOn(device!) ? 'On' : 'Off';
+    return 'Off';
   }
 
   String getLockStatus() {
@@ -702,20 +705,73 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   bool _isEngineOn(DeviceItem device) {
+    // 1. If speed > 0, engine must be on (telematics override for wiring/reporting issues)
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+    if (speed > 0) {
+      return true;
+    }
+
+    // 2. Check engineStatus field directly
     if (device.engineStatus != null) {
       final status = device.engineStatus;
       if (status is bool) return status;
       if (status is int) return status == 1;
       if (status is String) {
-        final s = status.toLowerCase();
-        if (['on', '1', 'true'].contains(s)) return true;
+        final s = status.toLowerCase().trim();
+        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s)) {
+          return true;
+        }
+        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
+            .contains(s)) {
+          return false;
+        }
       }
     }
 
-    final speed = double.tryParse(device.speed.toString()) ?? 0;
-    if (speed > 0) return true;
+    // 3. Check sensors for ignition/ACC status
+    if (device.sensors != null && device.sensors!.isNotEmpty) {
+      for (var sensor in device.sensors!) {
+        try {
+          final type = (sensor['type'] ?? '').toString().toLowerCase();
+          final name = (sensor['name'] ?? '').toString().toLowerCase();
+          final value = sensor['value'];
 
-    return device.iconColor?.toLowerCase() == 'yellow';
+          if (type == 'acc' ||
+              type == 'ignition' ||
+              type == 'engine' ||
+              name.contains('ignition') ||
+              name.contains('acc') ||
+              name.contains('engine')) {
+            if (value == null) continue;
+
+            if (value is bool) return value;
+            if (value is int) return value == 1;
+            if (value is String) {
+              final v = value.toLowerCase().trim();
+              if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
+                  .contains(v)) {
+                return true;
+              }
+              if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
+                  .contains(v)) {
+                return false;
+              }
+            }
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+    }
+
+    // 4. Fallback: Check iconColor as indicator
+    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
+    if (iconColor == 'yellow' || iconColor == 'green') {
+      return true; 
+    }
+
+    // Default: engine is off
+    return false;
   }
 
   Color _getStatusColor() {

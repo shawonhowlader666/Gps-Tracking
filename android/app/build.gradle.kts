@@ -36,9 +36,7 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
-    }
+
 
     sourceSets {
         getByName("main") {
@@ -104,3 +102,9 @@ dependencies {
 }
 
 apply(plugin = "com.google.gms.google-services")
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+    }
+}

@@ -26,6 +26,7 @@ import 'package:gpspro/widgets/scale_button.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/payment_service.dart';
+import 'package:gpspro/services/model/billing_vehicle.dart';
 
 enum DeviceStatus { running, idle, stop, offline }
 
@@ -43,6 +44,11 @@ class _DevicePageState extends State<DevicePage> {
 
   // Due amount observable
   final RxDouble totalDue = 0.0.obs;
+
+  // Billing info state
+  List<BillingVehicle> _billingVehicles = [];
+  Map<String, BillingVehicle> _billingMap = {};
+  bool _isLoadingBilling = false;
 
   SingleDevice? sd;
   int expiryTime = 10;
@@ -82,6 +88,7 @@ class _DevicePageState extends State<DevicePage> {
         _loadDevices();
         _startPeriodicRefresh();
         _loadDueAmount();
+        _loadBillingInfo();
       }
     });
   }
@@ -96,6 +103,149 @@ class _DevicePageState extends State<DevicePage> {
     } catch (e) {
       debugPrint('Error loading due amount: $e');
     }
+  }
+
+  /// Load billing info from payment service
+  Future<void> _loadBillingInfo() async {
+    if (_isDisposed || !mounted) return;
+    _safeSetState(() {
+      _isLoadingBilling = true;
+    });
+
+    try {
+      final billingList = await PaymentService.getBillingVehicles();
+      if (billingList != null && mounted && !_isDisposed) {
+        _billingVehicles = billingList;
+        _billingMap = {for (var v in billingList) v.imei: v};
+        debugPrint('LOADED BILLING MAP KEYS: ${_billingMap.keys.toList()}');
+      } else {
+        debugPrint('Billing list is null or empty');
+      }
+    } catch (e) {
+      debugPrint('Error loading billing info: $e');
+    } finally {
+      if (mounted && !_isDisposed) {
+        _safeSetState(() {
+          _isLoadingBilling = false;
+        });
+      }
+    }
+  }
+
+  bool _isDeviceSuspended(DeviceItem device) {
+    final imei = device.imei ?? device.deviceData?.imei;
+    if (imei == null) return false;
+    final billingInfo = _billingMap[imei];
+    if (billingInfo == null) return false;
+
+    // Suspend if explicitly marked inactive in billing
+    if (!billingInfo.isActive) {
+      return true;
+    }
+
+    // Check expiration date
+    if (billingInfo.expirationDate != null) {
+      try {
+        final expDate = DateTime.parse(billingInfo.expirationDate!);
+        if (expDate.isBefore(DateTime.now())) {
+          final daysPassed = DateTime.now().difference(expDate).inDays;
+          if (daysPassed > 10) {
+            return true;
+          }
+        }
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  String _formatBillingDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      return "${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}";
+    } catch (_) {
+      return dateString.split(' ').first;
+    }
+  }
+
+  void _showSuspendedDialog(DeviceItem device) {
+    final imei = device.imei ?? device.deviceData?.imei;
+    final billingInfo = imei != null ? _billingMap[imei] : null;
+    final monthlyBillStr = billingInfo?.monthlyBill != null 
+        ? " (মান্থলি বিল: ৳${billingInfo!.monthlyBill!.toStringAsFixed(0)})" 
+        : "";
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_clock_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('সেবা সাময়িকভাবে স্থগিত', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'আপনার "${device.name ?? 'ডিভাইস'}" গাড়িটির বিল বকেয়া থাকায় বা মেয়াদ শেষ হওয়ায় ট্র্যাকিং সাময়িকভাবে স্থগিত করা হয়েছে$monthlyBillStr। অবিলম্বে ট্র্যাকিং সচল করতে বকেয়া বিল পরিশোধ করুন।',
+          style: const TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('বন্ধ করুন', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Get.to(() => const PaymentListScreen())?.then((_) {
+                _loadDueAmount();
+                _loadBillingInfo();
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF22C55E),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('বিল পরিশোধ করুন', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _checkNoPermission(DeviceItem device) {
+    if (device.id != null && device.id! < 0) {
+      _showNoPermissionDialog(device);
+      return true;
+    }
+    return false;
+  }
+
+  void _showNoPermissionDialog(DeviceItem device) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('ট্র্যাকিং অনুমতি নেই', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'আপনার "${device.name ?? 'ডিভাইস'}" গাড়িটি দেখার পর্যাপ্ত অনুমতি জিপিএস ট্র্যাকিং সার্ভারে নেই। ম্যাপ বা লাইভ ট্র্যাকিং দেখতে অনুগ্রহ করে অ্যাডমিন প্যানেল থেকে অনুমতি সক্রিয় করুন।',
+          style: const TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('বন্ধ করুন', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _startPeriodicRefresh() {
@@ -115,10 +265,40 @@ class _DevicePageState extends State<DevicePage> {
     _filterDevices("all");
   }
 
+  List<DeviceItem> _getMergedDevices() {
+    final trackingDevices = controller.filteredDevices.toList();
+    final List<DeviceItem> merged = List.from(trackingDevices);
+
+    for (final bv in _billingVehicles) {
+      final exists = trackingDevices.any((td) {
+        final trackingImei = td.imei ?? td.deviceData?.imei;
+        return trackingImei != null && trackingImei == bv.imei;
+      });
+
+      if (!exists) {
+        final mockDevice = DeviceItem(
+          id: -bv.id,
+          name: bv.name ?? 'ভেইকেল ${bv.id}',
+          imei: bv.imei,
+          online: 'offline',
+          iconColor: 'red',
+          speed: 0,
+          lat: null,
+          lng: null,
+          deviceData: DeviceData(
+            imei: bv.imei,
+          ),
+        );
+        merged.add(mockDevice);
+      }
+    }
+    return merged;
+  }
+
   void _calculateCounts() {
     if (_isDisposed || !mounted) return;
 
-    final allDevices = controller.filteredDevices.toList();
+    final allDevices = _getMergedDevices();
 
     int running = 0;
     int idle = 0;
@@ -195,7 +375,13 @@ class _DevicePageState extends State<DevicePage> {
 
   /// Check if engine/ignition is on - MASTER ENGINE CHECK
   bool _isEngineOn(DeviceItem device) {
-    // 1. Check engineStatus field directly
+    // 1. If speed > 0, engine must be on (telematics override for wiring/reporting issues)
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+    if (speed > 0) {
+      return true;
+    }
+
+    // 2. Check engineStatus field directly
     if (device.engineStatus != null) {
       final status = device.engineStatus;
       if (status is bool) return status;
@@ -212,7 +398,7 @@ class _DevicePageState extends State<DevicePage> {
       }
     }
 
-    // 2. Check sensors for ignition/acc status
+    // 3. Check sensors for ignition/acc status
     if (device.sensors != null && device.sensors!.isNotEmpty) {
       for (var sensor in device.sensors!) {
         try {
@@ -249,24 +435,16 @@ class _DevicePageState extends State<DevicePage> {
       }
     }
 
-    // 3. If speed > 0, engine must be on
-    final speed = double.tryParse(device.speed.toString()) ?? 0;
-    if (speed > 0) {
-      return true;
-    }
-
-    // 4. Check iconColor as indicator
+    // 4. Fallback: Check iconColor as indicator
     final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
-    if (iconColor == 'yellow') {
-      return true; // Idle/Yellow = engine on but not moving
-    }
-    if (iconColor == 'green') {
-      return true; // Running/Green = engine on and moving
+    if (iconColor == 'yellow' || iconColor == 'green') {
+      return true; 
     }
 
     // Default: engine is off
     return false;
   }
+
 
   /// Get device status - MASTER STATUS DETERMINATION
   DeviceStatus _getDeviceStatus(DeviceItem device) {
@@ -307,7 +485,7 @@ class _DevicePageState extends State<DevicePage> {
     if (_isDisposed || !mounted) return;
 
     controller.filterDevicesByStatus("all");
-    final allDevices = controller.filteredDevices.toList();
+    final allDevices = _getMergedDevices();
 
     // Recalculate counts
     _calculateCounts();
@@ -350,7 +528,7 @@ class _DevicePageState extends State<DevicePage> {
       _filterDevices(_getFilterName(_selectedFilterIndex));
     } else {
       controller.filterDevicesByStatus("all");
-      final allDevices = controller.filteredDevices.toList();
+      final allDevices = _getMergedDevices();
 
       // Apply current filter first, then search
       List<DeviceItem> filtered;
@@ -864,7 +1042,11 @@ class _DevicePageState extends State<DevicePage> {
             padding: const EdgeInsets.all(16),
             child: InkWell(
               onTap: () {
-                Get.to(() => TrackDevicePage(device.id, device.name, device));
+                if (_isDeviceSuspended(device)) {
+                  _showSuspendedDialog(device);
+                } else if (!_checkNoPermission(device)) {
+                  Get.to(() => TrackDevicePage(device.id, device.name, device));
+                }
               },
               child: Row(
                 children: [
@@ -889,11 +1071,17 @@ class _DevicePageState extends State<DevicePage> {
                         // ),
                         child: Padding(
                           padding: const EdgeInsets.all(2.0),
-                          child: Image(
-                            image: CachedNetworkImageProvider(
-                              "${UserRepository.getServerUrl()}/${device.icon!.path!}",
-                            ),
-                          ),
+                          child: (device.icon?.path != null)
+                              ? Image(
+                                  image: CachedNetworkImageProvider(
+                                    "${UserRepository.getServerUrl()}/${device.icon!.path!}",
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.directions_car,
+                                  color: statusColor,
+                                  size: 28,
+                                ),
                         ),
                       ),
                       // Status dot
@@ -939,6 +1127,93 @@ class _DevicePageState extends State<DevicePage> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        // Billing and Expiration Row
+                        () {
+                          final imei = device.imei ?? device.deviceData?.imei;
+                          final billingInfo = imei != null ? _billingMap[imei] : null;
+                          if (billingInfo == null) return const SizedBox.shrink();
+
+                          final isSuspended = _isDeviceSuspended(device);
+
+                          // Check if expired but within grace period
+                          bool isGracePeriod = false;
+                          if (billingInfo.expirationDate != null) {
+                            try {
+                              final expDate = DateTime.parse(billingInfo.expirationDate!);
+                              if (expDate.isBefore(DateTime.now()) && !isSuspended) {
+                                isGracePeriod = true;
+                              }
+                            } catch (_) {}
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  if (isSuspended) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEE2E2),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: const Color(0xFFFCA5A5)),
+                                      ),
+                                      child: const Text(
+                                        'সেবা স্থগিত',
+                                        style: TextStyle(
+                                          color: Color(0xFFEF4444),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ] else if (isGracePeriod) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEF3C7),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: const Color(0xFFFCD34D)),
+                                      ),
+                                      child: const Text(
+                                        'মেয়াদ শেষ (১০ দিন ছাড়)',
+                                        style: TextStyle(
+                                          color: Color(0xFFD97706),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ] else if (billingInfo.expirationDate != null) ...[
+                                    Text(
+                                      'মেয়াদ: ${_formatBillingDate(billingInfo.expirationDate!)}',
+                                      style: const TextStyle(
+                                        color: Colors.black54,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  if (billingInfo.monthlyBill != null)
+                                    Text(
+                                      'বিল: ৳${billingInfo.monthlyBill!.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF1B851C),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          );
+                        }(),
                         const SizedBox(height: 6),
                         Row(
                           children: [
@@ -1034,38 +1309,49 @@ class _DevicePageState extends State<DevicePage> {
                 _buildBottomButton(
                   icon: Icons.info_outline,
                   label: 'details'.tr,
-                  onTap: () => _showDetailsSheet(device),
+                  onTap: () {
+                    if (!_checkNoPermission(device)) {
+                      _showDetailsSheet(device);
+                    }
+                  },
                 ),
                 _buildBottomButton(
                   icon: Icons.description_outlined,
                   label: 'Report'.tr,
-                  onTap: () => _showReport(device),
+                  onTap: () {
+                    if (!_checkNoPermission(device)) {
+                      _showReport(device);
+                    }
+                  },
                 ),
                 _buildBottomButton(
                   icon: Icons.my_location,
                   label: 'tracking'.tr,
                   onTap: () {
-                    AdMobService().showInterstitialAd();
-                    Get.to(
-                            () => TrackDevicePage(device.id, device.name, device));
+                    if (!_checkNoPermission(device)) {
+                      AdMobService().showInterstitialAd();
+                      _openTracking(device);
+                    }
                   },
                 ),
                 _buildBottomButton(
                   icon: Icons.play_circle_outline,
                   label: 'playback'.tr,
                   onTap: () {
-                    AdMobService().showInterstitialAd(ignoreFrequency: true);
-                    Get.to(() => PlaybackScreen(
-                      id: device.id,
-                      name: device.name,
-                      device: device,
-                    ));
+                    if (!_checkNoPermission(device)) {
+                      AdMobService().showInterstitialAd(ignoreFrequency: true);
+                      _openPlayback(device);
+                    }
                   },
                 ),
                 _buildBottomButton(
                   icon: Icons.more_horiz,
                   label: 'more'.tr,
-                  onTap: () => _showMoreOptions(device),
+                  onTap: () {
+                    if (!_checkNoPermission(device)) {
+                      _showMoreOptions(device);
+                    }
+                  },
                 ),
               ],
             ),
@@ -2011,22 +2297,22 @@ class _DevicePageState extends State<DevicePage> {
       ));
     }
 
-    if (data.simActivationDate != null) {
+    if (data?.simActivationDate != null) {
       if (items.isNotEmpty) items.add(_buildDivider());
       items.add(_buildInfoRow(
         icon: Icons.calendar_today,
         label: 'SIM Activation',
-        value: _formatDate(data.simActivationDate),
+        value: _formatDate(data?.simActivationDate),
       ));
     }
 
-    if (data.simExpirationDate != null) {
+    if (data?.simExpirationDate != null) {
       if (items.isNotEmpty) items.add(_buildDivider());
       items.add(_buildInfoRow(
         icon: Icons.event_busy,
         label: 'SIM Expiration',
-        value: _formatDate(data.simExpirationDate),
-        valueColor: _isExpired(data.simExpirationDate) ? _redColor : null,
+        value: _formatDate(data?.simExpirationDate),
+        valueColor: _isExpired(data?.simExpirationDate) ? _redColor : null,
       ));
     }
 
@@ -2382,7 +2668,7 @@ class _DevicePageState extends State<DevicePage> {
         icon: Icons.event_busy,
         label: 'Expiration Date',
         value: _formatDate(data!.expirationDate),
-        valueColor: _isExpired(data.expirationDate) ? _redColor : null,
+        valueColor: _isExpired(data!.expirationDate) ? _redColor : null,
       ));
     }
 
@@ -2604,6 +2890,10 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   void _openPlayback(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     Get.to(() => PlaybackScreen(
       id: device.id,
       name: device.name,
@@ -2612,14 +2902,26 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   void _openTracking(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     Get.to(() => TrackDevicePage(device.id, device.name, device));
   }
 
   void _openLockUnlock(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     Get.to(() => LockUnlockScreen(device: device));
   }
 
   void _openStreetView(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     if (device.lat == null || device.lng == null) return;
     Get.to(() => StreetViewScreen(
       latitude: device.lat!,
@@ -2634,6 +2936,10 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   void _openDirections(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     if (device.lat == null || device.lng == null) return;
     final url =
         'https://www.google.com/maps/dir/?api=1&destination=${device.lat},${device.lng}&travelmode=driving';
@@ -2649,6 +2955,10 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   void _showMoreOptions(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -2825,6 +3135,10 @@ class _DevicePageState extends State<DevicePage> {
   // }
 
   void _showReport(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     AdMobService().showInterstitialAd(ignoreFrequency: true);
 
     Navigator.push(

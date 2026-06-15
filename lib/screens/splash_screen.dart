@@ -15,6 +15,7 @@ import 'package:gpspro/storage/user_repository.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class SplashScreenPage extends StatefulWidget {
   const SplashScreenPage({super.key});
@@ -204,23 +205,54 @@ class _SplashScreenPageState extends State<SplashScreenPage>
       prefs = await SharedPreferences.getInstance();
       var serverType = prefs!.getString('serverType') ?? 'free';
 
-      final doc = await FirebaseFirestore.instance
-          .collection('configs')
-          .doc('urls')
-          .get();
+      if (kIsWeb) {
+        SERVER_URL = [
+          {
+            'name': 'Server 1',
+            'url': 'http://93.127.135.46',
+            'type': 'paid',
+            'showBannerAds': true,
+          },
+          {
+            'name': 'Server 2',
+            'url': 'http://161.248.200.151',
+            'type': 'paid',
+            'showBannerAds': true,
+          },
+          {
+            'name': 'Server 3',
+            'url': 'http://167.86.78.162',
+            'type': 'paid',
+            'showBannerAds': true,
+          }
+        ];
+        SHOW_ADS = false;
+        WHATS_APP = '+880 1912-609087';
+        PHONE_NO = '+880 1912-609087';
+        EMAIL = 'privacy@orbitgps.com';
+        adsFrequency = 2;
+        APP_VERSION = '1.0.0';
+        BANNER_IMAGE = [];
+        fuelData = {};
+      } else {
+        final doc = await FirebaseFirestore.instance
+            .collection('configs')
+            .doc('urls')
+            .get();
 
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        final spytrackConfig = data['spytrack'] as Map<String, dynamic>;
-        SERVER_URL = spytrackConfig['url'] as List;
-        SHOW_ADS = (spytrackConfig['ads'] as bool) && serverType == 'free';
-        WHATS_APP = spytrackConfig['whatsapp'] as String;
-        PHONE_NO = spytrackConfig['phone'] as String;
-        EMAIL = spytrackConfig['email'] as String;
-        adsFrequency = spytrackConfig['adsfrequency'] as int;
-        APP_VERSION = spytrackConfig['version'] as String;
-        BANNER_IMAGE = spytrackConfig['banners'] as List<dynamic>;
-        fuelData = spytrackConfig['fuelData'];
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          final spytrackConfig = data['spytrack'] as Map<String, dynamic>;
+          SERVER_URL = spytrackConfig['url'] as List;
+          SHOW_ADS = (spytrackConfig['ads'] as bool) && serverType == 'free';
+          WHATS_APP = spytrackConfig['whatsapp'] as String;
+          PHONE_NO = spytrackConfig['phone'] as String;
+          EMAIL = spytrackConfig['email'] as String;
+          adsFrequency = spytrackConfig['adsfrequency'] as int;
+          APP_VERSION = spytrackConfig['version'] as String;
+          BANNER_IMAGE = spytrackConfig['banners'] as List<dynamic>;
+          fuelData = spytrackConfig['fuelData'];
+        }
       }
 
       _updateStatus('Checking server...');

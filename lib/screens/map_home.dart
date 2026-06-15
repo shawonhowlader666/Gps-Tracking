@@ -11,7 +11,7 @@ import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:gpspro/arguments/device_args.dart';
 import 'package:gpspro/flutter_flow/flutter_flow_theme.dart';
-import 'package:gpspro/services/model/device_item.dart';
+import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/services/model/geofence_model.dart';
 import 'package:gpspro/preference.dart';
 import 'package:gpspro/screens/common_method.dart';
@@ -25,6 +25,9 @@ import 'package:gpspro/util/util.dart';
 import 'package:label_marker/label_marker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart' as m;
+import 'package:gpspro/services/payment_service.dart';
+import 'package:gpspro/services/model/billing_vehicle.dart';
+import 'package:gpspro/screens/payment_list.dart';
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -42,6 +45,7 @@ class _MapPageState extends State<MapPage> {
   GoogleMapController? mapController;
   Set<Marker> _markers = <Marker>{};
   MapType _currentMapType = MapType.normal;
+  Map<String, BillingVehicle> _billingMap = {};
   final bool _trafficEnabled = false;
   int _selectedDeviceId = 0;
   bool deviceSelected = false;
@@ -82,7 +86,95 @@ class _MapPageState extends State<MapPage> {
     rootBundle.loadString('assets/map_style.txt').then((string) {
       _mapStyle = string;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadBillingInfo();
+      }
+    });
     super.initState();
+  }
+
+  Future<void> _loadBillingInfo() async {
+    try {
+      final billingList = await PaymentService.getBillingVehicles();
+      if (billingList != null && mounted) {
+        setState(() {
+          _billingMap = {for (var v in billingList) v.imei: v};
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading billing info in MapPage: $e');
+    }
+  }
+
+  bool _isDeviceSuspended(DeviceItem device) {
+    final imei = device.imei ?? device.deviceData?.imei;
+    if (imei == null) return false;
+    final billingInfo = _billingMap[imei];
+    if (billingInfo == null) return false;
+
+    if (!billingInfo.isActive) {
+      return true;
+    }
+
+    if (billingInfo.expirationDate != null) {
+      try {
+        final expDate = DateTime.parse(billingInfo.expirationDate!);
+        if (expDate.isBefore(DateTime.now())) {
+          final daysPassed = DateTime.now().difference(expDate).inDays;
+          if (daysPassed > 10) {
+            return true;
+          }
+        }
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  void _showSuspendedDialog(DeviceItem device) {
+    final imei = device.imei ?? device.deviceData?.imei;
+    final billingInfo = imei != null ? _billingMap[imei] : null;
+    final monthlyBillStr = billingInfo?.monthlyBill != null 
+        ? " (মান্থলি বিল: ৳${billingInfo!.monthlyBill!.toStringAsFixed(0)})" 
+        : "";
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_clock_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('সেবা সাময়িকভাবে স্থগিত', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'আপনার "${device.name ?? 'ডিভাইস'}" গাড়িটির বিল বকেয়া থাকায় বা মেয়াদ শেষ হওয়ায় ট্র্যাকিং সাময়িকভাবে স্থগিত করা হয়েছে$monthlyBillStr। অবিলম্বে ট্র্যাকিং সচল করতে বকেয়া বিল পরিশোধ করুন।',
+          style: const TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('বন্ধ করুন', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Get.to(() => const PaymentListScreen())?.then((_) {
+                _loadBillingInfo();
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF22C55E),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('বিল পরিশোধ করুন', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void checkPreference() async {
@@ -337,8 +429,12 @@ class _MapPageState extends State<MapPage> {
                 icon: markerIcon,
                 onTap: () {
                   device = element;
-                  Get.to(
-                      () => TrackDevicePage(device!.id, device!.name, device));
+                  if (_isDeviceSuspended(device!)) {
+                    _showSuspendedDialog(device!);
+                  } else {
+                    Get.to(
+                        () => TrackDevicePage(device!.id, device!.name, device));
+                  }
                   mapController!.getZoomLevel().then((value) => {
                         if (value < 14)
                           {
@@ -638,7 +734,11 @@ class _MapPageState extends State<MapPage> {
       onTap: () => {
         device = d,
         moveToMarker(),
-        Get.to(() => TrackDevicePage(d.id, d.name, d))
+        if (_isDeviceSuspended(d)) {
+          _showSuspendedDialog(d)
+        } else {
+          Get.to(() => TrackDevicePage(d.id, d.name, d))
+        }
       },
       child: Card(
           elevation: 2.0,

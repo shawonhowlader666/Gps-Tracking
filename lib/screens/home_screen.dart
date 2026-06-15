@@ -57,7 +57,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _checkPaymentStatus();
         _calculateStatusCounts();
         _startStatusRefresh();
       }
@@ -171,13 +170,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       if (!mounted) return;
 
-      if (graceEnd == null) {
-        _showPaymentDialog(stats.due, allowSnooze: true, isBlocking: false);
-      } else {
+      if (graceEnd != null) {
         final now = DateTime.now().millisecondsSinceEpoch;
-        if (now > graceEnd) {
-          _showPaymentDialog(stats.due, allowSnooze: false, isBlocking: true);
-        } else {
+        if (now <= graceEnd) {
           _startCountdown(DateTime.fromMillisecondsSinceEpoch(graceEnd));
         }
       }
@@ -300,7 +295,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// MASTER ENGINE CHECK - Same as DevicePage
   bool _isEngineOn(DeviceItem device) {
-    // 1. Check engineStatus field directly
+    // 1. If speed > 0, engine must be on (telematics override for wiring/reporting issues)
+    final speed = double.tryParse(device.speed.toString()) ?? 0;
+    if (speed > 0) {
+      return true;
+    }
+
+    // 2. Check engineStatus field directly
     if (device.engineStatus != null) {
       final status = device.engineStatus;
       if (status is bool) return status;
@@ -317,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
-    // 2. Check sensors for ignition/ACC status
+    // 3. Check sensors for ignition/ACC status
     if (device.sensors != null && device.sensors!.isNotEmpty) {
       for (var sensor in device.sensors!) {
         try {
@@ -353,24 +354,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
-    // 3. If speed > 0, engine must be on
-    final speed = double.tryParse(device.speed.toString()) ?? 0;
-    if (speed > 0) {
-      return true;
-    }
-
-    // 4. Check iconColor as indicator
+    // 4. Fallback: Check iconColor as indicator
     final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
-    if (iconColor == 'yellow') {
-      return true; // Idle/Yellow = engine on but not moving
-    }
-    if (iconColor == 'green') {
-      return true; // Running/Green = engine on and moving
+    if (iconColor == 'yellow' || iconColor == 'green') {
+      return true; 
     }
 
     // Default: engine is off
     return false;
   }
+
+
 
   /// Get the color for the current status
   Color _getStatusColor(DeviceItem device) {

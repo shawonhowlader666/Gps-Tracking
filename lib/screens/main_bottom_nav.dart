@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,11 @@ import 'package:gpspro/screens/map_home.dart';
 import 'package:gpspro/screens/report/recent_events.dart';
 import 'package:gpspro/screens/settings.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
+import 'package:gpspro/services/payment_service.dart';
+import 'package:gpspro/screens/payment_block_screen.dart';
+import 'package:gpspro/storage/user_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:gpspro/screens/payment_list.dart';
 
 class MainBottomNav extends StatefulWidget {
   const MainBottomNav({super.key});
@@ -21,6 +27,10 @@ class _MainBottomNavState extends State<MainBottomNav>
     with SingleTickerProviderStateMixin {
   int _selectedIndex = 2;
   late AnimationController _bounceController;
+  double _dueAmount = 0.0;
+  bool _isLoadingDue = true;
+  bool _isHardLocked = false;
+  bool _warningShownThisSession = false;
 
   @override
   void initState() {
@@ -30,12 +40,128 @@ class _MainBottomNavState extends State<MainBottomNav>
       duration: const Duration(milliseconds: 1150),
     );
     _bounceController.value = 1.0;
+    _checkDue();
   }
 
   @override
   void dispose() {
     _bounceController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkDue() async {
+    try {
+      final stats = await PaymentService.getStats();
+      final due = stats?.due ?? 0.0;
+      bool hardLocked = false;
+
+      if (due > 0) {
+        final bills = await PaymentService.getBills();
+        if (bills != null && bills.isNotEmpty) {
+          final unpaidBills = bills.where((b) => b.status.toLowerCase() != 'paid').toList();
+          if (unpaidBills.isNotEmpty) {
+            DateTime? oldestDate;
+            for (final bill in unpaidBills) {
+              try {
+                final date = DateTime.parse(bill.billingMonth);
+                if (oldestDate == null || date.isBefore(oldestDate)) {
+                  oldestDate = date;
+                }
+              } catch (_) {}
+            }
+
+            if (oldestDate != null) {
+              final days = DateTime.now().difference(oldestDate).inDays;
+              if (days > 10) {
+                hardLocked = true;
+              }
+            } else {
+              hardLocked = true;
+            }
+          }
+        } else {
+          hardLocked = true;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _dueAmount = due;
+          _isHardLocked = hardLocked;
+          _isLoadingDue = false;
+        });
+
+        if (due > 0 && !hardLocked && !_warningShownThisSession) {
+          _warningShownThisSession = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showGracePeriodWarningDialog();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking due: $e");
+      if (mounted) {
+        setState(() {
+          _isLoadingDue = false;
+        });
+      }
+    }
+  }
+
+  void _showGracePeriodWarningDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 8),
+            Text(
+              'বকেয়া বিল পরিশোধের অনুরোধ',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          'আপনার অ্যাকাউন্টে মোট ৳${_dueAmount.toStringAsFixed(0)} বকেয়া বিল রয়েছে। সাময়িক ছাড়ের সময়সীমা পার হওয়ার আগেই অনুগ্রহ করে বিলটি পরিশোধ করুন। অন্যথায় আপনার ট্র্যাকিং সেবা সাময়িকভাবে স্থগিত করা হবে।',
+          style: const TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey[700],
+            ),
+            child: const Text(
+              'পরে করুন',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Get.to(() => const PaymentListScreen())?.then((_) {
+                setState(() {
+                  _isLoadingDue = true;
+                });
+                _checkDue();
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF22C55E),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text(
+              'পরিশোধ করুন',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   final List<_NavItem> _navItems = [
@@ -78,6 +204,25 @@ class _MainBottomNavState extends State<MainBottomNav>
       statusBarBrightness: Brightness.dark,
       statusBarIconBrightness: Brightness.dark,
     ));
+
+    if (_isLoadingDue) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF5F6FA),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_isHardLocked && _dueAmount > 0) {
+      return PaymentBlockScreen(
+        dueAmount: _dueAmount,
+        onRefresh: () {
+          setState(() {
+            _isLoadingDue = true;
+          });
+          _checkDue();
+        },
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),

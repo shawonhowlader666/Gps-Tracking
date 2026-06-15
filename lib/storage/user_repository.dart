@@ -37,7 +37,7 @@ class UserRepository {
   }
 
   static String? getPassword() {
-    return prefs!.getString(PREF_PASSWORD).toString();
+    return prefs!.getString(PREF_PASSWORD);
   }
 
   static void setPassword(String password) {

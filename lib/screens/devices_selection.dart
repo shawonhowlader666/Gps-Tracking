@@ -306,7 +306,7 @@ class _DevicePageState extends State<DeviceSelection> {
                           child: Container(
                             height: 35,
                             width: 35,
-                            padding: const EdgeInsets.all(5),
+                            padding: const EdgeInsets.all(1.0),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: color.withValues(alpha: 0.3),

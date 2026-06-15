@@ -4,11 +4,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:gpspro/services/model/bill.dart';
 import 'package:gpspro/services/model/payment_stats.dart';
+import 'package:gpspro/services/model/billing_vehicle.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:http/http.dart' as http;
 
 class PaymentService {
-  static const String baseUrl = "http://93.127.143.78:8000/api";
+  static const String baseUrl = "http://167.86.78.162:8000/api";
   static const Duration timeoutDuration = Duration(seconds: 30);
   static String? _token;
   static bool _isLoggingIn = false;
@@ -120,15 +121,44 @@ class PaymentService {
       } else {
         debugPrint("Get Stats Error: Status ${response.statusCode}");
       }
-    } on TimeoutException {
-      debugPrint("Get Stats Error: Connection timed out");
-      rethrow;
-    } on SocketException catch (e) {
-      debugPrint("Get Stats Error: Network error - $e");
-      rethrow;
     } catch (e) {
       debugPrint("Get Stats Error: $e");
-      rethrow;
+    }
+
+    // Fallback: calculate stats from the bills list if stats endpoint fails
+    try {
+      final bills = await getBills();
+      if (bills != null && bills.isNotEmpty) {
+        double due = 0.0;
+        double totalBilled = 0.0;
+        double totalPaid = 0.0;
+        int unpaidBillsCount = 0;
+
+        for (final bill in bills) {
+          totalBilled += bill.amount;
+          double paidForBill = 0.0;
+          for (final payment in bill.payments) {
+            paidForBill += payment.amount;
+          }
+          if (bill.status.toLowerCase() == 'paid' && paidForBill < bill.amount) {
+            paidForBill = bill.amount;
+          }
+          totalPaid += paidForBill;
+
+          if (bill.status.toLowerCase() != 'paid') {
+            due += (bill.amount - paidForBill);
+            unpaidBillsCount++;
+          }
+        }
+        return PaymentStats(
+          due: due,
+          totalBilled: totalBilled,
+          totalPaid: totalPaid,
+          unpaidBillsCount: unpaidBillsCount,
+        );
+      }
+    } catch (e) {
+      debugPrint("Fallback Get Stats Error: $e");
     }
     return null;
   }
@@ -140,34 +170,73 @@ class PaymentService {
         return null;
       }
 
-      final response = await http.get(
-        Uri.parse("$baseUrl/bills?per_page=15&page=$page"),
-        headers: _headers,
-      ).timeout(timeoutDuration);
+      final List<Bill> bills = [];
+      int consecutive404Count = 0;
+      int currentId = 1;
+      const int batchSize = 5;
+      const int maxConsecutive404 = 3;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List list = data['data'];
-        return list.map((e) => Bill.fromJson(e)).toList();
-      } else if (response.statusCode == 401) {
-        // Token expired, clear and try login again
-        _token = null;
-        if (await login()) {
-          // Retry once after re-login
-          final retryResponse = await http.get(
-            Uri.parse("$baseUrl/bills?per_page=15&page=$page"),
+      while (consecutive404Count < maxConsecutive404 && currentId <= 100) {
+        final List<int> batchIds = [];
+        for (int i = 0; i < batchSize; i++) {
+          batchIds.add(currentId + i);
+        }
+
+        final List<Future<http.Response>> requests = batchIds.map((id) =>
+          http.get(
+            Uri.parse("$baseUrl/invoices/$id"),
             headers: _headers,
-          ).timeout(timeoutDuration);
+          ).timeout(const Duration(seconds: 10)),
+        ).toList();
 
-          if (retryResponse.statusCode == 200) {
-            final data = jsonDecode(retryResponse.body);
-            final List list = data['data'];
-            return list.map((e) => Bill.fromJson(e)).toList();
+        var responses = await Future.wait(requests);
+
+        // Check for 401 token expiration
+        bool has401 = responses.any((res) => res.statusCode == 401);
+        if (has401) {
+          _token = null;
+          if (await login()) {
+            // Retry batch
+            final retryRequests = batchIds.map((id) =>
+              http.get(
+                Uri.parse("$baseUrl/invoices/$id"),
+                headers: _headers,
+              ).timeout(const Duration(seconds: 10)),
+            ).toList();
+            responses = await Future.wait(retryRequests);
+          } else {
+            break; // Login failed, stop fetching
           }
         }
-      } else {
-        debugPrint("Get Bills Error: Status ${response.statusCode}");
+
+        for (int i = 0; i < responses.length; i++) {
+          final res = responses[i];
+          final id = batchIds[i];
+
+          if (res.statusCode == 200) {
+            consecutive404Count = 0; // Reset count
+            try {
+              final data = jsonDecode(res.body);
+              if (data['data'] != null && data['data']['bill'] != null) {
+                bills.add(Bill.fromJson(data['data']['bill']));
+              }
+            } catch (e) {
+              debugPrint("Error parsing bill $id: $e");
+            }
+          } else if (res.statusCode == 404) {
+            consecutive404Count++;
+            if (consecutive404Count >= maxConsecutive404) {
+              break;
+            }
+          }
+        }
+
+        currentId += batchSize;
       }
+
+      // Sort bills by ID descending
+      bills.sort((a, b) => b.id.compareTo(a.id));
+      return bills;
     } on TimeoutException {
       debugPrint("Get Bills Error: Connection timed out");
       rethrow;
@@ -178,7 +247,78 @@ class PaymentService {
       debugPrint("Get Bills Error: $e");
       rethrow;
     }
+  }
+
+  /// Get vehicles from billing server
+  static Future<List<BillingVehicle>?> getBillingVehicles() async {
+    try {
+      if (!await _ensureLoggedIn()) {
+        return null;
+      }
+
+      final response = await http.get(
+        Uri.parse("$baseUrl/vehicles?per_page=100"),
+        headers: _headers,
+      ).timeout(timeoutDuration);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List list = data['data'];
+        return list.map((e) => BillingVehicle.fromJson(e)).toList();
+      } else if (response.statusCode == 401) {
+        _token = null;
+        if (await login()) {
+          final retryResponse = await http.get(
+            Uri.parse("$baseUrl/vehicles?per_page=100"),
+            headers: _headers,
+          ).timeout(timeoutDuration);
+
+          if (retryResponse.statusCode == 200) {
+            final data = jsonDecode(retryResponse.body);
+            final List list = data['data'];
+            return list.map((e) => BillingVehicle.fromJson(e)).toList();
+          }
+        }
+      } else {
+        debugPrint("Get Billing Vehicles Error: Status ${response.statusCode}");
+      }
+    } on TimeoutException {
+      debugPrint("Get Billing Vehicles Error: Connection timed out");
+      rethrow;
+    } on SocketException catch (e) {
+      debugPrint("Get Billing Vehicles Error: Network error - $e");
+      rethrow;
+    } catch (e) {
+      debugPrint("Get Billing Vehicles Error: $e");
+      rethrow;
+    }
     return null;
+  }
+
+  static Future<void> testEndpoints() async {
+    try {
+      await _ensureLoggedIn();
+      final urls = [
+        "$baseUrl/invoices",
+        "$baseUrl/invoice",
+        "$baseUrl/bills",
+        "$baseUrl/bill",
+        "$baseUrl/user/invoices",
+        "$baseUrl/user/bills",
+        "$baseUrl/my-invoices",
+        "$baseUrl/my-bills",
+        "$baseUrl/me/invoices",
+        "$baseUrl/me/bills",
+        "$baseUrl/invoices/2", // Specific bill ID from screenshot
+      ];
+
+      for (final url in urls) {
+        final res = await http.get(Uri.parse(url), headers: _headers);
+        debugPrint("PROBE $url -> STATUS: ${res.statusCode} | BODY: ${res.body.length > 200 ? res.body.substring(0, 200) : res.body}");
+      }
+    } catch(e) {
+      debugPrint("testEndpoints error: $e");
+    }
   }
 
   /// Initiate SSL payment and get gateway URL

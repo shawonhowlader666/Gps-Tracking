@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/services/model/event.dart';
@@ -14,13 +15,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 // Helper function to show notification in background
 Future<void> _showBackgroundNotification(RemoteMessage message) async {
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-  FlutterLocalNotificationsPlugin();
+      FlutterLocalNotificationsPlugin();
 
   const AndroidInitializationSettings initializationSettingsAndroid =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
+      AndroidInitializationSettings('@mipmap/ic_launcher');
 
   const DarwinInitializationSettings initializationSettingsIOS =
-  DarwinInitializationSettings(
+      DarwinInitializationSettings(
     requestAlertPermission: false,
     requestBadgePermission: false,
     requestSoundPermission: false,
@@ -42,7 +43,7 @@ Future<void> _showBackgroundNotification(RemoteMessage message) async {
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 
   final notification = message.notification;
@@ -88,7 +89,7 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  FirebaseMessaging? get _fcm => kIsWeb ? null : FirebaseMessaging.instance;
   late FlutterLocalNotificationsPlugin _localNotifications;
 
   bool _isInitialized = false;
@@ -99,16 +100,18 @@ class NotificationService {
     _localNotifications = plugin;
 
     try {
-      await _requestPermissions();
-      await _createNotificationChannels();
-      _setupMessageHandlers();
-      await _fcm.getToken();
+      if (!kIsWeb) {
+        await _requestPermissions();
+        await _createNotificationChannels();
+        _setupMessageHandlers();
+        await _fcm?.getToken();
+      }
       _isInitialized = true;
     } catch (_) {}
   }
 
   Future<void> _requestPermissions() async {
-    await _fcm.requestPermission(
+    await _fcm?.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -119,9 +122,9 @@ class NotificationService {
     );
 
     if (Platform.isAndroid) {
-      final androidPlugin = _localNotifications
-          .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin =
+          _localNotifications.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
 
       if (androidPlugin != null) {
         await androidPlugin.requestNotificationsPermission();
@@ -131,13 +134,13 @@ class NotificationService {
     if (Platform.isIOS) {
       await _localNotifications
           .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>()
+              IOSFlutterLocalNotificationsPlugin>()
           ?.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-        critical: true,
-      );
+            alert: true,
+            badge: true,
+            sound: true,
+            critical: true,
+          );
     }
   }
 
@@ -145,7 +148,7 @@ class NotificationService {
     if (!Platform.isAndroid) return;
 
     const AndroidNotificationChannel highImportanceChannel =
-    AndroidNotificationChannel(
+        AndroidNotificationChannel(
       'high_importance_channel',
       'High Importance Notifications',
       description: 'This channel is used for important notifications.',
@@ -187,9 +190,9 @@ class NotificationService {
       ledColor: Color(0xFFFF0000),
     );
 
-    final androidPlugin = _localNotifications
-        .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin =
+        _localNotifications.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
 
     if (androidPlugin != null) {
       await androidPlugin.createNotificationChannel(highImportanceChannel);
@@ -238,7 +241,7 @@ class NotificationService {
     Map<String, dynamic>? data,
   }) async {
     const AndroidNotificationDetails androidDetails =
-    AndroidNotificationDetails(
+        AndroidNotificationDetails(
       'high_importance_channel',
       'High Importance Notifications',
       channelDescription: 'This channel is used for important notifications.',
@@ -294,7 +297,7 @@ class NotificationService {
         styleInformation: BigTextStyleInformation(
           body,
           contentTitle: title,
-          summaryText: 'Trust Me',
+          summaryText: 'ORBITGPS',
         ),
       );
 
@@ -322,11 +325,11 @@ class NotificationService {
   }
 
   Future<void> _showFallbackNotification(
-      int? id,
-      String title,
-      String body,
-      String? payload,
-      ) async {
+    int? id,
+    String title,
+    String body,
+    String? payload,
+  ) async {
     try {
       const androidDetails = AndroidNotificationDetails(
         'default_channel',
@@ -434,7 +437,7 @@ class NotificationService {
   }
 
   Future<String?> getToken() async {
-    return await _fcm.getToken();
+    return await _fcm?.getToken();
   }
 
   Future<void> cancelAll() async {

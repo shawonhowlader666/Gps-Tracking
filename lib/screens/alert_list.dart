@@ -1023,111 +1023,122 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
     final bool isActive = existing != null && _isAlertActive(existing);
     final alertColor = _getQuickAlertColor(type);
 
-    return CustomPaint(
-      foregroundPainter: GappedBorderPainter(
-        color: isActive ? alertColor : alertColor.withValues(alpha: 0.75),
-        strokeWidth: isActive ? 1.8 : 1.2,
-        borderRadius: 5,
-        gapSize: 18,
-      ),
-      child: ReflectiveAnimationWrapper(
-        borderRadius: 5,
-        child: Container(
-        decoration: BoxDecoration(
-          color: isActive ? null : alertColor.withValues(alpha: 0.12),
-          gradient: _getQuickAlertGradient(type, isActive),
-          borderRadius: BorderRadius.circular(5),
-          boxShadow: [
-            // 3D Bevel top highlight reflection
-            const BoxShadow(
-              color: Colors.white,
-              blurRadius: 0,
-              offset: Offset(0, -1),
-            ),
-            // Primary drop shadow (casts downward for 3D elevation)
-            BoxShadow(
-              color: isActive 
-                  ? alertColor.withValues(alpha: 0.22)
-                  : alertColor.withValues(alpha: 0.05),
-              blurRadius: isActive ? 12 : 8,
-              offset: const Offset(0, 4),
-            ),
-            // Ambient shadow
-            BoxShadow(
-              color: isActive 
-                  ? alertColor.withValues(alpha: 0.06)
-                  : alertColor.withValues(alpha: 0.01),
-              blurRadius: 2,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), // Slim padding
-          child: Row(
-            children: [
-              // Icon Background
-              Container(
-                padding: const EdgeInsets.all(8), // Compact padding
-                decoration: BoxDecoration(
-                  color: isActive 
-                      ? Colors.white.withValues(alpha: 0.25) 
-                      : alertColor.withValues(alpha: 0.22),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  color: isActive ? Colors.white : alertColor,
-                  size: 20, // Slim icon
-                ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Stack(
+        children: [
+          // 3D Bottom Base Layer (depth thickness)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: isActive 
+                    ? alertColor.withValues(alpha: 0.8) 
+                    : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 12),
-              // Text Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: isActive ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Switch
-              Transform.scale(
-                scale: 0.8, // Slim switch
-                child: Switch(
-                  value: isActive,
-                  onChanged: (val) {
-                    _toggleQuickAlert(type, val);
-                  },
-                  activeColor: Colors.white,
-                  activeTrackColor: Colors.white.withValues(alpha: 0.45),
-                  inactiveThumbColor: Colors.grey.shade400,
-                  inactiveTrackColor: Colors.grey.shade200,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          // Top Face Layer (shifts down slightly when active for a physical button click feel)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            margin: EdgeInsets.only(bottom: isActive ? 1.5 : 4.5),
+            child: CustomPaint(
+              foregroundPainter: GappedBorderPainter(
+                color: isActive ? alertColor : alertColor.withValues(alpha: 0.75),
+                strokeWidth: isActive ? 1.8 : 1.2,
+                borderRadius: 12,
+                gapSize: 18,
+              ),
+              child: ReflectiveAnimationWrapper(
+                borderRadius: 12,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isActive ? null : Colors.white,
+                    gradient: _getQuickAlertGradient(type, isActive),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      const BoxShadow(
+                        color: Colors.white24,
+                        blurRadius: 0,
+                        offset: Offset(0, -1),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    child: Row(
+                      children: [
+                        // Icon Background
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isActive 
+                                ? Colors.white.withValues(alpha: 0.25) 
+                                : alertColor.withValues(alpha: 0.22),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            icon,
+                            color: isActive ? Colors.white : alertColor,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Text Details
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: isActive ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                subtitle,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Switch
+                        Transform.scale(
+                          scale: 0.8,
+                          child: Switch(
+                            value: isActive,
+                            onChanged: (val) {
+                              _toggleQuickAlert(type, val);
+                            },
+                            activeColor: Colors.white,
+                            activeTrackColor: Colors.white.withValues(alpha: 0.45),
+                            inactiveThumbColor: Colors.grey.shade400,
+                            inactiveTrackColor: Colors.grey.shade200,
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildSearchBar() {
     String displayText = "";
@@ -1724,188 +1735,206 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
         },
       ),
     );
-  }  // ✅ CLEAN ALERT CARD DESIGN
+  }
+
+  // ✅ CLEAN ALERT CARD DESIGN
   Widget _buildCleanAlertCard(Alert alert) {
     final bool isActive = _isAlertActive(alert);
     final IconData typeIcon = _getAlertTypeIcon(alert.type ?? "");
     final alertColor = _getQuickAlertColor(alert.type ?? "");
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: CustomPaint(
-        foregroundPainter: GappedBorderPainter(
-          color: isActive ? alertColor : alertColor.withValues(alpha: 0.75),
-          strokeWidth: isActive ? 1.8 : 1.2,
-          borderRadius: 5,
-          gapSize: 18,
-        ),
-        child: ReflectiveAnimationWrapper(
-          borderRadius: 5,
-          child: Container(
-          decoration: BoxDecoration(
-            color: isActive ? null : alertColor.withValues(alpha: 0.1),
-            gradient: _getQuickAlertGradient(alert.type ?? "", isActive),
-            borderRadius: BorderRadius.circular(5),
-            boxShadow: [
-              BoxShadow(
-                color: isActive ? alertColor.withValues(alpha: 0.18) : Colors.black.withValues(alpha: 0.02),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Stack(
+        children: [
+          // 3D Bottom Base Layer (depth thickness)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: isActive 
+                    ? alertColor.withValues(alpha: 0.8) 
+                    : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(12),
               ),
-            ],
+            ),
           ),
-          child: Material(
-            color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(5),
-          onTap: () => _showAlertDetails(alert),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            child: Row(
-              children: [
-                // Icon
-                Container(
-                  padding: const EdgeInsets.all(8),
+          // Top Face Layer (shifts down when active)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            margin: EdgeInsets.only(bottom: isActive ? 1.5 : 4.5),
+            child: CustomPaint(
+              foregroundPainter: GappedBorderPainter(
+                color: isActive ? alertColor : alertColor.withValues(alpha: 0.75),
+                strokeWidth: isActive ? 1.8 : 1.2,
+                borderRadius: 12,
+                gapSize: 18,
+              ),
+              child: ReflectiveAnimationWrapper(
+                borderRadius: 12,
+                child: Container(
                   decoration: BoxDecoration(
-                    color: isActive ? Colors.white.withValues(alpha: 0.25) : alertColor.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: Icon(
-                    typeIcon,
-                    color: isActive ? Colors.white : alertColor,
-                    size: 18,
-                  ),
-                ),
-
-                const SizedBox(width: 10),
-
-                // Content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Alert Name
-                      Text(
-                        alert.name ?? 'Unnamed Alert',
-                        style: TextStyle(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w600,
-                          color: isActive ? Colors.white : Colors.black87,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    color: isActive ? null : Colors.white,
+                    gradient: _getQuickAlertGradient(alert.type ?? "", isActive),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      const BoxShadow(
+                        color: Colors.white24,
+                        blurRadius: 0,
+                        offset: Offset(0, -1),
                       ),
-                      const SizedBox(height: 3),
-
-                      // Type and Status
-                      Row(
-                        children: [
-                          // Type Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                            decoration: BoxDecoration(
-                              color: isActive ? Colors.white.withValues(alpha: 0.2) : alertColor.withValues(alpha: 0.22),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              _formatAlertType(alert.type ?? ""),
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: isActive ? Colors.white : alertColor,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-
-                          // Status Indicator
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: isActive ? Colors.white : alertColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            isActive ? 'Active' : 'Inactive',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isActive ? Colors.white.withValues(alpha: 0.9) : Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 3),
-
-                      // Devices Count
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.directions_car, 
-                            size: 11, 
-                            color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade500
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${alert.devices?.length ?? 0} devices',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(width: 8),
-
-                // Actions
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Switch
-                    Transform.scale(
-                      scale: 0.75,
-                      child: Switch(
-                        value: isActive,
-                        onChanged: (value) {
-                          value ? activateAlert(alert) : removeAlert(alert);
-                        },
-                        activeThumbColor: Colors.white,
-                        activeTrackColor: Colors.white.withValues(alpha: 0.45),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => _showAlertDetails(alert),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        child: Row(
+                          children: [
+                            // Icon
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isActive ? Colors.white.withValues(alpha: 0.25) : alertColor.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                typeIcon,
+                                color: isActive ? Colors.white : alertColor,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            // Content
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Alert Name
+                                  Text(
+                                    alert.name ?? 'Unnamed Alert',
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: isActive ? Colors.white : Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 3),
+                                  // Type and Status
+                                  Row(
+                                    children: [
+                                      // Type Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: isActive ? Colors.white.withValues(alpha: 0.2) : alertColor.withValues(alpha: 0.22),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          _formatAlertType(alert.type ?? ""),
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            color: isActive ? Colors.white : alertColor,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      // Status Indicator
+                                      Container(
+                                        width: 5,
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          color: isActive ? Colors.white : alertColor,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        isActive ? 'Active' : 'Inactive',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: isActive ? Colors.white.withValues(alpha: 0.9) : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  // Devices Count
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.directions_car, 
+                                        size: 11, 
+                                        color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade500
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        '${alert.devices?.length ?? 0} devices',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Actions
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Switch
+                                Transform.scale(
+                                  scale: 0.75,
+                                  child: Switch(
+                                    value: isActive,
+                                    onChanged: (value) {
+                                      value ? activateAlert(alert) : removeAlert(alert);
+                                    },
+                                    activeThumbColor: Colors.white,
+                                    activeTrackColor: Colors.white.withValues(alpha: 0.45),
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                                // Delete Button
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                  onPressed: () => deleteAlert(alert.id!),
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade400,
+                                    size: 18,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-
-                    // Delete Button
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                      onPressed: () => deleteAlert(alert.id!),
-                      icon: Icon(
-                        Icons.delete_outline,
-                        color: isActive ? Colors.white.withValues(alpha: 0.8) : Colors.grey.shade400,
-                        size: 18,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
-    ),
-  ),
-),
-);
-}
+    );
+  }
 
   void _showAlertDetails(Alert alert) {
     final bool isActive = _isAlertActive(alert);
@@ -3225,11 +3254,13 @@ class _ReflectiveAnimationWrapperState extends State<ReflectiveAnimationWrapper>
           children: [
             widget.child,
             Positioned.fill(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(widget.borderRadius),
-                child: CustomPaint(
-                  painter: _ReflectionSweepPainter(
-                    progress: _controller.value,
+              child: IgnorePointer(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(widget.borderRadius),
+                  child: CustomPaint(
+                    painter: _ReflectionSweepPainter(
+                      progress: _controller.value,
+                    ),
                   ),
                 ),
               ),

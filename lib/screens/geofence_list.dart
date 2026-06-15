@@ -604,7 +604,6 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     );
   }
 
-  // ✅ CLEAN FENCE CARD DESIGN
   Widget _buildCleanFenceCard(Geofence fence) {
     final bool isActive = fence.active.toString() == "1";
     final String fenceType = fence.type ?? 'circle';
@@ -612,283 +611,276 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     final List<Map<String, dynamic>>? devices = fenceDevices[fenceId];
     final int deviceCount = devices?.length ?? 0;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: CustomPaint(
-        foregroundPainter: GappedBorderPainter(
-          color: isActive ? CustomColor.primary : Colors.grey.shade400,
-          strokeWidth: isActive ? 1.8 : 1.2,
-          borderRadius: 14,
-          gapSize: 24,
-        ),
-        child: ReflectiveAnimationWrapper(
-          borderRadius: 14,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-      child: Column(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Stack(
         children: [
-          // Main Content
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Icon
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: isActive ? CustomColor.primary.withValues(alpha: 0.1) : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    fenceType == 'polygon' ? Icons.pentagon_outlined : Icons.radio_button_unchecked,
-                    color: isActive ? CustomColor.primary : Colors.grey.shade500,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 14),
-
-                // Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Name and Status
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              fence.name ?? 'Unnamed Fence',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Status Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isActive ? Colors.green.shade50 : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: isActive ? Colors.green : Colors.grey,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  isActive ? 'Active' : 'Inactive',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: isActive ? Colors.green.shade700 : Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-
-                      // Info Chips
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          _buildInfoChip(
-                            icon: fenceType == 'polygon' ? Icons.pentagon_outlined : Icons.radio_button_unchecked,
-                            label: fenceType.toUpperCase(),
-                            color: CustomColor.primary,
-                          ),
-                          if (fence.radius != null && fence.radius.toString().isNotEmpty && fenceType == 'circle')
-                            _buildInfoChip(
-                              icon: Icons.straighten,
-                              label: '${fence.radius}m',
-                              color: Colors.orange.shade700,
-                            ),
-                          _buildInfoChip(
-                            icon: Icons.directions_car,
-                            label: '$deviceCount ${deviceCount == 1 ? "vehicle" : "vehicles"}',
-                            color: deviceCount > 0 ? Colors.blue.shade700 : Colors.grey.shade600,
-                          ),
-                        ],
-                      ),
-
-                      // Vehicle Names
-                      if (devices != null && devices.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.directions_car, size: 14, color: Colors.blue.shade700),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Vehicles:',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.blue.shade900,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Wrap(
-                                spacing: 4,
-                                runSpacing: 4,
-                                children: [
-                                  ...devices.take(3).map((device) => Text(
-                                    '• ${device['name']}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.blue.shade800,
-                                    ),
-                                  )),
-                                  if (devices.length > 3)
-                                    Text(
-                                      ' +${devices.length - 3} more',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.grey.shade700,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-
-                      // No Vehicles Warning
-                      // if (deviceCount == 0) ...[
-                      //   const SizedBox(height: 10),
-                      //   Container(
-                      //     padding: const EdgeInsets.all(8),
-                      //     decoration: BoxDecoration(
-                      //       color: Colors.orange.shade50,
-                      //       borderRadius: BorderRadius.circular(6),
-                      //     ),
-                      //     child: Row(
-                      //       children: [
-                      //         Icon(Icons.info_outline, size: 14, color: Colors.orange.shade700),
-                      //         const SizedBox(width: 6),
-                      //         Expanded(
-                      //           child: Text(
-                      //             'No vehicles assigned',
-                      //             style: TextStyle(
-                      //               fontSize: 11,
-                      //               color: Colors.orange.shade800,
-                      //             ),
-                      //           ),
-                      //         ),
-                      //       ],
-                      //     ),
-                      //   ),
-                      // ],
-                    ],
-                  ),
-                ),
-              ],
+          // 3D Bottom Base Layer (depth thickness)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: isActive 
+                    ? CustomColor.primary.withValues(alpha: 0.8) 
+                    : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
           ),
-
-          // Divider
-          Divider(height: 1, color: Colors.grey.shade200),
-
-          // Actions
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              children: [
-                // Toggle Switch
-                Expanded(
-                  child: Row(
+          // Top Face Layer (shifts down slightly when active/pressed)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            margin: EdgeInsets.only(bottom: isActive ? 1.5 : 4.5),
+            child: CustomPaint(
+              foregroundPainter: GappedBorderPainter(
+                color: isActive ? CustomColor.primary : Colors.grey.shade400,
+                strokeWidth: isActive ? 1.8 : 1.2,
+                borderRadius: 14,
+                gapSize: 24,
+              ),
+              child: ReflectiveAnimationWrapper(
+                borderRadius: 14,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Column(
                     children: [
-                      Transform.scale(
-                        scale: 0.85,
-                        child: Switch(
-                          value: isActive,
-                          onChanged: (value) => _toggleFenceStatus(fence, value),
-                          activeThumbColor: CustomColor.primary,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      // Main Content
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Icon
+                            Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: isActive ? CustomColor.primary.withValues(alpha: 0.1) : Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                fenceType == 'polygon' ? Icons.pentagon_outlined : Icons.radio_button_unchecked,
+                                color: isActive ? CustomColor.primary : Colors.grey.shade500,
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+
+                            // Info
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Name and Status
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          fence.name ?? 'Unnamed Fence',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 16,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Status Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: isActive ? Colors.green.shade50 : Colors.grey.shade100,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 6,
+                                              height: 6,
+                                              decoration: BoxDecoration(
+                                                color: isActive ? Colors.green : Colors.grey,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              isActive ? 'Active' : 'Inactive',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                color: isActive ? Colors.green.shade700 : Colors.grey.shade600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // Info Chips
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      _buildInfoChip(
+                                        icon: fenceType == 'polygon' ? Icons.pentagon_outlined : Icons.radio_button_unchecked,
+                                        label: fenceType.toUpperCase(),
+                                        color: CustomColor.primary,
+                                      ),
+                                      if (fence.radius != null && fence.radius.toString().isNotEmpty && fenceType == 'circle')
+                                        _buildInfoChip(
+                                          icon: Icons.straighten,
+                                          label: '${fence.radius}m',
+                                          color: Colors.orange.shade700,
+                                        ),
+                                      _buildInfoChip(
+                                        icon: Icons.directions_car,
+                                        label: '$deviceCount ${deviceCount == 1 ? "vehicle" : "vehicles"}',
+                                        color: deviceCount > 0 ? Colors.blue.shade700 : Colors.grey.shade600,
+                                      ),
+                                    ],
+                                  ),
+
+                                  // Vehicle Names
+                                  if (devices != null && devices.isNotEmpty) ...[
+                                    const SizedBox(height: 10),
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(Icons.directions_car, size: 14, color: Colors.blue.shade700),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Vehicles:',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.blue.shade900,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Wrap(
+                                            spacing: 4,
+                                            runSpacing: 4,
+                                            children: [
+                                              ...devices.take(3).map((device) => Text(
+                                                '• ${device['name']}',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.blue.shade800,
+                                                ),
+                                              )),
+                                              if (devices.length > 3)
+                                                Text(
+                                                  ' +${devices.length - 3} more',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      Text(
-                        isActive ? 'Active' : 'Inactive',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade700,
+
+                      // Divider
+                      Divider(height: 1, color: Colors.grey.shade200),
+
+                      // Actions
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        child: Row(
+                          children: [
+                            // Toggle Switch
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Transform.scale(
+                                    scale: 0.85,
+                                    child: Switch(
+                                      value: isActive,
+                                      onChanged: (value) => _toggleFenceStatus(fence, value),
+                                      activeThumbColor: CustomColor.primary,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                  ),
+                                  Text(
+                                    isActive ? 'Active' : 'Inactive',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Edit Button
+                            IconButton(
+                              icon: Icon(Icons.edit_outlined, color: Colors.blue.shade600, size: 20),
+                              onPressed: () async {
+                                final result = await Navigator.pushNamed(
+                                  context,
+                                  "/geofenceAdd",
+                                  arguments: FenceArguments(fenceModel: fence, device: activeDevice),
+                                );
+                                if (result == true) {
+                                  getFences();
+                                }
+                              },
+                              tooltip: 'Edit',
+                            ),
+
+                            // Delete Button
+                            IconButton(
+                              icon: Icon(Icons.delete_outline, color: Colors.red.shade600, size: 20),
+                              onPressed: () => _deleteFence(fence),
+                              tooltip: 'Delete',
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-
-                // Edit Button
-                IconButton(
-                  icon: Icon(Icons.edit_outlined, color: Colors.blue.shade600, size: 20),
-                  onPressed: () async {
-                    final result = await Navigator.pushNamed(
-                      context,
-                      "/geofenceAdd",
-                      arguments: FenceArguments(fenceModel: fence, device: activeDevice),
-                    );
-                    if (result == true) {
-                      getFences();
-                    }
-                  },
-                  tooltip: 'Edit',
-                ),
-
-                // Delete Button
-                IconButton(
-                  icon: Icon(Icons.delete_outline, color: Colors.red.shade600, size: 20),
-                  onPressed: () => _deleteFence(fence),
-                  tooltip: 'Delete',
-                ),
-              ],
+              ),
             ),
           ),
         ],
       ),
-    ),
-  ),
-),
-);
-}
+    );
+  }
 
   Widget _buildInfoChip({
     required IconData icon,
@@ -1033,11 +1025,13 @@ class _ReflectiveAnimationWrapperState extends State<ReflectiveAnimationWrapper>
           children: [
             widget.child,
             Positioned.fill(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(widget.borderRadius),
-                child: CustomPaint(
-                  painter: _ReflectionSweepPainter(
-                    progress: _controller.value,
+              child: IgnorePointer(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(widget.borderRadius),
+                  child: CustomPaint(
+                    painter: _ReflectionSweepPainter(
+                      progress: _controller.value,
+                    ),
                   ),
                 ),
               ),
