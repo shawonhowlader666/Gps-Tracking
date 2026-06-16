@@ -68,14 +68,18 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android.txt"),
                 "proguard-rules.pro"
             )
-            isCrunchPngs = false
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isCrunchPngs = true
+            isMinifyEnabled = true
+            isShrinkResources = true
         }
     }
 }
