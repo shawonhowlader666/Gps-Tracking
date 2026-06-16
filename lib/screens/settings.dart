@@ -737,7 +737,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       _buildTermsSection(
                         'Contact Information',
-                        'For questions about these terms, contact us at:\nEmail: info@orbitgps.com.bd\nWebsite: orbitgps.com.bd\nPhone: 01901388950\nAddress: N/A',
+                        'For questions about these terms, contact us at:\nEmail: Info@orbitgps.com.bd\nWebsite: orbitgps.com.bd\nPhone: 01901388950 - 51, 01901645999\nAddress: N/A',
                       ),
                       const SizedBox(height: 10),
                       Center(
@@ -896,9 +896,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       _buildTermsSection(
                         'Contact Us',
                         'For privacy concerns or to exercise your rights:\n\n'
-                            'Email: info@orbitgps.com.bd\n'
+                            'Email: Info@orbitgps.com.bd\n'
                             'Website: orbitgps.com.bd\n'
-                            'Phone: 01901388950\n'
+                            'Phone: 01901388950 - 51, 01901645999\n'
                             'Address: N/A',
                       ),
                       _buildTermsSection(
