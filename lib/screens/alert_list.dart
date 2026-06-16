@@ -103,13 +103,6 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
             mainSelectedDevices.clear();
             mainSelectedDevices.add(args.toString());
           });
-
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) => _buildAddAlertSheet(),
-          );
         });
       }
     }
@@ -649,6 +642,49 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
     );
   }
 
+  int _getTotalRulesCount() {
+    final deviceFilteredAlerts = alertList.where((alert) {
+      if (mainSelectedDevices.isEmpty) return true;
+      return alert.devices != null && alert.devices!.any((dev) {
+        String devId = "";
+        if (dev is Map) {
+          devId = (dev['id'] ?? '').toString();
+        } else {
+          devId = dev.toString();
+        }
+        return mainSelectedDevices.contains(devId);
+      });
+    }).toList();
+
+    int totalLocalQuickAlerts = 0;
+    final quickAlertTypes = ['ignition_duration', 'overspeed', 'sos', 'offline_duration', 'start_of_movement'];
+
+    for (var type in quickAlertTypes) {
+      bool isLocalActive = false;
+      if (prefs != null) {
+        if (mainSelectedDevices.isEmpty) {
+          isLocalActive = prefs!.getBool('quick_alert_all_$type') ?? false;
+        } else {
+          isLocalActive = mainSelectedDevices.every((devId) {
+            return prefs!.getBool('quick_alert_${devId}_$type') ?? false;
+          });
+        }
+      }
+
+      final serverAlerts = deviceFilteredAlerts.where(
+        (a) => a.type.toString().toLowerCase() == type.toLowerCase()
+      ).toList();
+
+      final serverRuleExists = serverAlerts.isNotEmpty;
+
+      if (!serverRuleExists && isLocalActive) {
+        totalLocalQuickAlerts++;
+      }
+    }
+
+    return deviceFilteredAlerts.length + totalLocalQuickAlerts;
+  }
+
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       elevation: 0,
@@ -659,7 +695,7 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
         children: [
           Text('alerts'.tr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
           Text(
-            '${alertList.length} alerts',
+            '${_getTotalRulesCount()} alerts',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.normal),
           ),
         ],
@@ -697,71 +733,142 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
   }
 
   void _toggleQuickAlert(String type, bool turnOn) async {
-    // 1. Find if an alert of this type already exists
-    Alert? existing = alertList.firstWhereOrNull(
-      (a) => a.type.toString().toLowerCase() == type.toLowerCase()
-    );
+    if (prefs == null) {
+      prefs = await SharedPreferences.getInstance();
+    }
 
-    if (existing != null) {
-      // If it exists, call activateAlert or removeAlert
-      turnOn ? activateAlert(existing) : removeAlert(existing);
+    if (type == 'overspeed' && turnOn) {
+      _showSpeedLimitDialog();
     } else {
-      // If it does not exist and we want to turn it ON, we automatically create it!
-      if (turnOn) {
-        if (devicesList.isEmpty) {
-          _showSnackBar('No devices available to assign to this alert', isError: true);
-          return;
-        }
+      _toggleQuickAlertLocally(type, turnOn);
+    }
+  }
 
-        _showLoadingDialog();
-        
-        // Build the query parameters for creating a new alert for all devices by default
-        String name = "Instant ${_formatAlertType(type)} Alert";
-        
-        // Select all device IDs
-        List<String> deviceParams = [];
-        for (var dev in devicesList) {
-          deviceParams.add("devices[]=${dev.id}");
-        }
-        String devicesStr = deviceParams.join("&");
-        
-        String request = "";
-        if (type == "sos") {
-          request = "&name=${Uri.encodeComponent(name)}&type=$type&$devicesStr";
-        } else if (type == "overspeed") {
-          request = "&name=${Uri.encodeComponent(name)}&type=$type&overspeed=80&$devicesStr";
-        } else if (type == "ignition_duration") {
-          request = "&name=${Uri.encodeComponent(name)}&type=$type&ignition_duration=5&$devicesStr";
-        } else if (type == "offline_duration") {
-          request = "&name=${Uri.encodeComponent(name)}&type=$type&offline_duration=30&$devicesStr";
-        } else if (type == "start_of_movement") {
-          request = "&name=${Uri.encodeComponent(name)}&type=$type&$devicesStr";
-        }
-        
-        APIService.addAlert(request).then((value) {
-          if (mounted) {
-            Navigator.pop(context);
-            if (value.statusCode == 200) {
-              _showSnackBar('$name created and activated successfully');
-              getAlerts();
-            } else {
-              try {
-                final responseBody = json.decode(value.body);
-                String errorMsg = responseBody['message'] ?? 'Failed to create quick alert';
-                _showSnackBar(errorMsg, isError: true);
-              } catch (e) {
-                _showSnackBar('Failed to create quick alert: ${value.statusCode}', isError: true);
-              }
-            }
-          }
-        }).catchError((e) {
-          if (mounted) {
-            Navigator.pop(context);
-            _showSnackBar('Error: $e', isError: true);
-          }
-        });
+  void _toggleQuickAlertLocally(String type, bool turnOn) async {
+    if (mainSelectedDevices.isEmpty) {
+      await prefs?.setBool('quick_alert_all_$type', turnOn);
+      for (var dev in devicesList) {
+        await prefs?.setBool('quick_alert_${dev.id}_$type', turnOn);
+      }
+    } else {
+      for (var devId in mainSelectedDevices) {
+        await prefs?.setBool('quick_alert_${devId}_$type', turnOn);
       }
     }
+
+    final Alert? existing = alertList.firstWhereOrNull((a) {
+      if (a.type.toString().toLowerCase() != type.toLowerCase()) return false;
+      if (mainSelectedDevices.isEmpty) return true;
+      return a.devices != null && a.devices!.any((dev) {
+        String devId = "";
+        if (dev is Map) {
+          devId = (dev['id'] ?? '').toString();
+        } else {
+          devId = dev.toString();
+        }
+        return mainSelectedDevices.contains(devId);
+      });
+    });
+
+    if (existing != null) {
+      if (turnOn) {
+        activateAlert(existing);
+      } else {
+        removeAlert(existing);
+      }
+    } else {
+      setState(() {});
+      _showSnackBar('${_formatAlertType(type)} alert ${turnOn ? "enabled" : "disabled"} successfully');
+    }
+  }
+
+  void _showSpeedLimitDialog() {
+    final TextEditingController speedCtl = TextEditingController();
+    
+    double currentLimit = 80.0;
+    if (mainSelectedDevices.isNotEmpty) {
+      currentLimit = prefs?.getDouble('quick_alert_${mainSelectedDevices.first}_overspeed_limit') ?? 80.0;
+    } else {
+      currentLimit = prefs?.getDouble('quick_alert_all_overspeed_limit') ?? 80.0;
+    }
+    speedCtl.text = currentLimit.toInt().toString();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.speed, color: Color(0xFFEA580C)),
+            SizedBox(width: 8),
+            Text(
+              'Set Speed Limit',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'অ্যালার্টের জন্য গতিসীমা (km/h) নির্ধারণ করুন:',
+              style: TextStyle(fontSize: 13, color: Colors.black54),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: speedCtl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                hintText: 'e.g., 80',
+                suffixText: 'km/h',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _toggleQuickAlertLocally('overspeed', false);
+            },
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final val = double.tryParse(speedCtl.text.trim());
+              if (val == null || val <= 0) {
+                _showSnackBar('Please enter a valid speed limit', isError: true);
+                return;
+              }
+              Navigator.pop(context);
+              
+              if (mainSelectedDevices.isEmpty) {
+                await prefs?.setDouble('quick_alert_all_overspeed_limit', val);
+                for (var dev in devicesList) {
+                  await prefs?.setDouble('quick_alert_${dev.id}_overspeed_limit', val);
+                }
+              } else {
+                for (var devId in mainSelectedDevices) {
+                  await prefs?.setDouble('quick_alert_${devId}_overspeed_limit', val);
+                }
+              }
+              _toggleQuickAlertLocally('overspeed', true);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEA580C),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildStatCards() {
@@ -778,8 +885,43 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
       });
     }).toList();
 
-    final total = deviceFilteredAlerts.length;
-    final active = deviceFilteredAlerts.where((a) => _isAlertActive(a)).length;
+    int activeLocalQuickAlerts = 0;
+    int totalLocalQuickAlerts = 0;
+    final quickAlertTypes = ['ignition_duration', 'overspeed', 'sos', 'offline_duration', 'start_of_movement'];
+
+    for (var type in quickAlertTypes) {
+      bool isLocalActive = false;
+      if (prefs != null) {
+        if (mainSelectedDevices.isEmpty) {
+          isLocalActive = prefs!.getBool('quick_alert_all_$type') ?? false;
+        } else {
+          isLocalActive = mainSelectedDevices.every((devId) {
+            return prefs!.getBool('quick_alert_${devId}_$type') ?? false;
+          });
+        }
+      }
+
+      final serverAlerts = deviceFilteredAlerts.where(
+        (a) => a.type.toString().toLowerCase() == type.toLowerCase()
+      ).toList();
+
+      final isServerActive = serverAlerts.any((a) => _isAlertActive(a));
+      final serverRuleExists = serverAlerts.isNotEmpty;
+
+      if (serverRuleExists) {
+        if (isLocalActive && !isServerActive) {
+          activeLocalQuickAlerts++;
+        }
+      } else {
+        if (isLocalActive) {
+          totalLocalQuickAlerts++;
+          activeLocalQuickAlerts++;
+        }
+      }
+    }
+
+    final total = deviceFilteredAlerts.length + totalLocalQuickAlerts;
+    final active = deviceFilteredAlerts.where((a) => _isAlertActive(a)).length + activeLocalQuickAlerts;
     final inactive = total - active;
     final primaryThemeColor = Theme.of(context).primaryColor;
 
@@ -906,6 +1048,19 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
   );
 }
 
+  String _getOverspeedSubtitle() {
+    double speedLimit = 80.0;
+    if (prefs != null) {
+      if (mainSelectedDevices.isNotEmpty) {
+        speedLimit = prefs!.getDouble('quick_alert_${mainSelectedDevices.first}_overspeed_limit') ?? 
+                     prefs!.getDouble('quick_alert_all_overspeed_limit') ?? 80.0;
+      } else {
+        speedLimit = prefs!.getDouble('quick_alert_all_overspeed_limit') ?? 80.0;
+      }
+    }
+    return 'Limit ${speedLimit.toInt()} km/h threshold';
+  }
+
   Widget _buildQuickAlertsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -934,7 +1089,7 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
               const SizedBox(height: 10),
               _buildQuickAlertRow(
                 title: 'Over Speed',
-                subtitle: 'Limit 80 km/h threshold',
+                subtitle: _getOverspeedSubtitle(),
                 type: 'overspeed',
                 icon: Icons.speed_rounded,
               ),
@@ -1017,10 +1172,32 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
     required String type,
     required IconData icon,
   }) {
-    final Alert? existing = alertList.firstWhereOrNull(
-      (a) => a.type.toString().toLowerCase() == type.toLowerCase()
-    );
-    final bool isActive = existing != null && _isAlertActive(existing);
+    final Alert? existing = alertList.firstWhereOrNull((a) {
+      if (a.type.toString().toLowerCase() != type.toLowerCase()) return false;
+      if (mainSelectedDevices.isEmpty) return true;
+      return a.devices != null && a.devices!.any((dev) {
+        String devId = "";
+        if (dev is Map) {
+          devId = (dev['id'] ?? '').toString();
+        } else {
+          devId = dev.toString();
+        }
+        return mainSelectedDevices.contains(devId);
+      });
+    });
+    final bool isServerActive = existing != null && _isAlertActive(existing);
+
+    bool isLocalActive = false;
+    if (prefs != null) {
+      if (mainSelectedDevices.isEmpty) {
+        isLocalActive = prefs!.getBool('quick_alert_all_$type') ?? false;
+      } else {
+        isLocalActive = mainSelectedDevices.every((devId) {
+          return prefs!.getBool('quick_alert_${devId}_$type') ?? false;
+        });
+      }
+    }
+    final bool isActive = isServerActive || isLocalActive;
     final alertColor = _getQuickAlertColor(type);
 
     return Container(
@@ -3245,30 +3422,7 @@ class _ReflectiveAnimationWrapperState extends State<ReflectiveAnimationWrapper>
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.isAnimated) return widget.child;
-
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Stack(
-          children: [
-            widget.child,
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(widget.borderRadius),
-                  child: CustomPaint(
-                    painter: _ReflectionSweepPainter(
-                      progress: _controller.value,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+    return widget.child;
   }
 }
 

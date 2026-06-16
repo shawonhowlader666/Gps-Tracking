@@ -9,6 +9,8 @@ import 'package:gpspro/services/model/event.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class DataController extends GetxController {
   // Device Lists
@@ -41,6 +43,12 @@ class DataController extends GetxController {
 
   // Notification service
   final NotificationService _notificationService = NotificationService();
+
+  // Maps to keep track of previous values for change detection
+  final Map<int, bool> _prevEngineStatus = {};
+  final Map<int, String> _prevOnlineStatus = {};
+  final Map<int, DateTime> _lastOverspeedTime = {};
+  final Map<int, bool> _prevSOSStatus = {};
 
   @override
   Future<void> onInit() async {
@@ -92,9 +100,128 @@ class DataController extends GetxController {
         isLoading.value = false;
         _updateStatusCounters();
         _reapplyCurrentFilter();
+        _checkLocalAlerts(onlyDevices);
       }
     } catch (e) {
       isLoading.value = false;
+    }
+  }
+
+  Future<void> _checkLocalAlerts(List<DeviceItem> deviceItems) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      for (var device in deviceItems) {
+        if (device.id == null) continue;
+        final devId = device.id!;
+
+        // 1. Engine Status Alert (Ignition On/Off)
+        final bool isEngineAlertEnabled = prefs.getBool('quick_alert_${devId}_ignition_duration') ?? 
+                                          prefs.getBool('quick_alert_all_ignition_duration') ?? false;
+        if (isEngineAlertEnabled) {
+          bool currentEngine = device.engineStatus == true || 
+                               device.engineStatus == 1 || 
+                               device.engineStatus.toString().toLowerCase() == 'true' ||
+                               device.engineStatus.toString() == '1';
+
+          if (_prevEngineStatus.containsKey(devId)) {
+            bool prevEngine = _prevEngineStatus[devId]!;
+            if (currentEngine != prevEngine) {
+              String statusStr = currentEngine ? "ON" : "OFF";
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 1,
+                title: "🔑 Engine status: ${device.name}",
+                body: "Engine has been turned $statusStr",
+                channelId: 'alert_channel_v1',
+              );
+            }
+          }
+          _prevEngineStatus[devId] = currentEngine;
+        }
+
+        // 2. Over Speed Alert
+        final bool isOverspeedEnabled = prefs.getBool('quick_alert_${devId}_overspeed') ?? 
+                                        prefs.getBool('quick_alert_all_overspeed') ?? false;
+        if (isOverspeedEnabled) {
+          double currentSpeed = double.tryParse(device.speed.toString()) ?? 0.0;
+          double speedLimit = prefs.getDouble('quick_alert_${devId}_overspeed_limit') ?? 
+                              prefs.getDouble('quick_alert_all_overspeed_limit') ?? 80.0;
+          if (currentSpeed > speedLimit) {
+            final now = DateTime.now();
+            final lastNotification = _lastOverspeedTime[devId];
+            if (lastNotification == null || now.difference(lastNotification).inMinutes >= 10) {
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 2,
+                title: "⚡ Over Speed: ${device.name}",
+                body: "Vehicle is moving at ${currentSpeed.toStringAsFixed(1)} km/h (Limit: ${speedLimit.toInt()} km/h)",
+                channelId: 'alert_channel_v1',
+              );
+              _lastOverspeedTime[devId] = now;
+            }
+          }
+        }
+
+        // 3. SOS Alarm Alert
+        final bool isSosEnabled = prefs.getBool('quick_alert_${devId}_sos') ?? 
+                                  prefs.getBool('quick_alert_all_sos') ?? false;
+        if (isSosEnabled) {
+          bool currentSOS = device.alarm == 1 || device.alarm.toString() == "sos";
+          if (_prevSOSStatus.containsKey(devId)) {
+            bool prevSOS = _prevSOSStatus[devId]!;
+            if (currentSOS && !prevSOS) {
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 3,
+                title: "🆘 SOS Alarm: ${device.name}",
+                body: "Emergency SOS button triggered!",
+                channelId: 'sos_channel_v1',
+                priority: Priority.max,
+                importance: Importance.max,
+              );
+            }
+          }
+          _prevSOSStatus[devId] = currentSOS;
+        }
+
+        // 4. Offline Alert
+        final bool isOfflineEnabled = prefs.getBool('quick_alert_${devId}_offline_duration') ?? 
+                                      prefs.getBool('quick_alert_all_offline_duration') ?? false;
+        if (isOfflineEnabled) {
+          String currentOnline = device.iconColor ?? 'green';
+          if (_prevOnlineStatus.containsKey(devId)) {
+            String prevOnline = _prevOnlineStatus[devId]!;
+            if (currentOnline == 'red' && prevOnline != 'red') {
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 4,
+                title: "❌ Offline Alert: ${device.name}",
+                body: "Vehicle went offline",
+                channelId: 'alert_channel_v1',
+              );
+            }
+          }
+          _prevOnlineStatus[devId] = currentOnline;
+        }
+
+        // 5. Movement Alert
+        final bool isMovementEnabled = prefs.getBool('quick_alert_${devId}_start_of_movement') ?? 
+                                       prefs.getBool('quick_alert_all_start_of_movement') ?? false;
+        if (isMovementEnabled) {
+          String currentOnline = device.iconColor ?? 'green';
+          if (_prevOnlineStatus.containsKey(devId)) {
+            String prevOnline = _prevOnlineStatus[devId]!;
+            if (currentOnline == 'green' && prevOnline != 'green') {
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 5,
+                title: "Directions Movement: ${device.name}",
+                body: "Vehicle has started moving",
+                channelId: 'event_channel_v1',
+              );
+            }
+          }
+          _prevOnlineStatus[devId] = currentOnline;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking local alerts: $e");
     }
   }
 
