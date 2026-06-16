@@ -77,9 +77,9 @@ android {
                 getDefaultProguardFile("proguard-android.txt"),
                 "proguard-rules.pro"
             )
-            isCrunchPngs = false
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isCrunchPngs = true
+            isMinifyEnabled = true
+            isShrinkResources = true
         }
     }
 }
