@@ -681,35 +681,10 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   }
 
   Widget _buildAppTitle() {
-    return AnimatedBuilder(
-      animation: _shimmerAnimation,
-      builder: (context, child) {
-        return ShaderMask(
-          shaderCallback: (bounds) {
-            return LinearGradient(
-              colors: const [
-                _primaryColor,
-                _lightAccent,
-                _primaryColor,
-              ],
-              stops: [
-                (_shimmerAnimation.value - 0.3).clamp(0.0, 1.0),
-                _shimmerAnimation.value.clamp(0.0, 1.0),
-                (_shimmerAnimation.value + 0.3).clamp(0.0, 1.0),
-              ],
-            ).createShader(bounds);
-          },
-          child: const Text(
-            AppConstants.appName,
-            style: TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: 8,
-            ),
-          ),
-        );
-      },
+    return Image.asset(
+      'images/orbit_logo_text.png',
+      height: 42,
+      fit: BoxFit.contain,
     );
   }
 
