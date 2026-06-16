@@ -777,13 +777,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           mainAxisSize: MainAxisSize.min,
           children: [
             Image.asset(
-              'images/btrc.png',
+              'images/asthax.png',
               height: 30,
               width: 30,
             ),
             const SizedBox(width: 8),
             Text(
-              'Approved By BTRC',
+              'Approved By AsthaX',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey[600],
