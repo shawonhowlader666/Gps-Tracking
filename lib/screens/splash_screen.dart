@@ -227,9 +227,9 @@ class _SplashScreenPageState extends State<SplashScreenPage>
           }
         ];
         SHOW_ADS = false;
-        WHATS_APP = '+880 1912-609087';
-        PHONE_NO = '+880 1912-609087';
-        EMAIL = 'privacy@orbitgps.com';
+        WHATS_APP = '01901388950';
+        PHONE_NO = '01901388950';
+        EMAIL = 'info@orbitgps.com.bd';
         adsFrequency = 2;
         APP_VERSION = '1.0.0';
         BANNER_IMAGE = [];
