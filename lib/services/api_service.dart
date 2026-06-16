@@ -55,7 +55,6 @@ class APIService {
   static Future<RxList<Device>?> getDevices() async {
     final response = await http.get(Uri.parse(
         "$serverURL/api/get_devices?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"));
-    print(response.body);
     if (response.statusCode == 200) {
       Iterable list = json.decode(response.body.replaceAll("ï»¿", ""));
       return list.map((model) => Device.fromJson(model)).toList().obs;
@@ -92,8 +91,6 @@ class APIService {
       String deviceID, String fromDate, String toDate, int type) async {
     final response = await http.get(Uri.parse(
         "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&geofences[]=0&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0&send_to_email=${UserRepository.getEmail()!}"));
-    print("Response");
-    print(response.body);
     if (response.statusCode == 200) {
       return RouteReport.fromJson(
           json.decode(response.body.replaceAll("ï»¿", "")));
@@ -159,7 +156,6 @@ class APIService {
             "$serverURL/api/send_gprs_command?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
         body: body,
         headers: headers);
-    print(response.body);
     return response;
   }
   //
@@ -209,8 +205,6 @@ class APIService {
   static Future<http.Response?> addGeofence(Map<String, dynamic> fence) async {
     headers['content-type'] = "application/x-www-form-urlencoded; charset=UTF-8";
 
-    print('Creating geofence with data: $fence'); // Debug log
-
     final response = await http.post(
       Uri.parse(
           "$serverURL/api/add_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"
@@ -219,7 +213,6 @@ class APIService {
       headers: headers,
     );
 
-    print('Response: ${response.statusCode} - ${response.body}'); // Debug log
     return response;
   }
 
@@ -231,8 +224,6 @@ class APIService {
       ),
       headers: headers,
     );
-
-    print('Geofences response: ${response.body}'); // Debug log
 
     if (response.statusCode == 200) {
       final jsonData = json.decode(response.body.replaceAll("ï»¿", ""));

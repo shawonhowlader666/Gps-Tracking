@@ -660,13 +660,11 @@ class _SplashScreenPageState extends State<SplashScreenPage>
                           ),
                         ],
                       ),
-                      child: ClipOval(
-                        child: Padding(
-                          padding: const EdgeInsets.all(22),
-                          child: Image.asset(
-                            AppConstants.appIcon,
-                            fit: BoxFit.contain,
-                          ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(22),
+                        child: Image.asset(
+                          AppConstants.appIcon,
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ),

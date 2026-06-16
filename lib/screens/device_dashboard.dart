@@ -464,17 +464,19 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
               });
 
           return SizedBox(
-            height: _dialogCommandHeight,
             width: 300.0,
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.start,
               children: <Widget>[
                 Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     Padding(
                       padding:
                           const EdgeInsets.only(left: 10, right: 10, top: 20),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.start,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: <Widget>[
@@ -611,16 +613,19 @@ class _DeviceDashboardState extends State<DeviceDashboard> {
               });
 
           return SizedBox(
-            height: _dialogCommandHeight,
+            width: 300.0,
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.start,
               children: <Widget>[
                 Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     Padding(
                       padding:
                           const EdgeInsets.only(left: 10, right: 10, top: 20),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.start,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: <Widget>[

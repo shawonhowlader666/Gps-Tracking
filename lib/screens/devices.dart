@@ -3046,7 +3046,9 @@ class _DevicePageState extends State<DevicePage> {
                   _greyColor,
                       () {
                     Navigator.pop(sheetContext);
-                    _getEditDeviceData(device.id);
+                    Future.delayed(const Duration(milliseconds: 200), () {
+                      _getEditDeviceData(device.id);
+                    });
                   },
                 ),
                 _buildOptionItem(
@@ -3206,8 +3208,8 @@ class _DevicePageState extends State<DevicePage> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
@@ -3255,6 +3257,7 @@ class _DevicePageState extends State<DevicePage> {
                 const Gap(16),
                 DropdownButtonFormField<int>(
                   value: selectedProtocolIndex,
+                  isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Tracker Command Format',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -3295,7 +3298,7 @@ class _DevicePageState extends State<DevicePage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: Text('cancel'.tr, style: TextStyle(color: Colors.grey[600])),
             ),
             ElevatedButton.icon(
@@ -3315,7 +3318,7 @@ class _DevicePageState extends State<DevicePage> {
                   return;
                 }
 
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
                 showProgress(true, context);
 
                 try {
@@ -3327,6 +3330,8 @@ class _DevicePageState extends State<DevicePage> {
                   };
 
                   final res = await APIService.sendCommands(requestBody);
+                  
+                  if (!mounted) return;
                   showProgress(false, context);
 
                   if (res.statusCode == 200) {
@@ -3361,6 +3366,7 @@ class _DevicePageState extends State<DevicePage> {
                     );
                   }
                 } catch (e) {
+                  if (!mounted) return;
                   showProgress(false, context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -3463,9 +3469,37 @@ class _DevicePageState extends State<DevicePage> {
     showProgress(true, context);
     APIService.editDeviceData({'device_id': deviceId.toString()}).then((value) {
       showProgress(false, context);
-      sd = SingleDevice.fromJson(json.decode(value.body.replaceAll("ï»¿", "")));
-      _name.text = sd!.item!["name"];
-      _showEditDialog(sd!.item);
+      try {
+        final decoded = json.decode(value.body.replaceAll("ï»¿", ""));
+        if (decoded is Map<String, dynamic> && decoded.containsKey('message')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(decoded['message'].toString())),
+          );
+          return;
+        }
+        
+        sd = SingleDevice.fromJson(decoded);
+        if (sd != null && sd!.item != null) {
+          _name.text = sd!.item!["name"] ?? "";
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showEditDialog(sd!.item);
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Failed to parse device data")),
+          );
+        }
+      } catch (e) {
+        debugPrint("Error parsing edit device data: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    }).catchError((e) {
+      showProgress(false, context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to fetch device data: $e")),
+      );
     });
   }
 
@@ -3485,7 +3519,9 @@ class _DevicePageState extends State<DevicePage> {
               ),
             ],
           ),
-          content: SingleChildScrollView(
+          content: SizedBox(
+            width: 340,
+            child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3620,6 +3656,7 @@ class _DevicePageState extends State<DevicePage> {
                 ],
               ],
             ),
+          ),
           ),
           actions: [
             TextButton(

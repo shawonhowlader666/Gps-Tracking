@@ -770,27 +770,31 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           ),
         ),
       ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.only(bottom: 20.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              'images/btrc.png',
-              height: 30,
-              width: 30,
+      bottomNavigationBar: _buildBtrcApproval(),
+    );
+  }
+
+  Widget _buildBtrcApproval() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'images/asthax.png',
+            height: 30,
+            width: 30,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Approved By AsthaX',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
             ),
-            const SizedBox(width: 8),
-            Text(
-              'Approved By BTRC',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

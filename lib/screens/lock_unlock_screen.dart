@@ -805,9 +805,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           });
 
           return Container(
-            constraints: BoxConstraints(
-              maxHeight: _dialogCommandHeight + 50,
-            ),
             padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,

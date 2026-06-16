@@ -212,9 +212,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
   bool _userInteracting = false;
   bool _isProgrammaticMove = false;
 
-  // MARKERS - Direct state, no streams
-  Set<Marker> _markers = {};
-  Set<Polyline> _polylines = {};
+  // Optimized ValueNotifiers for high performance updates
+  final ValueNotifier<Set<Marker>> _markersNotifier = ValueNotifier<Set<Marker>>({});
+  final ValueNotifier<Set<Polyline>> _polylinesNotifier = ValueNotifier<Set<Polyline>>({});
 
   // DEVICE DATA
   DeviceItem? device;
@@ -222,6 +222,11 @@ class _TrackDeviceState extends State<TrackDevicePage>
   String todayEngineHours = "--";
   String? _address;
   TodayReportData? todayData;
+
+  // Optimized Address Fetching state
+  double? _lastFetchedLat;
+  double? _lastFetchedLng;
+  bool _isFetchingAddress = false;
 
 
   // SMOOTH ANIMATION
@@ -257,6 +262,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   Future<void> _initializeAll() async {
     // Initialize position first
     final initialPos = _getInitialPosition();
+    _fetchAddressForCoordinates(initialPos.latitude, initialPos.longitude);
     final initialBearing = double.tryParse(device?.course?.toString() ?? '0') ?? 0;
 
     // Initialize animator
@@ -608,6 +614,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
       double.parse(element.lng.toString()),
     );
 
+    // Fetch address only if location actually changed
+    final oldLat = double.tryParse(device?.lat?.toString() ?? '');
+    final oldLng = double.tryParse(device?.lng?.toString() ?? '');
+    if (oldLat != newPos.latitude || oldLng != newPos.longitude) {
+      _fetchAddressForCoordinates(newPos.latitude, newPos.longitude);
+    }
+
     final rotation = element.iconType == "arrow" || element.iconType == "rotating";
     final newBearing = rotation ? double.parse(element.course.toString()) : 0.0;
 
@@ -658,13 +671,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
       endCap: Cap.roundCap,
     );
 
-    // Update state efficiently
-    if (mounted) {
-      setState(() {
-        _markers = {marker};
-        _polylines = {polyline};
-      });
-    }
+    // Update value notifiers instead of calling setState on the whole widget tree
+    _markersNotifier.value = {marker};
+    _polylinesNotifier.value = {polyline};
   }
 
   double _calculateDistance(LatLng a, LatLng b) {
@@ -800,15 +809,28 @@ class _TrackDeviceState extends State<TrackDevicePage>
     }
   }
 
-  void _fetchAddress() {
-    if (device?.lat == null || _address != null) return;
+  void _fetchAddressForCoordinates(double lat, double lng) {
+    if (_isDisposed) return;
+    if (_lastFetchedLat == lat && _lastFetchedLng == lng) return;
+    if (_isFetchingAddress) return;
+
+    _isFetchingAddress = true;
+    _lastFetchedLat = lat;
+    _lastFetchedLng = lng;
 
     APIService.getGeocoderAddress(
-      device!.lat.toString(),
-      device!.lng.toString(),
+      lat.toString(),
+      lng.toString(),
     ).then((addr) {
       if (!_isDisposed && mounted) {
-        setState(() => _address = addr.replaceAll('"', ''));
+        setState(() {
+          _address = addr.replaceAll('"', '');
+          _isFetchingAddress = false;
+        });
+      }
+    }).catchError((_) {
+      if (!_isDisposed) {
+        _isFetchingAddress = false;
       }
     });
   }
@@ -842,7 +864,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
 // Replace the _startCameraTimer method
   void _startCameraTimer() {
-    _cameraTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+    _cameraTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
       if (_followVehicle &&
           _isMapCreated &&
           _carAnimator != null &&
@@ -851,7 +873,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
         _isProgrammaticMove = true;
 
-        _mapController?.animateCamera(
+        _mapController?.moveCamera(
           CameraUpdate.newLatLng(_carAnimator!.currentPosition),
         );
 
@@ -864,70 +886,84 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
 // Replace the _buildMap method
   Widget _buildMap() {
-    return GoogleMap(
-      mapType: _currentMapType,
-      trafficEnabled: _trafficEnabled,
-      initialCameraPosition: CameraPosition(
-        target: _getInitialPosition(),
-        zoom: 16,
-      ),
-      onCameraMove: (pos) {
-        _currentZoom = pos.zoom;
+    return Listener(
+      onPointerDown: (_) {
+        _userInteracting = true;
       },
-      onCameraMoveStarted: () {
-        // Only mark user interaction if NOT a programmatic move
-        if (!_isProgrammaticMove) {
-          _userInteracting = true;
-        }
-      },
-      onCameraIdle: () {
-        // Only disable follow mode if user manually moved the map
-        if (_userInteracting && !_isProgrammaticMove && _followVehicle && _carAnimator != null) {
-          _mapController?.getLatLng(ScreenCoordinate(
-            x: (MediaQuery.of(context).size.width / 2).toInt(),
-            y: (MediaQuery.of(context).size.height / 2).toInt(),
-          )).then((centerLatLng) {
-            if (mounted) {
-              final distance = _calculateDistance(
-                  _carAnimator!.currentPosition,
-                  centerLatLng
+      child: ValueListenableBuilder<Set<Marker>>(
+        valueListenable: _markersNotifier,
+        builder: (context, markers, _) {
+          return ValueListenableBuilder<Set<Polyline>>(
+            valueListenable: _polylinesNotifier,
+            builder: (context, polylines, _) {
+              return GoogleMap(
+                mapType: _currentMapType,
+                trafficEnabled: _trafficEnabled,
+                initialCameraPosition: CameraPosition(
+                  target: _getInitialPosition(),
+                  zoom: 16,
+                ),
+                onCameraMove: (pos) {
+                  _currentZoom = pos.zoom;
+                },
+                onCameraIdle: () {
+                  // Only disable follow mode if user manually moved the map
+                  if (_userInteracting && !_isProgrammaticMove && _followVehicle && _carAnimator != null) {
+                    _mapController?.getLatLng(ScreenCoordinate(
+                      x: (MediaQuery.of(context).size.width / 2).toInt(),
+                      y: (MediaQuery.of(context).size.height / 2).toInt(),
+                    )).then((centerLatLng) {
+                      if (mounted) {
+                        final distance = _calculateDistance(
+                            _carAnimator!.currentPosition,
+                            centerLatLng
+                        );
+
+                        // Only disable if user moved more than 100 meters
+                        if (distance > 100) {
+                          setState(() => _followVehicle = false);
+                        }
+                      }
+                    });
+                  }
+                  _userInteracting = false;
+                },
+                onMapCreated: (controller) {
+                  _mapController = controller;
+                  _isMapCreated = true;
+                  if (_mapStyle != null) controller.setMapStyle(_mapStyle);
+
+                  if (_carAnimator != null) {
+                    _isProgrammaticMove = true;
+                    controller.animateCamera(
+                      CameraUpdate.newCameraPosition(
+                        CameraPosition(target: _carAnimator!.currentPosition, zoom: 16),
+                      ),
+                    ).then((_) {
+                      Future.delayed(const Duration(milliseconds: 100), () {
+                        _isProgrammaticMove = false;
+                      });
+                    });
+                  }
+                },
+                markers: markers,
+                polylines: polylines,
+                padding: const EdgeInsets.only(bottom: 200),
+                rotateGesturesEnabled: true,
+                tiltGesturesEnabled: true,
+                scrollGesturesEnabled: true,  // Make sure this is true
+                zoomGesturesEnabled: true,    // Make sure this is true
+                mapToolbarEnabled: false,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: false,
+                buildingsEnabled: false,
+                indoorViewEnabled: false,
               );
-
-              // Only disable if user moved more than 100 meters
-              if (distance > 100) {
-                setState(() => _followVehicle = false);
-              }
-            }
-          });
-        }
-        _userInteracting = false;
-      },
-      onMapCreated: (controller) {
-        _mapController = controller;
-        _isMapCreated = true;
-        if (_mapStyle != null) controller.setMapStyle(_mapStyle);
-
-        if (_carAnimator != null) {
-          controller.animateCamera(
-            CameraUpdate.newCameraPosition(
-              CameraPosition(target: _carAnimator!.currentPosition, zoom: 16),
-            ),
+            },
           );
-        }
-      },
-      markers: _markers,
-      polylines: _polylines,
-      padding: const EdgeInsets.only(bottom: 200),
-      rotateGesturesEnabled: true,
-      tiltGesturesEnabled: true,
-      scrollGesturesEnabled: true,  // Make sure this is true
-      zoomGesturesEnabled: true,    // Make sure this is true
-      mapToolbarEnabled: false,
-      myLocationEnabled: true,
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
-      buildingsEnabled: false,
-      indoorViewEnabled: false,
+        },
+      ),
     );
   }
 
@@ -959,7 +995,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
           _MapButton(
             icon: _followVehicle ? Icons.gps_fixed : Icons.gps_not_fixed,
             selected: _followVehicle,
-            onTap: _centerOnVehicle,
+            onTap: () {
+              if (_followVehicle) {
+                setState(() => _followVehicle = false);
+              } else {
+                _centerOnVehicle();
+              }
+            },
           ),
           const SizedBox(height: 6),
           _MapButton(
@@ -1243,6 +1285,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
     _dataTimer?.cancel();
     _cameraTimer?.cancel();
     _carAnimator?.dispose();
+    _markersNotifier.dispose();
+    _polylinesNotifier.dispose();
     _mapController = null;
     super.dispose();
   }
@@ -1300,8 +1344,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   // ==================== ORIGINAL BOTTOM SHEET DESIGN ====================
   Widget _buildBottomSheet() {
-    _fetchAddress();
-
     return DraggableScrollableSheet(
       initialChildSize: 0.31,
       minChildSize: 0.08,
