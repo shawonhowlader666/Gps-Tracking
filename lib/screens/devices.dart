@@ -75,6 +75,8 @@ class _DevicePageState extends State<DevicePage> {
   static const Color _greyColor = Color(0xFF6B7280);
 
   Timer? _refreshTimer;
+  StreamSubscription? _onlyDevicesSubscription;
+  StreamSubscription? _isLoadingSubscription;
 
   void _safeSetState(VoidCallback fn) {
     if (mounted && !_isDisposed) setState(fn);
@@ -89,6 +91,28 @@ class _DevicePageState extends State<DevicePage> {
         _startPeriodicRefresh();
         _loadDueAmount();
         _loadBillingInfo();
+      }
+    });
+
+    _onlyDevicesSubscription = controller.onlyDevices.listen((_) {
+      if (mounted && !_isDisposed) {
+        _calculateCounts();
+        if (_searchController.text.isEmpty) {
+          _applyCurrentFilter();
+        } else {
+          _searchDevices(_searchController.text);
+        }
+      }
+    });
+
+    _isLoadingSubscription = controller.isLoading.listen((isLoading) {
+      if (!isLoading && mounted && !_isDisposed) {
+        _calculateCounts();
+        if (_searchController.text.isEmpty) {
+          _applyCurrentFilter();
+        } else {
+          _searchDevices(_searchController.text);
+        }
       }
     });
   }
@@ -266,7 +290,7 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   List<DeviceItem> _getMergedDevices() {
-    final trackingDevices = controller.filteredDevices.toList();
+    final trackingDevices = controller.onlyDevices.toList();
     final List<DeviceItem> merged = List.from(trackingDevices);
 
     for (final bv in _billingVehicles) {
@@ -484,7 +508,6 @@ class _DevicePageState extends State<DevicePage> {
   void _filterDevices(String filter) {
     if (_isDisposed || !mounted) return;
 
-    controller.filterDevicesByStatus("all");
     final allDevices = _getMergedDevices();
 
     // Recalculate counts
@@ -527,7 +550,6 @@ class _DevicePageState extends State<DevicePage> {
     if (query.isEmpty) {
       _filterDevices(_getFilterName(_selectedFilterIndex));
     } else {
-      controller.filterDevicesByStatus("all");
       final allDevices = _getMergedDevices();
 
       // Apply current filter first, then search
@@ -744,6 +766,8 @@ class _DevicePageState extends State<DevicePage> {
   void dispose() {
     _isDisposed = true;
     _refreshTimer?.cancel();
+    _onlyDevicesSubscription?.cancel();
+    _isLoadingSubscription?.cancel();
     _searchFocusNode.dispose();
     _searchController.dispose();
     _name.dispose();
@@ -759,15 +783,6 @@ class _DevicePageState extends State<DevicePage> {
         if (controller.isLoading.value) {
           return const Center(child: CircularProgressIndicator());
         }
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !_isDisposed) {
-            _calculateCounts();
-            if (_searchController.text.isEmpty) {
-              _applyCurrentFilter();
-            }
-          }
-        });
 
         return Column(
           children: [

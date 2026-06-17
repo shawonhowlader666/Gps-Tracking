@@ -239,7 +239,7 @@ class _SwipeableEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dismissible(
-      key: Key(event.id.toString() + DateTime.now().toString()),
+      key: ValueKey(event.id),
       direction: DismissDirection.endToStart,
       onDismissed: (_) => onDelete(),
       confirmDismiss: (direction) async {
