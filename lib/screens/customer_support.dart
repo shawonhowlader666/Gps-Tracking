@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:gpspro/constants/app_constants.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:gpspro/widgets/scale_button.dart';
 
@@ -26,7 +27,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> {
     final Uri url = Uri(
       scheme: 'mailto',
       path: email,
-      queryParameters: {'subject': 'Support Ticket: OrbitGPS'},
+      queryParameters: {'subject': 'Support Ticket: ${AppConstants.appName}'},
     );
     try {
       await launchUrl(url, mode: LaunchMode.externalApplication);
