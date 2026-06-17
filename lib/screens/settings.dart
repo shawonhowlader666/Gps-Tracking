@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gpspro/screens/payment_list.dart';
+import 'package:gpspro/screens/customer_support.dart';
 import 'package:gpspro/widgets/scale_button.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -192,34 +193,49 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ]),
             const SizedBox(height: 24),
-            _buildSectionTitle('Account'),
+            _buildSectionTitle('Account & Support'),
             const SizedBox(height: 12),
-            _buildSettingsCard([
-              _buildSettingItem(
-                icon: Icons.payment_outlined,
-                iconColor: const Color(0xFFF59E0B),
-                iconBgColor: const Color(0xFFFEF3C7),
-                title: 'Payment',
-                subtitle: 'View invoices',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => PaymentListScreen(),
-                    ),
-                  );
-                },
-              ),
-              // _buildDivider(),
-              // _buildSettingItem(
-              //   icon: Icons.add_circle_outline,
-              //   iconColor: const Color(0xFF8B5CF6),
-              //   iconBgColor: const Color(0xFFF3E8FF),
-              //   title: 'Add Vehicles',
-              //   subtitle: 'Register vehicles',
-              //   onTap: () {},
-              // ),
-            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildPremium3DCard(
+                    title: 'Payment',
+                    subtitle: 'View invoices',
+                    icon: Icons.payment_rounded,
+                    iconColor: const Color(0xFFF59E0B),
+                    iconBgColor: const Color(0xFFFEF3C7),
+                    shadowColor: const Color(0xFFF59E0B),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PaymentListScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildPremium3DCard(
+                    title: 'Support',
+                    subtitle: '24/7 Helpline',
+                    icon: Icons.headset_mic_rounded,
+                    iconColor: const Color(0xFF3F5EFB),
+                    iconBgColor: const Color(0xFFEEF2FF),
+                    shadowColor: const Color(0xFF3F5EFB),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CustomerSupportScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
             _buildSectionTitle('Support'),
             const SizedBox(height: 12),
@@ -266,12 +282,17 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.15),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -377,16 +398,116 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Widget _buildPremium3DCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBgColor,
+    required Color shadowColor,
+    required VoidCallback onTap,
+  }) {
+    return ScaleButton(
+      onTap: onTap,
+      child: Container(
+        height: 105,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 6),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          border: Border.all(
+            color: const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: iconBgColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: iconColor,
+                      size: 20,
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Colors.grey[300],
+                    size: 16,
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF1E293B),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.1,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSettingsCard(List<Widget> children) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.15),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -406,7 +527,7 @@ class _SettingsPageState extends State<SettingsPage> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
@@ -468,13 +589,18 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: Colors.black.withOpacity(0.15),
               blurRadius: 10,
-              offset: const Offset(0, 4),
+              offset: const Offset(0, 6),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
