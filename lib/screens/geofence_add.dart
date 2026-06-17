@@ -732,8 +732,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
         GoogleMap(
           mapType: _currentMapType,
           initialCameraPosition: CameraPosition(
-            target: _currentLocation ?? const LatLng(21.7679, 78.8718),
-            zoom: _currentLocation != null ? 14 : 4,
+            target: _currentLocation ?? const LatLng(23.6850, 90.3563),
+            zoom: _currentLocation != null ? 14 : 7,
           ),
           onMapCreated: (controller) {
             _controller.complete(controller);

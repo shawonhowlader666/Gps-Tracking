@@ -79,6 +79,7 @@ class _MapPageState extends State<MapPage> {
 
   DataController dataController = Get.put(DataController());
   String? _mapStyle;
+  StreamSubscription? _devicesSubscription;
 
   @override
   initState() {
@@ -91,7 +92,28 @@ class _MapPageState extends State<MapPage> {
         _loadBillingInfo();
       }
     });
+
+    _devicesSubscription = dataController.devices.listen((devices) {
+      if (mounted && devices.isNotEmpty && mapController != null) {
+        if (first) {
+          addMarker(dataController);
+          first = false;
+        } else {
+          updateMarker(dataController);
+        }
+      }
+    });
+
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _devicesSubscription?.cancel();
+    if (_timer != null && _timer!.isActive) {
+      _timer!.cancel();
+    }
+    super.dispose();
   }
 
   Future<void> _loadBillingInfo() async {
@@ -253,7 +275,6 @@ class _MapPageState extends State<MapPage> {
 
   void addMarker(DataController controller) {
     _markers = <Marker>{};
-    LatLngBounds? bound;
     for (var element in controller.devices) {
       if (element.items!.isNotEmpty) {
         element.items!.forEach((element) async {
@@ -345,8 +366,9 @@ class _MapPageState extends State<MapPage> {
                       double.parse(element.lng.toString())),
                 ));
               }
-              bound = boundsFromLatLngList(_markers);
-              // Perform additional actions if necessary.
+              if (mounted) {
+                setState(() {});
+              }
             }).catchError((error) {
               print('Error fetching and caching images: $error');
             });
@@ -354,18 +376,6 @@ class _MapPageState extends State<MapPage> {
         });
       }
     }
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (bound != null) {
-        CameraUpdate u2 = CameraUpdate.newLatLngBounds(bound!, 50);
-        if (mapController != null) {
-          mapController!.animateCamera(u2).then((void v) {
-            check(u2, mapController!);
-          });
-          _timer!.cancel();
-          setState(() {});
-        }
-      }
-    });
   }
 
   void drawPolyline() async {
@@ -485,6 +495,9 @@ class _MapPageState extends State<MapPage> {
                       double.parse(element.lng.toString())));
                 }
               }
+              if (mounted) {
+                setState(() {});
+              }
             });
           }
         });
@@ -527,19 +540,17 @@ class _MapPageState extends State<MapPage> {
   void _reloadMap() {
     device = null;
     _selectedDeviceId = 0;
-    setState(() {});
-    // slidingPanelHeight = 0;
-    // _pc.close();
-    //widget.model.devices.forEach((key, value) {
-    LatLngBounds bound = boundsFromLatLngList(_markers);
-
     polylines.clear();
     polylineCoordinates.clear();
     setState(() {});
-    CameraUpdate u2 = CameraUpdate.newLatLngBounds(bound, 100);
-    mapController!.animateCamera(u2).then((void v) {
-      check(u2, mapController!);
-    });
+
+    if (_markers.isNotEmpty) {
+      LatLngBounds bound = boundsFromLatLngList(_markers);
+      CameraUpdate u2 = CameraUpdate.newLatLngBounds(bound, 100);
+      mapController!.animateCamera(u2).then((void v) {
+        check(u2, mapController!);
+      });
+    }
 
     Fluttertoast.showToast(
         msg: ("showingAllDevices").tr,
@@ -618,8 +629,8 @@ class _MapPageState extends State<MapPage> {
   }
 
   static const CameraPosition _initialRegion = CameraPosition(
-    target: LatLng(21.7679, 78.8718),
-    zoom: 4,
+    target: LatLng(23.6850, 90.3563),
+    zoom: 7,
   );
 
   Future<void> onSearchTextChanged(String text) async {
@@ -645,17 +656,6 @@ class _MapPageState extends State<MapPage> {
             init: DataController(),
             builder: (controller) {
               devicesList = controller.onlyDevices;
-
-              if (controller.devices.isNotEmpty) {
-                if (first) {
-                  addMarker(controller);
-                  first = false;
-                } else {
-                  if (controller.devices.isNotEmpty) {
-                    updateMarker(controller);
-                  }
-                }
-              }
 
               if (!controller.isLoading.value) {
                 return buildMap();
@@ -864,6 +864,14 @@ class _MapPageState extends State<MapPage> {
             _controller.complete(controller);
             mapController = controller;
             _onMapCreated();
+            if (dataController.devices.isNotEmpty) {
+              if (first) {
+                addMarker(dataController);
+                first = false;
+              } else {
+                updateMarker(dataController);
+              }
+            }
             // mapController!.setMapStyle(_mapStyle);
           },
           mapToolbarEnabled: false,

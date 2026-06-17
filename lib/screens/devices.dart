@@ -1025,11 +1025,16 @@ class _DevicePageState extends State<DevicePage> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: statusColor, width: 0.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -1058,7 +1063,7 @@ class _DevicePageState extends State<DevicePage> {
                         height: 56,
                         decoration: BoxDecoration(
                           color: statusColor.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         // child: Image.asset(
                         //   "assets/images/car-icon.png",
