@@ -268,55 +268,54 @@ class _MapPageState extends State<MapPage> {
     Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high);
     //_pc.close();
-    setState(() {
-      _location = LatLng(position.latitude, position.longitude);
-    });
+    if (mounted) {
+      setState(() {
+        _location = LatLng(position.latitude, position.longitude);
+      });
+    }
   }
 
   void addMarker(DataController controller) {
     _markers = <Marker>{};
+    List<Future> futures = [];
+
     for (var element in controller.devices) {
       if (element.items!.isNotEmpty) {
-        element.items!.forEach((element) async {
-          if (element.deviceData!.active.toString() == "1") {
-            Util.fetchAndCacheImages(
-                    "${UserRepository.getServerUrl()!}/${element.icon!.path!}")
+        for (var subElement in element.items!) {
+          if (subElement.deviceData!.active.toString() == "1") {
+            final f = Util.fetchAndCacheImages(
+                    "${UserRepository.getServerUrl()!}/${subElement.icon!.path!}")
                 .then((_) async {
               BitmapDescriptor markerIcon;
               bool rotation = true;
-              if (element.iconType == "arrow") {
+              if (subElement.iconType == "arrow") {
                 rotation = true;
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
-              } else if (element.icon!.path!.contains("v2")) {
-                if (element.iconType == "rotating") {
+                markerIcon = await Util.getMarkerIcon(subElement.icon!.path!);
+              } else if (subElement.icon!.path!.contains("v2")) {
+                if (subElement.iconType == "rotating") {
                   rotation = true;
                 } else {
                   rotation = false;
                 }
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
+                markerIcon = await Util.getMarkerIcon(subElement.icon!.path!);
               } else {
-                if (element.iconType == "rotating") {
+                if (subElement.iconType == "rotating") {
                   rotation = true;
                 } else {
                   rotation = false;
                 }
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
+                markerIcon = await Util.getMarkerIcon(subElement.icon!.path!);
               }
               _markers.add(
                 Marker(
-                    markerId: MarkerId(element.id.toString()),
-                    position: LatLng(double.parse(element.lat.toString()),
-                        double.parse(element.lng.toString())),
-                    // updated position
+                    markerId: MarkerId(subElement.id.toString()),
+                    position: LatLng(double.parse(subElement.lat.toString()),
+                        double.parse(subElement.lng.toString())),
                     rotation:
-                        rotation ? double.parse(element.course.toString()) : 0,
+                        rotation ? double.parse(subElement.course.toString()) : 0,
                     icon: markerIcon,
                     onTap: () {
-                      device = element;
-                      // Navigator.pushNamed(context, "/trackDevice",
-                      //     arguments:
-                      //     DeviceArguments(device!.id!, device!.name!, device!));
-
+                      device = subElement;
                       Get.to('/home',
                           arguments: DeviceArguments(
                               device!.id!, device!.name!, device!));
@@ -328,42 +327,38 @@ class _MapPageState extends State<MapPage> {
                               }
                           });
                       CameraPosition cPosition = CameraPosition(
-                        target: LatLng(element.lat, element.lng),
+                        target: LatLng(subElement.lat, subElement.lng),
                         zoom: currentZoom,
                       );
                       mapController!.moveCamera(
                           CameraUpdate.newCameraPosition(cPosition));
-                      _selectedDeviceId = element.id!;
+                      _selectedDeviceId = subElement.id!;
                       setState(() {
-                        //.open();
-                        //slidingPanelHeight = 130;
                         streetView = true;
                         polylines.clear();
                         polylineCoordinates.clear();
 
-                        for (var tail in element.tail!) {
+                        for (var tail in subElement.tail!) {
                           polylineCoordinates.add(LatLng(
                               double.parse(tail.lat.toString()),
                               double.parse(tail.lng.toString())));
                         }
                         drawPolyline();
-                        device = element;
+                        device = subElement;
                         polylineCoordinates.add(LatLng(
-                            double.parse(element.lat.toString()),
-                            double.parse(element.lng.toString())));
+                            double.parse(subElement.lat.toString()),
+                            double.parse(subElement.lng.toString())));
                       });
                     },
-                    infoWindow: const InfoWindow(
-                        // title: widget.model.devices[value.deviceId].name,
-                        )),
+                    infoWindow: const InfoWindow()),
               );
 
               if (isTextEnabled) {
                 _markers.addLabelMarker(LabelMarker(
-                  label: element.name!,
-                  markerId: MarkerId("t_${element.id}"),
-                  position: LatLng(double.parse(element.lat.toString()),
-                      double.parse(element.lng.toString())),
+                  label: subElement.name!,
+                  markerId: MarkerId("t_${subElement.id}"),
+                  position: LatLng(double.parse(subElement.lat.toString()),
+                      double.parse(subElement.lng.toString())),
                 ));
               }
               if (mounted) {
@@ -372,9 +367,35 @@ class _MapPageState extends State<MapPage> {
             }).catchError((error) {
               print('Error fetching and caching images: $error');
             });
+            futures.add(f);
           }
-        });
+        }
       }
+    }
+
+    if (futures.isNotEmpty) {
+      Future.wait(futures).then((_) {
+        if (mounted && _markers.isNotEmpty && mapController != null) {
+          try {
+            LatLngBounds bound = boundsFromLatLngList(_markers);
+            if (bound.southwest.latitude == bound.northeast.latitude &&
+                bound.southwest.longitude == bound.northeast.longitude) {
+              CameraPosition cPosition = CameraPosition(
+                target: bound.southwest,
+                zoom: 15,
+              );
+              mapController!.animateCamera(CameraUpdate.newCameraPosition(cPosition));
+            } else {
+              CameraUpdate u = CameraUpdate.newLatLngBounds(bound, 80);
+              mapController!.animateCamera(u).then((void v) {
+                check(u, mapController!);
+              });
+            }
+          } catch (e) {
+            print("Error fitting camera bounds: $e");
+          }
+        }
+      });
     }
   }
 
@@ -904,21 +925,22 @@ class _MapPageState extends State<MapPage> {
                         CameraUpdate.newCameraPosition(cPosition));
                   },
                   materialTapTargetSize: MaterialTapTargetSize.padded,
-                  foregroundColor: CustomColor.primaryColor,
+                  foregroundColor: CustomColor.primary,
                   backgroundColor: CustomColor.secondaryColor,
-                  child: const m.Icon(Icons.gps_fixed, size: 30.0),
+                  child: const m.Icon(Icons.gps_fixed, size: 30.0, color: CustomColor.primary),
                 ),
                 FloatingActionButton(
                   heroTag: "mapTypeMenu",
                   mini: true,
                   onPressed: () {},
                   materialTapTargetSize: MaterialTapTargetSize.padded,
-                  foregroundColor: CustomColor.primaryColor,
+                  foregroundColor: CustomColor.primary,
                   backgroundColor: CustomColor.secondaryColor,
                   child: PopupMenuButton<Choice>(
                     onSelected: selectedMapType,
                     icon: const m.Icon(
                       Icons.map,
+                      color: CustomColor.primary,
                     ),
                     itemBuilder: (BuildContext context) {
                       return menuChoices.map((Choice choice) {
@@ -936,28 +958,17 @@ class _MapPageState extends State<MapPage> {
                   onPressed: _reloadMap,
                   backgroundColor: CustomColor.secondaryColor,
                   materialTapTargetSize: MaterialTapTargetSize.padded,
-                  foregroundColor: CustomColor.primaryColor,
-                  child: const m.Icon(Icons.refresh, size: 30.0),
+                  foregroundColor: CustomColor.primary,
+                  child: const m.Icon(Icons.refresh, size: 30.0, color: CustomColor.primary),
                 ),
-                // Visibility(
-                //   visible: streetView,
-                //   child: FloatingActionButton(
-                //       heroTag: "streetView",
-                //       mini: true,
-                //       onPressed: _streetView,
-                //       backgroundColor: CustomColor.secondaryColor,
-                //       materialTapTargetSize: MaterialTapTargetSize.padded,
-                //       foregroundColor: CustomColor.primaryColor,
-                //       child: const m.Icon(Icons.streetview, size: 30.0)),
-                // ),
                 FloatingActionButton(
                     heroTag: "text",
                     mini: true,
                     onPressed: _removeMarkerName,
                     backgroundColor: CustomColor.secondaryColor,
                     materialTapTargetSize: MaterialTapTargetSize.padded,
-                    foregroundColor: CustomColor.primaryColor,
-                    child: const m.Icon(Icons.text_fields, size: 30.0)),
+                    foregroundColor: CustomColor.primary,
+                    child: const m.Icon(Icons.text_fields, size: 30.0, color: CustomColor.primary)),
                 const Padding(padding: EdgeInsets.only(top: 10)),
                 FloatingActionButton(
                   heroTag: "zoomIn",
@@ -967,8 +978,8 @@ class _MapPageState extends State<MapPage> {
                   },
                   materialTapTargetSize: MaterialTapTargetSize.padded,
                   backgroundColor: Colors.white,
-                  foregroundColor: CustomColor.primaryColor,
-                  child: const m.Icon(Icons.add, size: 30.0),
+                  foregroundColor: CustomColor.primary,
+                  child: const m.Icon(Icons.add, size: 30.0, color: CustomColor.primary),
                 ),
                 const Padding(padding: EdgeInsets.only(top: 15)),
                 FloatingActionButton(
@@ -978,84 +989,18 @@ class _MapPageState extends State<MapPage> {
                     mapController!.animateCamera(CameraUpdate.zoomOut());
                   },
                   backgroundColor: Colors.white,
-                  foregroundColor: CustomColor.primaryColor,
-                  child: const m.Icon(Icons.remove, size: 30.0),
+                  foregroundColor: CustomColor.primary,
+                  child: const m.Icon(Icons.remove, size: 30.0, color: CustomColor.primary),
                 ),
-                // const Padding(padding: EdgeInsets.only(top: 10)),
-                // Visibility(
-                //   visible: streetView,
-                //   child: FloatingActionButton(
-                //       heroTag: "commands",
-                //       mini: true,
-                //       onPressed: (){
-                //         showSavedCommandDialog(context);
-                //       },
-                //       backgroundColor: CustomColor.secondaryColor,
-                //       materialTapTargetSize: MaterialTapTargetSize.padded,
-                //       foregroundColor: CustomColor.primaryColor,
-                //       child: const m.Icon(Icons.send_to_mobile, size: 30.0)),
-                // ),
-                // Visibility(
-                //     visible: streetView,
-                //     child:FloatingActionButton(
-                //       heroTag: "whatsapp",
-                //       mini: true,
-                //       backgroundColor: CustomColor.secondaryColor,
-                //       materialTapTargetSize: MaterialTapTargetSize.padded,
-                //       foregroundColor: CustomColor.primaryColor,
-                //       child: const FaIcon(FontAwesomeIcons.whatsapp, size: 30.0),
-                //       onPressed: () async{
-                //         String origin = "${device!.lat},${device!.lng}"; // lat,long like 123.34,68.56
-                //
-                //         String query = Uri.encodeComponent(origin);
-                //         await FlutterShare.share(
-                //             title: 'Device Info',
-                //             text: 'Object: ${device!.name} \n Imei: ${device!.deviceData!.traccar!.uniqueId}',
-                //             linkUrl: "https://www.google.com/maps/search/?api=1&query=$query",
-                //             chooserTitle: ''
-                //         );
-                //       },
-                //     )),
-                // Visibility(
-                //     visible: streetView,
-                //     child:FloatingActionButton(
-                //       heroTag: "streetView",
-                //       mini: true,
-                //       backgroundColor: CustomColor.secondaryColor,
-                //       materialTapTargetSize: MaterialTapTargetSize.padded,
-                //       foregroundColor: CustomColor.primaryColor,
-                //       child: const FaIcon(FontAwesomeIcons.streetView, size: 30.0),
-                //       onPressed: () async{
-                //         launchUrl(Uri.parse("https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${device!.lat},${device!.lng}&heading=0&pitch=0&fov=80"));
-                //       },
-                //     )),
               ],
             ),
           ),
         ),
-        // Stack(
-        //   children: [
-        //     Positioned(
-        //       left: 5,
-        //       top: 10,
-        //       child: FloatingActionButton(
-        //         heroTag: "openDrawer",
-        //         mini: true,
-        //         onPressed: () {
-        //           _drawerKey.currentState!.openDrawer();
-        //           setState(() {});
-        //         },
-        //         materialTapTargetSize: MaterialTapTargetSize.padded,
-        //         backgroundColor: CustomColor.secondaryColor,
-        //         foregroundColor: CustomColor.primaryColor,
-        //         child: const m.Icon(Icons.menu, size: 25.0),
-        //       ),
-        //     ),
-        //   ],
-        // )
       ],
     );
   }
+
+
 
   Future<void> _showProgress(bool status) async {
     if (status) {

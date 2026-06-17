@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/config.dart';
@@ -13,10 +14,14 @@ import 'package:gpspro/storage/user_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/payment_service.dart';
+import '../services/model/billing_vehicle.dart';
 import 'data_controller/data_controller.dart';
+import 'quick_links/driving_instructor_screen.dart';
+import 'quick_links/traffic_signs_screen.dart';
+import 'quick_links/car_knowledge_screen.dart';
 
 // Status enum for consistency
-enum VehicleStatus { running, idle, stop, offline }
+enum VehicleStatus { running, idle, stop, offline, noData, expired }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -40,13 +45,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final RxInt _idleCount = 0.obs;
   final RxInt _stopCount = 0.obs;
   final RxInt _offlineCount = 0.obs;
+  final RxInt _noDataCount = 0.obs;
+  final RxInt _expiredCount = 0.obs;
 
   // Simple color palette
-  static const Color primaryColor = Color(0xFF1B851C);
+  static const Color primaryColor = Color(0xFF8B1A1A);
   static const Color successColor = Color(0xFF22C55E);
   static const Color warningColor = Color(0xFFF59E0B);
   static const Color dangerColor = Color(0xFFEF4444);
   static const Color neutralColor = Color(0xFF64748B);
+
+  Map<String, BillingVehicle> _billingMap = {};
+  bool _isLoadingBilling = false;
+
+  Future<void> _loadBillingInfo() async {
+    if (!mounted || _isLoadingBilling) return;
+    _isLoadingBilling = true;
+
+    try {
+      final billingList = await PaymentService.getBillingVehicles();
+      if (billingList != null && mounted) {
+        setState(() {
+          _billingMap = {for (var v in billingList) v.imei: v};
+        });
+        debugPrint('Home Screen loaded billing map: ${_billingMap.length} items');
+        _calculateStatusCounts();
+      }
+    } catch (e) {
+      debugPrint('Home Screen error loading billing info: $e');
+    } finally {
+      if (mounted) {
+        _isLoadingBilling = false;
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -57,6 +89,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _loadBillingInfo();
         _calculateStatusCounts();
         _startStatusRefresh();
       }
@@ -67,6 +100,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _statusRefreshTimer?.cancel();
     _statusRefreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (mounted && _isVisible) {
+        _loadBillingInfo();
         _calculateStatusCounts();
       }
     });
@@ -80,6 +114,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     int idle = 0;
     int stop = 0;
     int offline = 0;
+    int noData = 0;
+    int expired = 0;
 
     for (final device in vehicles) {
       final status = _getVehicleStatus(device);
@@ -96,6 +132,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         case VehicleStatus.offline:
           offline++;
           break;
+        case VehicleStatus.noData:
+          noData++;
+          break;
+        case VehicleStatus.expired:
+          expired++;
+          break;
       }
     }
 
@@ -103,6 +145,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _idleCount.value = idle;
     _stopCount.value = stop;
     _offlineCount.value = offline;
+    _noDataCount.value = noData;
+    _expiredCount.value = expired;
   }
 
   @override
@@ -220,8 +264,60 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // ==================== STATUS DETECTION METHODS ====================
   // SAME LOGIC AS DevicePage for consistency
 
+  bool _isDeviceExpired(DeviceItem device) {
+    // 1. Check from Billing Server Map first (same as devices.dart)
+    final imei = device.imei ?? device.deviceData?.imei;
+    if (imei != null) {
+      final billingInfo = _billingMap[imei];
+      if (billingInfo != null && billingInfo.expirationDate != null && billingInfo.expirationDate!.isNotEmpty) {
+        try {
+          final d = DateTime.parse(billingInfo.expirationDate!);
+          if (d.isBefore(DateTime.now())) {
+            return true;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 2. Check general device expiration date
+    final expStr = device.deviceData?.expirationDate;
+    if (expStr != null && expStr.toString().isNotEmpty) {
+      try {
+        final d = DateTime.parse(expStr.toString());
+        if (d.isBefore(DateTime.now())) {
+          return true;
+        }
+      } catch (_) {}
+    }
+
+    // 3. Check SIM expiration date
+    final simExpStr = device.simExpirationDate;
+    if (simExpStr != null && simExpStr.toString().isNotEmpty) {
+      try {
+        final d = DateTime.parse(simExpStr.toString());
+        if (d.isBefore(DateTime.now())) {
+          return true;
+        }
+      } catch (_) {}
+    }
+
+    return false;
+  }
+
   /// MASTER STATUS DETERMINATION - Same as DevicePage
   VehicleStatus _getVehicleStatus(DeviceItem device) {
+    // STEP 0: Check if device is expired
+    if (_isDeviceExpired(device)) {
+      return VehicleStatus.expired;
+    }
+
+    // STEP 0.5: Check if device has no data
+    if (device.lat == null || device.lng == null ||
+        double.tryParse(device.lat.toString()) == 0.0 ||
+        double.tryParse(device.lng.toString()) == 0.0) {
+      return VehicleStatus.noData;
+    }
+
     // STEP 1: Check if device is online first
     final isOnline = _isDeviceOnline(device);
 
@@ -377,6 +473,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return neutralColor;
       case VehicleStatus.offline:
         return dangerColor;
+      case VehicleStatus.noData:
+        return Colors.grey[500]!;
+      case VehicleStatus.expired:
+        return Colors.black;
     }
   }
 
@@ -391,6 +491,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return 'Parking';
       case VehicleStatus.offline:
         return 'Offline';
+      case VehicleStatus.noData:
+        return 'No Data';
+      case VehicleStatus.expired:
+        return 'Expired';
     }
   }
 
@@ -405,6 +509,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return Icons.local_parking;
       case VehicleStatus.offline:
         return Icons.signal_wifi_off;
+      case VehicleStatus.noData:
+        return Icons.error_outline;
+      case VehicleStatus.expired:
+        return Icons.timer_off_outlined;
     }
   }
 
@@ -757,6 +865,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       const SizedBox(height: 16),
                     RepaintBoundary(child: _buildStatsRow()),
                     const SizedBox(height: 16),
+                    RepaintBoundary(child: _buildQuickLinksCard()),
+                    const SizedBox(height: 16),
                     RepaintBoundary(child: _buildVehicleSelector()),
                     const SizedBox(height: 16),
                     RepaintBoundary(child: _buildMileageChart()),
@@ -926,6 +1036,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       snap: true,
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
+      systemOverlayStyle: const SystemUiOverlayStyle(
+        statusBarColor: Color(0xFF8B1A1A),
+        statusBarBrightness: Brightness.dark,
+        statusBarIconBrightness: Brightness.light,
+      ),
       elevation: 0,
       toolbarHeight: 48,
       automaticallyImplyLeading: false,
@@ -1039,6 +1154,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final idle = _idleCount.value;
       final parking = _stopCount.value;
       final offline = _offlineCount.value;
+      final noData = _noDataCount.value;
+      final expired = _expiredCount.value;
 
       return Container(
         padding: const EdgeInsets.all(16),
@@ -1089,8 +1206,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               children: [
                 // Pie Chart
                 SizedBox(
-                  width: 120,
-                  height: 120,
+                  width: 180,
+                  height: 180,
                   child: allCount == 0
                       ? _buildEmptyPieChart()
                       : Stack(
@@ -1098,14 +1215,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     children: [
                       PieChart(
                         PieChartData(
-                          sectionsSpace: 2,
-                          centerSpaceRadius: 40,
+                          sectionsSpace: 2.0,
+                          centerSpaceRadius: 44,
                           startDegreeOffset: -90,
                           sections: _buildPieSections(
                             running: running,
                             idle: idle,
                             parking: parking,
                             offline: offline,
+                            noData: noData,
+                            expired: expired,
                           ),
                         ),
                       ),
@@ -1114,17 +1233,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         children: [
                           Text(
                             allCount.toString(),
-                            style: const TextStyle(
-                              fontSize: 24,
+                            style: TextStyle(
+                              fontSize: 26,
                               fontWeight: FontWeight.bold,
-                              color: primaryColor,
+                              color: Colors.black,
                             ),
                           ),
                           Text(
-                            'Vehicles',
+                            'Total',
                             style: TextStyle(
                               fontSize: 10,
-                              color: Colors.grey[500],
+                              color: Colors.grey[600],
                             ),
                           ),
                         ],
@@ -1132,7 +1251,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(width: 58),
                 // Legend
                 Expanded(
                   child: Column(
@@ -1165,6 +1284,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         count: offline,
                         total: allCount,
                       ),
+                      const SizedBox(height: 10),
+                      _buildLegendItem(
+                        color: Colors.grey[500]!,
+                        label: 'No Data',
+                        count: noData,
+                        total: allCount,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildLegendItem(
+                        color: Colors.black,
+                        label: 'Expired',
+                        count: expired,
+                        total: allCount,
+                      ),
                     ],
                   ),
                 ),
@@ -1181,8 +1314,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     required int idle,
     required int parking,
     required int offline,
+    required int noData,
+    required int expired,
   }) {
-    final total = running + idle + parking + offline;
+    final total = running + idle + parking + offline + noData + expired;
     if (total == 0) return [];
 
     final sections = <PieChartSectionData>[];
@@ -1192,14 +1327,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         PieChartSectionData(
           color: successColor,
           value: running.toDouble(),
-          title: running > 0 ? '$running' : '',
-          radius: 20,
-          titleStyle: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          titlePositionPercentageOffset: 0.55,
+          title: '',
+          radius: 42,
         ),
       );
     }
@@ -1209,14 +1338,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         PieChartSectionData(
           color: warningColor,
           value: idle.toDouble(),
-          title: idle > 0 ? '$idle' : '',
-          radius: 20,
-          titleStyle: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          titlePositionPercentageOffset: 0.55,
+          title: '',
+          radius: 42,
         ),
       );
     }
@@ -1226,14 +1349,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         PieChartSectionData(
           color: neutralColor,
           value: parking.toDouble(),
-          title: parking > 0 ? '$parking' : '',
-          radius: 20,
-          titleStyle: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          titlePositionPercentageOffset: 0.55,
+          title: '',
+          radius: 42,
         ),
       );
     }
@@ -1243,14 +1360,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         PieChartSectionData(
           color: dangerColor,
           value: offline.toDouble(),
-          title: offline > 0 ? '$offline' : '',
-          radius: 20,
-          titleStyle: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          titlePositionPercentageOffset: 0.55,
+          title: '',
+          radius: 42,
+        ),
+      );
+    }
+
+    if (noData > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: Colors.grey[500]!,
+          value: noData.toDouble(),
+          title: '',
+          radius: 42,
+        ),
+      );
+    }
+
+    if (expired > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: Colors.black,
+          value: expired.toDouble(),
+          title: '',
+          radius: 42,
         ),
       );
     }
@@ -1265,13 +1398,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         PieChart(
           PieChartData(
             sectionsSpace: 0,
-            centerSpaceRadius: 40,
+            centerSpaceRadius: 44,
             sections: [
               PieChartSectionData(
                 color: Colors.grey[200],
                 value: 1,
                 title: '',
-                radius: 20,
+                radius: 42,
               ),
             ],
           ),
@@ -1282,13 +1415,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             Text(
               '0',
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 26,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey[400],
               ),
             ),
             Text(
-              'Vehicles',
+              'Total',
               style: TextStyle(
                 fontSize: 10,
                 color: Colors.grey[400],
@@ -1306,51 +1439,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     required int count,
     required int total,
   }) {
-    final percentage =
-    total > 0 ? (count / total * 100).toStringAsFixed(0) : '0';
-
     return Row(
       children: [
         Container(
-          width: 12,
-          height: 12,
+          width: 10,
+          height: 10,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: BorderRadius.circular(2),
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[700],
-            ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
           ),
         ),
+        const Spacer(),
         Text(
           '$count',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            '$percentage%',
-            style: TextStyle(
-              fontSize: 10,
-              color: color,
-              fontWeight: FontWeight.w500,
-            ),
+            color: Colors.black,
           ),
         ),
       ],
@@ -2352,6 +2466,281 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildQuickLinksCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.grid_view, color: primaryColor, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Quick Links',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Divider(color: Colors.grey[200], height: 1),
+          const SizedBox(height: 14),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 3,
+            childAspectRatio: 1.8,
+            crossAxisSpacing: 6,
+            mainAxisSpacing: 6,
+            children: [
+              _buildQuickLinkItem(
+                imagePath: 'assets/images/driving_instructor.png',
+                label: 'Driving\nInstructor',
+                onTap: () => Get.to(() => const DrivingInstructorScreen()),
+              ),
+              _buildQuickLinkItem(
+                imagePath: 'assets/images/get_license.png',
+                label: 'Get\nLicense',
+                onTap: () => _launchURL('https://bsp.brta.gov.bd'),
+              ),
+              _buildQuickLinkItem(
+                imagePath: 'assets/images/traffic_signs.png',
+                label: 'Traffic\nSigns',
+                onTap: () => Get.to(() => const TrafficSignsScreen()),
+              ),
+              _buildQuickLinkItem(
+                imagePath: 'assets/images/brta_instruction.png',
+                label: 'BRTA\nInstruction',
+                onTap: () => _launchURL('https://brta.gov.bd'),
+              ),
+              _buildQuickLinkItem(
+                imagePath: 'assets/images/car_knowledge.png',
+                label: 'Car\nKnowledge',
+                onTap: () => Get.to(() => const CarKnowledgeScreen()),
+              ),
+              _buildQuickLinkItem(
+                imagePath: 'assets/images/blogs.png',
+                label: 'Blogs',
+                onTap: () => _launchURL('https://orbitgps.com.bd'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickLinkItem({
+    required String imagePath,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.grey[200]!, width: 0.5),
+        ),
+        child: Row(
+          children: [
+            Image.asset(
+              imagePath,
+              width: 26,
+              height: 26,
+              cacheWidth: 52,
+              errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.link, color: primaryColor, size: 18),
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10.0,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                  height: 1.1,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchURL(String urlString) async {
+    final uri = Uri.parse(urlString);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        Get.snackbar('Error', 'Could not open link: $urlString',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: dangerColor.withOpacity(0.8),
+            colorText: Colors.white);
+      }
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+    }
+  }
+
+  void _showDrivingInstructorDialog() {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            Image.asset('assets/images/driving_instructor.png', width: 28, height: 28, errorBuilder: (_, __, ___) => const SizedBox()),
+            const SizedBox(width: 8),
+            const Text('Driving Instructors', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Top Registered Schools & Instructors:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              SizedBox(height: 8),
+              Text('1. Orbit Driving Training School\n   Phone: 01901388950\n'),
+              Text('2. BRAC Driving School\n   Dhaka Office\n'),
+              Text('3. BRTA Safety Training Center\n   Mirpur, Dhaka\n'),
+              Divider(),
+              Text(
+                'Tip: Always learn from BRTA-licensed instructors for safe road habits.',
+                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Close', style: TextStyle(color: primaryColor)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTrafficSignsDialog() {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            Image.asset('assets/images/traffic_signs.png', width: 28, height: 28, errorBuilder: (_, __, ___) => const SizedBox()),
+            const SizedBox(width: 8),
+            const Text('Traffic Signs Guide', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Key Traffic Guidelines in Bangladesh:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              SizedBox(height: 8),
+              Text('• Red Light: Stop immediately.\n'
+                  '• Yellow Light: Slow down and prepare to stop.\n'
+                  '• Green Light: Go safely.\n'
+                  '• Speed Limit: Observe speed limit signs in urban zones (typically 30-50 km/h).\n'
+                  '• Overtaking: Do not overtake on bridges, curves, or narrow roads.'),
+              Divider(),
+              Text(
+                'Tip: Orbit GPS tracking sends dynamic notifications when you exceed speed limits.',
+                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Close', style: TextStyle(color: primaryColor)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCarKnowledgeDialog() {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            Image.asset('assets/images/car_knowledge.png', width: 28, height: 28, errorBuilder: (_, __, ___) => const SizedBox()),
+            const SizedBox(width: 8),
+            const Text('Car Maintenance Tips', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Essential Vehicle Care Checkpoints:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              SizedBox(height: 8),
+              Text('1. Engine Oil: Check the level weekly and change every 5,000 km.\n'
+                  '2. Coolant Level: Ensure the radiator reservoir is filled.\n'
+                  '3. Tire Pressure: Keep tires inflated to the recommended PSI (usually 30-32).\n'
+                  '4. Brake Check: Inspect pads regularly for wear.\n'
+                  '5. Battery Status: Keep terminal connectors clean and tight.'),
+              Divider(),
+              Text(
+                'Tip: Configure geo-fence alerts to secure your car overnight.',
+                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Close', style: TextStyle(color: primaryColor)),
+          ),
+        ],
       ),
     );
   }

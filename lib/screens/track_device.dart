@@ -20,6 +20,7 @@ import 'package:gpspro/util/util.dart';
 import 'package:gpspro/widgets/scale_button.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 import 'common_method.dart';
 
@@ -200,6 +201,12 @@ class TrackDevicePage extends StatefulWidget {
 
 class _TrackDeviceState extends State<TrackDevicePage>
     with TickerProviderStateMixin {
+  bool _isLoading = false;
+  String? _lockCommandType;
+  String? _lockCommandId;
+  String? _unlockCommandType;
+  String? _unlockCommandId;
+
   // MAP
   GoogleMapController? _mapController;
   bool _isMapCreated = false;
@@ -248,7 +255,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   static const _successColor = Color(0xFF22C55E);
   static const _warningColor = Color(0xFFF59E0B);
   static const _dangerColor = Color(0xFFEF4444);
-  static const _primaryColor = Color(0xFF1B851C);
+  static const _primaryColor = Color(0xFF8B1A1A);
   static const _neutralColor = Color(0xFF64748B);
 
   @override
@@ -273,6 +280,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     _loadMapStyle();
     _initializeAll();
+    _loadLockUnlockCommands();
   }
 
   Future<void> _initializeAll() async {
@@ -1010,37 +1018,31 @@ class _TrackDeviceState extends State<TrackDevicePage>
           const SizedBox(height: 6),
           _MapButton(
             icon: Icons.play_circle_fill,
-            iconColor: Colors.orange,
             onTap: _openPlayback,
           ),
           const SizedBox(height: 6),
           _MapButton(
             icon: Icons.lock,
-            iconColor: _dangerColor,
             onTap: _openLock,
           ),
           const SizedBox(height: 6),
           _MapButton(
             icon: Icons.phone,
-            iconColor: _successColor,
             onTap: _callDevice,
           ),
           const SizedBox(height: 6),
           _MapButton(
             icon: Icons.navigation_rounded,
-            iconColor: Colors.purple,
             onTap: _navigate,
           ),
           const SizedBox(height: 6),
           _MapButton(
             icon: Icons.share_rounded,
-            iconColor: Colors.teal,
             onTap: _shareLocation,
           ),
           const SizedBox(height: 6),
           _MapButton(
             icon: Icons.description,
-            iconColor: Colors.indigo,
             onTap: _openReport,
           ),
         ],
@@ -1295,6 +1297,249 @@ class _TrackDeviceState extends State<TrackDevicePage>
     super.dispose();
   }
 
+  void _loadLockUnlockCommands() {
+    if (widget.id == null) return;
+    APIService.getSavedCommands(widget.id.toString()).then((value) {
+      if (value != null && mounted && !_isDisposed) {
+        try {
+          final List<dynamic> list = json.decode(value.body);
+          for (var element in list) {
+            if (element is Map) {
+              final title = (element["title"] ?? "").toString().toLowerCase();
+              final type = (element["type"] ?? "").toString();
+              final id = (element["id"] ?? "").toString();
+              if (title.contains("unlock") || title.contains("resume") || title.contains("start")) {
+                _unlockCommandType = type;
+                _unlockCommandId = id;
+              } else if (title.contains("lock") || title.contains("stop")) {
+                _lockCommandType = type;
+                _lockCommandId = id;
+              }
+            }
+          }
+          debugPrint("TrackDevice: Mapped Lock command: $_lockCommandType (ID: $_lockCommandId)");
+          debugPrint("TrackDevice: Mapped Unlock command: $_unlockCommandType (ID: $_unlockCommandId)");
+        } catch (e) {
+          debugPrint("TrackDevice: Error loading saved commands: $e");
+        }
+      }
+    });
+  }
+
+  void _sendEngineCommand(bool isUnlockAction) async {
+    final devId = device?.id ?? widget.id;
+    if (devId == null) {
+      Fluttertoast.showToast(msg: "Device ID not found");
+      return;
+    }
+
+    final commandType = isUnlockAction 
+        ? (_unlockCommandType ?? 'engineResume') 
+        : (_lockCommandType ?? 'engineStop');
+    final commandId = isUnlockAction ? _unlockCommandId : _lockCommandId;
+
+    setState(() => _isLoading = true);
+
+    try {
+      Map<String, String> requestBody = <String, String>{
+        'id': commandId ?? "",
+        'device_id': devId.toString(),
+        'type': commandType
+      };
+
+      final res = await APIService.sendCommands(requestBody);
+
+      if (res.statusCode == 200) {
+        Map<String, dynamic>? responseJson;
+        try {
+          responseJson = json.decode(res.body);
+        } catch (_) {}
+
+        if (responseJson != null && responseJson.containsKey('status') && responseJson['status'] == 0) {
+          Fluttertoast.showToast(
+            msg: responseJson['message'] ?? 'Failed to send command',
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: const Color(0xFFEF4444),
+            textColor: Colors.white,
+          );
+          return;
+        }
+
+        Fluttertoast.showToast(
+          msg: isUnlockAction
+              ? 'Vehicle unlocked successfully'
+              : 'Vehicle locked successfully',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFF22C55E),
+          textColor: Colors.white,
+        );
+      } else {
+        Fluttertoast.showToast(
+          msg: 'Failed to send command',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFFEF4444),
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Connection error',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: const Color(0xFFEF4444),
+        textColor: Colors.white,
+      );
+    } finally {
+      if (mounted && !_isDisposed) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Widget _buildLoadingOverlay() {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.4),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 20,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(_primaryColor),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Sending command...',
+                style: TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLockUnlockSection() {
+    if (device == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: Colors.white,
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () {
+                _sendEngineCommand(false); // Lock (Engine Stop)
+              },
+              borderRadius: BorderRadius.circular(30),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2), // soft red
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.lock,
+                        color: Color(0xFFDC2626), // red
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Engine Lock',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: InkWell(
+              onTap: () {
+                _sendEngineCommand(true); // Unlock (Engine Resume)
+              },
+              borderRadius: BorderRadius.circular(30),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1FAE5), // soft green
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.lock_open,
+                        color: Color(0xFF16A34A), // green
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Engine Unlock',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFF16A34A),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1329,6 +1574,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
             ),
           ),
         ),
+
+        // LOADING OVERLAY
+        if (_isLoading) _buildLoadingOverlay(),
       ],
     );
   }
@@ -1338,7 +1586,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   // ==================== ORIGINAL BOTTOM SHEET DESIGN ====================
   Widget _buildBottomSheet() {
     return DraggableScrollableSheet(
-      initialChildSize: 0.31,
+      initialChildSize: 0.72,
       minChildSize: 0.08,
       maxChildSize: 0.80,
       builder: (context, scrollController) {
@@ -1363,6 +1611,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
               _buildSensorsSection(),
               const Divider(height: 1),
               _buildInfoSection(),
+              const Divider(height: 1),
+              _buildLockUnlockSection(),
               const Divider(height: 1),
               _buildRouteCard(),
               const Divider(height: 1),
@@ -1899,8 +2149,8 @@ class _MapButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final defaultIconColor = selected ? Colors.white : (iconColor ?? CustomColor.primaryColor);
-    final defaultBgColor = selected ? CustomColor.primaryColor : (backgroundColor ?? Colors.white);
+    final defaultIconColor = selected ? Colors.white : (iconColor ?? CustomColor.primary);
+    final defaultBgColor = selected ? CustomColor.primary : (backgroundColor ?? Colors.white);
 
     return Material(
       color: defaultBgColor,
@@ -2230,7 +2480,7 @@ class _QuickStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(icon, size: 18, color: CustomColor.primaryColor),
+        Icon(icon, size: 18, color: CustomColor.primary),
         const SizedBox(height: 4),
         Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[500])),

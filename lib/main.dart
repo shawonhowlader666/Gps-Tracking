@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
@@ -15,6 +16,71 @@ import 'package:overlay_support/overlay_support.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'translation/translation_service.dart';
+
+/// Ultra-liquid scroll: iOS-quality spring physics on all platforms
+class _PremiumScrollBehavior extends ScrollBehavior {
+  const _PremiumScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const _LiquidScrollPhysics();
+  }
+
+  @override
+  Widget buildOverscrollIndicator(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    return child; // No glow — clean premium look
+  }
+}
+
+/// Custom scroll physics with tight spring — feels like water
+class _LiquidScrollPhysics extends BouncingScrollPhysics {
+  const _LiquidScrollPhysics({super.parent});
+
+  @override
+  _LiquidScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return _LiquidScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  SpringDescription get spring => const SpringDescription(
+        mass: 0.04,       // lighter = snappier response
+        stiffness: 100,   // higher = tighter spring
+        damping: 0.8,     // <1 = slight elastic overshoot
+      );
+}
+
+/// Smooth page transition: fade + micro-slide, 280ms easeOutExpo
+class _SmoothPageTransitionBuilder extends PageTransitionsBuilder {
+  const _SmoothPageTransitionBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    const curve = Curves.easeOutExpo;
+    final curvedAnimation = CurvedAnimation(parent: animation, curve: curve);
+    final fadeCurved = CurvedAnimation(
+      parent: animation,
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+    );
+
+    return FadeTransition(
+      opacity: fadeCurved,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0.0, 0.025), // 2.5% upward — barely perceptible
+          end: Offset.zero,
+        ).animate(curvedAnimation),
+        child: child,
+      ),
+    );
+  }
+}
 
 // Global notification plugin instance (for foreground use only)
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -418,9 +484,9 @@ class _MyAppPageState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarBrightness: Brightness.light,
-      statusBarIconBrightness: Brightness.dark,
+      statusBarColor: Color(0xFF8B1A1A),
+      statusBarBrightness: Brightness.dark,
+      statusBarIconBrightness: Brightness.light,
     ));
   }
 
@@ -445,6 +511,7 @@ class _MyAppPageState extends State<MyApp> with WidgetsBindingObserver {
             translations: TranslationService(),
             debugShowCheckedModeBanner: false,
             navigatorKey: navigatorKey,
+            scrollBehavior: const _PremiumScrollBehavior(),
             theme: ThemeData(
               useMaterial3: true,
               primaryColor: CustomColor.primary,
@@ -453,15 +520,44 @@ class _MyAppPageState extends State<MyApp> with WidgetsBindingObserver {
                 primary: CustomColor.primary,
               ),
               visualDensity: VisualDensity.adaptivePlatformDensity,
-              textTheme: GoogleFonts.rethinkSansTextTheme(),
+              splashFactory: InkSparkle.splashFactory,
+              fontFamily: GoogleFonts.plusJakartaSans().fontFamily,
+              textTheme: GoogleFonts.plusJakartaSansTextTheme(),
+              primaryTextTheme: GoogleFonts.plusJakartaSansTextTheme(),
               appBarTheme: const AppBarTheme(
+                elevation: 0,
+                scrolledUnderElevation: 0,
                 systemOverlayStyle: SystemUiOverlayStyle(
-                  statusBarColor: Colors.transparent,
-                  statusBarBrightness: Brightness.light,
-                  statusBarIconBrightness: Brightness.dark,
+                  statusBarColor: Color(0xFF8B1A1A),
+                  statusBarBrightness: Brightness.dark,
+                  statusBarIconBrightness: Brightness.light,
                 ),
               ),
+              pageTransitionsTheme: PageTransitionsTheme(
+                builders: {
+                  TargetPlatform.android: const _SmoothPageTransitionBuilder(),
+                  TargetPlatform.iOS: const _SmoothPageTransitionBuilder(),
+                },
+              ),
             ),
+            builder: (context, child) {
+              return Stack(
+                children: [
+                  child!,
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: MediaQuery.of(context).padding.top,
+                    child: IgnorePointer(
+                      child: Container(
+                        color: const Color(0xFF8B1A1A),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
             initialRoute: '/',
             routes: routes,
           ),

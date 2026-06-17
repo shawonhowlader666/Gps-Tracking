@@ -209,107 +209,107 @@ class ThemeTypography extends Typography {
 
   final FlutterFlowTheme theme;
 
-  String get displayLargeFamily => 'Outfit';
+  String get displayLargeFamily => 'Plus Jakarta Sans';
   TextStyle get displayLarge => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.normal,
         fontSize: 57.0,
       );
-  String get displayMediumFamily => 'Outfit';
+  String get displayMediumFamily => 'Plus Jakarta Sans';
   TextStyle get displayMedium => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.normal,
         fontSize: 45.0,
       );
-  String get displaySmallFamily => 'Outfit';
+  String get displaySmallFamily => 'Plus Jakarta Sans';
   TextStyle get displaySmall => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.bold,
         fontSize: 28.0,
       );
-  String get headlineLargeFamily => 'Outfit';
+  String get headlineLargeFamily => 'Plus Jakarta Sans';
   TextStyle get headlineLarge => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.normal,
         fontSize: 32.0,
       );
-  String get headlineMediumFamily => 'Outfit';
+  String get headlineMediumFamily => 'Plus Jakarta Sans';
   TextStyle get headlineMedium => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.w600,
         fontSize: 24.0,
       );
-  String get headlineSmallFamily => 'Outfit';
+  String get headlineSmallFamily => 'Plus Jakarta Sans';
   TextStyle get headlineSmall => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.w500,
         fontSize: 20.0,
       );
-  String get titleLargeFamily => 'Outfit';
+  String get titleLargeFamily => 'Plus Jakarta Sans';
   TextStyle get titleLarge => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.w500,
         fontSize: 22.0,
       );
-  String get titleMediumFamily => 'Outfit';
+  String get titleMediumFamily => 'Plus Jakarta Sans';
   TextStyle get titleMedium => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.w500,
         fontSize: 20.0,
       );
-  String get titleSmallFamily => 'Outfit';
+  String get titleSmallFamily => 'Plus Jakarta Sans';
   TextStyle get titleSmall => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.normal,
         fontSize: 16.0,
       );
-  String get labelLargeFamily => 'Outfit';
+  String get labelLargeFamily => 'Plus Jakarta Sans';
   TextStyle get labelLarge => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.w500,
         fontSize: 14.0,
       );
-  String get labelMediumFamily => 'Outfit';
+  String get labelMediumFamily => 'Plus Jakarta Sans';
   TextStyle get labelMedium => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.w500,
         fontSize: 12.0,
       );
-  String get labelSmallFamily => 'Outfit';
+  String get labelSmallFamily => 'Plus Jakarta Sans';
   TextStyle get labelSmall => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.w500,
         fontSize: 11.0,
       );
-  String get bodyLargeFamily => 'Outfit';
+  String get bodyLargeFamily => 'Plus Jakarta Sans';
   TextStyle get bodyLarge => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.normal,
         fontSize: 16.0,
       );
-  String get bodyMediumFamily => 'Outfit';
+  String get bodyMediumFamily => 'Plus Jakarta Sans';
   TextStyle get bodyMedium => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.primaryText,
         fontWeight: FontWeight.normal,
         fontSize: 14.0,
       );
-  String get bodySmallFamily => 'Outfit';
+  String get bodySmallFamily => 'Plus Jakarta Sans';
   TextStyle get bodySmall => GoogleFonts.getFont(
-        'Outfit',
+        'Plus Jakarta Sans',
         color: theme.secondaryText,
         fontWeight: FontWeight.normal,
         fontSize: 14.0,

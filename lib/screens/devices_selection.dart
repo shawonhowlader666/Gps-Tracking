@@ -334,7 +334,6 @@ class _DevicePageState extends State<DeviceSelection> {
                                 Text(
                                   device.name!,
                                   style: const TextStyle(
-                                      fontFamily: "Sans",
                                       color: Colors.black,
                                       fontWeight: FontWeight.w500,
                                       fontSize: 14),
@@ -361,7 +360,6 @@ class _DevicePageState extends State<DeviceSelection> {
                                             Text(
                                               device.time!,
                                               style: const TextStyle(
-                                                  fontFamily: "Sans",
                                                   color: Colors.grey,
                                                   fontWeight: FontWeight.w500,
                                                   fontSize: 11),
@@ -380,7 +378,6 @@ class _DevicePageState extends State<DeviceSelection> {
                                             Text(
                                               device.stopDuration!,
                                               style: const TextStyle(
-                                                  fontFamily: "Sans",
                                                   color: Colors.grey,
                                                   fontWeight: FontWeight.w500,
                                                   fontSize: 11),

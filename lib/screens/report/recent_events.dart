@@ -33,6 +33,11 @@ class _EventsPageState extends State<EventsPage> {
       backgroundColor: Colors.white,
       elevation: 0,
       centerTitle: false,
+      systemOverlayStyle: const SystemUiOverlayStyle(
+        statusBarColor: Color(0xFF8B1A1A),
+        statusBarBrightness: Brightness.dark,
+        statusBarIconBrightness: Brightness.light,
+      ),
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

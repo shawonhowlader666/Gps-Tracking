@@ -179,6 +179,7 @@ flutter:
     - images/zoom_in.png
     - images/zoom_out.png
     - assets/
+    - google_fonts/
 
   fonts:
     - family: OpenSans-Regular
@@ -187,3 +188,12 @@ flutter:
     - family: OpenSans-Semibold
       fonts:
         - asset: fonts/OpenSans-Semibold.ttf
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: google_fonts/PlusJakartaSans-Regular.ttf
+        - asset: google_fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: google_fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: google_fonts/PlusJakartaSans-Bold.ttf
+          weight: 700

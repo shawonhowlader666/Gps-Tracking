@@ -232,7 +232,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
                 const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
             color: CustomColor.cssBlack.withValues(alpha: 0.1),
             textStyle: FlutterFlowTheme.of(context).titleSmall.override(
-                  fontFamily: 'Outfit',
+                  fontFamily: 'Plus Jakarta Sans',
                   color: CustomColor.cssBlack,
                   fontWeight: FontWeight.w600,
                 ),

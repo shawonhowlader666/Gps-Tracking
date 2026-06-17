@@ -26,7 +26,6 @@ class ListViewTopItem extends StatelessWidget {
         child: Center(child: Text(text!, style: TextStyle(
             decoration: TextDecoration.none,
             color: isSelected! ? Colors.white : color,
-            fontFamily: 'Poppins',
             fontSize: 13,
             fontWeight: FontWeight.w500))),
       ),

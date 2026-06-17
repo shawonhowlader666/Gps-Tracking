@@ -7,6 +7,7 @@ import 'package:open_file/open_file.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
+import 'package:gpspro/theme/custom_color.dart';
 
 import '../services/pdf_generator.dart';
 
@@ -420,8 +421,14 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title: const Text('Payment & Invoices'),
-        backgroundColor: const Color(0xFF3E6FB8),
+        backgroundColor: CustomColor.primary,
         foregroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(16),
+          ),
+        ),
         actions: [
           if (_bills.isNotEmpty)
             IconButton(
@@ -503,7 +510,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3E6FB8),
+                backgroundColor: CustomColor.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
@@ -525,15 +532,15 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF3E6FB8), Color(0xFF5C8ACF)],
+          colors: [CustomColor.primary, CustomColor.primary.withValues(alpha: 0.7)],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF3E6FB8).withValues(alpha: 0.3),
+            color: CustomColor.primary.withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -589,9 +596,9 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               onPressed: (hasStats && hasDue) ? _initiatePayment : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF3E6FB8),
+                foregroundColor: CustomColor.primary,
                 disabledBackgroundColor: Colors.white.withValues(alpha: 0.5),
-                disabledForegroundColor: const Color(0xFF3E6FB8).withValues(alpha: 0.5),
+                disabledForegroundColor: CustomColor.primary.withValues(alpha: 0.5),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -750,7 +757,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.download, size: 20),
-                color: const Color(0xFF3E6FB8),
+                color: CustomColor.primary,
                 tooltip: 'Download PDF',
                 onPressed: () => _downloadBillPDF(bill),
                 padding: EdgeInsets.zero,

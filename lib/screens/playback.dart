@@ -1363,7 +1363,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         customBorder: const CircleBorder(),
         child: Padding(
           padding: const EdgeInsets.all(8),
-          child: Icon(icon, size: 18, color: Colors.grey[700]),
+          child: Icon(icon, size: 18, color: CustomColor.primary),
         ),
       ),
     );

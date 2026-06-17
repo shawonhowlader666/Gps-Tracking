@@ -36,12 +36,24 @@ class UserRepository {
     prefs!.setString(PREF_USER_NAME, name);
   }
 
+  static String? _sessionPassword; // in-memory only, not persisted
+
   static String? getPassword() {
-    return prefs!.getString(PREF_PASSWORD);
+    // First try persisted (rememberMe), then fall back to session memory
+    return prefs!.getString(PREF_PASSWORD) ?? _sessionPassword;
   }
 
   static void setPassword(String password) {
     prefs!.setString(PREF_PASSWORD, password);
+  }
+
+  static void setSessionPassword(String password) {
+    // Always store in memory for payment service (not persisted to disk)
+    _sessionPassword = password;
+  }
+
+  static void clearSessionPassword() {
+    _sessionPassword = null;
   }
 
   // NEW: Phone number
@@ -82,6 +94,7 @@ class UserRepository {
   }
 
   static void doLogout() {
+    _sessionPassword = null; // clear memory password on logout
     prefs!.clear();
   }
 

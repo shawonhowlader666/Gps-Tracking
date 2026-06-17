@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gpspro/screens/payment_list.dart';
 import 'package:gpspro/screens/customer_support.dart';
 import 'package:gpspro/widgets/scale_button.dart';
+import 'package:gpspro/theme/custom_color.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -123,7 +124,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF3E6FB8).withValues(alpha: 0.3),
+                color: CustomColor.primary.withValues(alpha: 0.3),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -136,14 +137,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                  Icon(
                     Icons.settings,
-                    color: const Color(0xFF3E6FB8),
+                    color: CustomColor.primary,
                     size: 24,
                   ),
                   const SizedBox(width: 60),
                   Text(
                     'Settings',
                     style: const TextStyle(
-                      color: Color(0xFF0F4FAF),
+                      color: CustomColor.primary,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                     ),
@@ -167,8 +168,9 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildSettingsCard([
               _buildSettingItem(
                 icon: Icons.notifications_outlined,
-                iconColor: const Color(0xFF6366F1),
-                iconBgColor: const Color(0xFFEEF2FF),
+                iconColor: CustomColor.primary,
+                iconBgColor: Colors.transparent,
+                iconSize: 24,
                 title: 'Alerts',
                 subtitle: 'Manage notifications',
                 onTap: () => Navigator.pushNamed(context, "/alertList"),
@@ -176,8 +178,8 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildDivider(),
               _buildSettingItem(
                 icon: Icons.fence_outlined,
-                iconColor: const Color(0xFF22C55E),
-                iconBgColor: const Color(0xFFDCFCE7),
+                iconColor: CustomColor.primary,
+                iconBgColor: Colors.transparent,
                 title: 'Geofence',
                 subtitle: 'Set location zones',
                 onTap: () => Navigator.pushNamed(context, "/geofenceList"),
@@ -185,8 +187,8 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildDivider(),
               _buildSettingItem(
                 icon: Icons.language_outlined,
-                iconColor: const Color(0xFF3B82F6),
-                iconBgColor: const Color(0xFFDBEAFE),
+                iconColor: CustomColor.primary,
+                iconBgColor: Colors.transparent,
                 title: 'Language',
                 subtitle: 'Select language',
                 onTap: () => _showLanguageDialog(context),
@@ -202,9 +204,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     title: 'Payment',
                     subtitle: 'View invoices',
                     icon: Icons.payment_rounded,
-                    iconColor: const Color(0xFFF59E0B),
-                    iconBgColor: const Color(0xFFFEF3C7),
-                    shadowColor: const Color(0xFFF59E0B),
+                    iconColor: CustomColor.primary,
+                    iconBgColor: Colors.transparent,
+                    shadowColor: CustomColor.primary,
                     onTap: () {
                       Navigator.push(
                         context,
@@ -221,9 +223,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     title: 'Support',
                     subtitle: '24/7 Helpline',
                     icon: Icons.headset_mic_rounded,
-                    iconColor: const Color(0xFF3F5EFB),
-                    iconBgColor: const Color(0xFFEEF2FF),
-                    shadowColor: const Color(0xFF3F5EFB),
+                    iconColor: CustomColor.primary,
+                    iconBgColor: Colors.transparent,
+                    shadowColor: CustomColor.primary,
                     onTap: () {
                       Navigator.push(
                         context,
@@ -242,8 +244,8 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildSettingsCard([
               _buildSettingItem(
                 icon: Icons.description_outlined,
-                iconColor: const Color(0xFF64748B),
-                iconBgColor: const Color(0xFFF1F5F9),
+                iconColor: CustomColor.primary,
+                iconBgColor: Colors.transparent,
                 title: 'Terms & Conditions',
                 subtitle: 'Read terms',
                 onTap: () => _showTermsAndConditions(),
@@ -251,8 +253,8 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildDivider(),
               _buildSettingItem(
                 icon: Icons.privacy_tip_outlined,
-                iconColor: const Color(0xFF64748B),
-                iconBgColor: const Color(0xFFF1F5F9),
+                iconColor: CustomColor.primary,
+                iconBgColor: Colors.transparent,
                 title: 'Privacy Policy',
                 subtitle: 'Read privacy',
                 onTap: () => _showPrivacyPolicy(),
@@ -308,7 +310,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: const Color(0xFF3E6FB8),
+                      color: CustomColor.primary,
                       width: 2,
                     ),
                   ),
@@ -328,7 +330,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3E6FB8),
+                      color: CustomColor.primary,
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 2),
                     ),
@@ -369,12 +371,12 @@ class _SettingsPageState extends State<SettingsPage> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF3E6FB8).withValues(alpha: 0.1),
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
               Icons.edit_outlined,
-              color: Color(0xFF3E6FB8),
+              color: CustomColor.primary,
               size: 18,
             ),
           ),
@@ -522,6 +524,7 @@ class _SettingsPageState extends State<SettingsPage> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    double iconSize = 20,
   }) {
     return Material(
       color: Colors.transparent,
@@ -538,7 +541,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   color: iconBgColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: iconColor, size: 20),
+                child: Icon(icon, color: iconColor, size: iconSize),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -609,7 +612,7 @@ class _SettingsPageState extends State<SettingsPage> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
+                color: Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(
@@ -737,11 +740,11 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF3E6FB8).withValues(alpha: 0.1)
+              ? CustomColor.primary.withValues(alpha: 0.1)
               : Colors.grey[100],
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF3E6FB8) : Colors.transparent,
+            color: isSelected ? CustomColor.primary : Colors.transparent,
             width: 2,
           ),
         ),
@@ -755,12 +758,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? const Color(0xFF3E6FB8) : Colors.grey[800],
+                  color: isSelected ? CustomColor.primary : Colors.grey[800],
                 ),
               ),
             ),
             if (isSelected)
-              const Icon(Icons.check_circle, color: Color(0xFF3E6FB8), size: 22),
+              const Icon(Icons.check_circle, color: CustomColor.primary, size: 22),
           ],
         ),
       ),
@@ -782,8 +785,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      const Color(0xFF3E6FB8),
-                      const Color(0xFF5C8ACF),
+                      CustomColor.primary,
+                      CustomColor.primary.withValues(alpha: 0.7),
                     ],
                   ),
                   borderRadius: const BorderRadius.only(
@@ -902,8 +905,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      const Color(0xFF3E6FB8),
-                      const Color(0xFF5C8ACF),
+                      CustomColor.primary,
+                      CustomColor.primary.withValues(alpha: 0.7),
                     ],
                   ),
                   borderRadius: const BorderRadius.only(
@@ -1065,7 +1068,7 @@ class _SettingsPageState extends State<SettingsPage> {
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF3E6FB8),
+              color: CustomColor.primary,
             ),
           ),
           const SizedBox(height: 8),

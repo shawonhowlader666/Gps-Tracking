@@ -18,7 +18,6 @@ class PaymentService {
   static Future<bool> login() async {
     // Prevent multiple simultaneous login attempts
     if (_isLoggingIn) {
-      // Wait for ongoing login to complete
       await Future.delayed(const Duration(milliseconds: 500));
       return _token != null;
     }
@@ -34,6 +33,8 @@ class PaymentService {
         return false;
       }
 
+      debugPrint("Payment Login: Trying with email=$email to $baseUrl/auth/login");
+
       final response = await http.post(
         Uri.parse("$baseUrl/auth/login"),
         headers: {"Content-Type": "application/json"},
@@ -44,10 +45,12 @@ class PaymentService {
         }),
       ).timeout(timeoutDuration);
 
+      debugPrint("Payment Login: Status=${response.statusCode} Body=${response.body.length > 300 ? response.body.substring(0, 300) : response.body}");
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         _token = data['token'];
-        debugPrint("Payment Login: Success");
+        debugPrint("Payment Login: Success, token=${_token?.substring(0, 20)}...");
         return true;
       } else {
         debugPrint("Payment Login Error: Status ${response.statusCode}");

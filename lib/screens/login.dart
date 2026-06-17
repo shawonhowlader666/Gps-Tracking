@@ -532,8 +532,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light.copyWith(
-      statusBarColor: Colors.transparent,
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Color(0xFF8B1A1A),
+      statusBarBrightness: Brightness.dark,
+      statusBarIconBrightness: Brightness.light,
     ));
 
     return Scaffold(
@@ -1004,6 +1006,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               UserRepository.setServerUrl(server['url']);
               UserRepository.setHash(user.userApiHash!);
               prefs?.setString('serverType', server['type'] ?? 'free');
+
+              // Always keep password in memory for payment service (session only)
+              UserRepository.setSessionPassword(_password);
 
               if (_rememberMe) {
                 UserRepository.setEmail(_email);

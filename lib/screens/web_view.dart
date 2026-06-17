@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:gpspro/theme/custom_color.dart';
 
 class WebViewScreen extends StatefulWidget {
   final String title;
@@ -97,7 +98,7 @@ Page resource error:
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
-        backgroundColor: const Color(0xFF3E6FB8),
+        backgroundColor: CustomColor.primary,
         foregroundColor: Colors.white,
       ),
       body: Stack(
