@@ -236,12 +236,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   // POLYLINE
   final List<LatLng> _polylinePoints = [];
-  static const int _maxPolylinePoints = 100;
+  static const int _maxPolylinePoints = 3000;
   LatLng? _lastPolylinePoint;
+
+  StreamSubscription? _onlyDevicesSubscription;
 
   // TIMERS
   Timer? _dataTimer;
-  Timer? _cameraTimer;
 
   // COLORS
   static const _successColor = Color(0xFF22C55E);
@@ -254,6 +255,21 @@ class _TrackDeviceState extends State<TrackDevicePage>
   void initState() {
     super.initState();
     device = widget.device;
+
+    final DataController controller = Get.put(DataController());
+    _onlyDevicesSubscription = controller.onlyDevices.listen((devices) {
+      if (mounted && !_isDisposed) {
+        for (var element in devices) {
+          if (element.id == widget.id) {
+            setState(() {
+              device = element;
+            });
+            updateMarker(element);
+            break;
+          }
+        }
+      }
+    });
 
     _loadMapStyle();
     _initializeAll();
@@ -285,9 +301,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     // Start data fetching
     _startDataTimer();
-
-    // Start smooth camera updates
-    _startCameraTimer();
   }
 
   LatLng _getInitialPosition() {
@@ -644,6 +657,17 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     // Update markers
     _updateMapMarkers();
+
+    // Center the map on the vehicle's updated position in real-time
+    if (_followVehicle && _isMapCreated && !_userInteracting) {
+      _isProgrammaticMove = true;
+      _mapController?.moveCamera(
+        CameraUpdate.newLatLng(position),
+      );
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _isProgrammaticMove = false;
+      });
+    }
   }
 
   void _updateMapMarkers() {
@@ -862,27 +886,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
     });
   }
 
-// Replace the _startCameraTimer method
-  void _startCameraTimer() {
-    _cameraTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
-      if (_followVehicle &&
-          _isMapCreated &&
-          _carAnimator != null &&
-          !_userInteracting &&
-          !_isProgrammaticMove) {
-
-        _isProgrammaticMove = true;
-
-        _mapController?.moveCamera(
-          CameraUpdate.newLatLng(_carAnimator!.currentPosition),
-        );
-
-        Future.delayed(const Duration(milliseconds: 50), () {
-          _isProgrammaticMove = false;
-        });
-      }
-    });
-  }
+  // Camera auto centering timer removed as it is now centered in real-time on tick updates
 
 // Replace the _buildMap method
   Widget _buildMap() {
@@ -1282,8 +1286,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
   @override
   void dispose() {
     _isDisposed = true;
+    _onlyDevicesSubscription?.cancel();
     _dataTimer?.cancel();
-    _cameraTimer?.cancel();
     _carAnimator?.dispose();
     _markersNotifier.dispose();
     _polylinesNotifier.dispose();
@@ -1295,18 +1299,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: GetX<DataController>(
-        init: DataController(),
-        builder: (controller) {
-          for (var element in controller.onlyDevices) {
-            if (element.id == widget.id) {
-              device = element;
-              updateMarker(element);
-            }
-          }
-          return _buildBody();
-        },
-      ),
+      body: _buildBody(),
     );
   }
 
