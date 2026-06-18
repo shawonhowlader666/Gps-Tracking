@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:gap/gap.dart';
 import 'package:get/get.dart';
@@ -205,15 +206,18 @@ class _DeviceInfoState extends State<DeviceInfo> {
             padding: const EdgeInsets.only(right: 15.0, left: 15.0, bottom: 15),
             child: Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(5),
                   color: Colors.white,
-                  boxShadow: const [
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                  boxShadow: [
                     BoxShadow(
-                        color: Colors.grey, spreadRadius: 1, blurRadius: 1.0),
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
                   ],
                 ),
-                child: Padding(
-                    padding: const EdgeInsets.all(1.0), child: sensorInfo()))),
+                child: sensorInfo())),
         Gap(10),
         Center(
             child: FFButtonWidget(
@@ -253,159 +257,151 @@ class _DeviceInfoState extends State<DeviceInfo> {
   Widget tripDistance() {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(5),
         color: Colors.white,
-        boxShadow: const [
-          BoxShadow(color: Colors.grey, spreadRadius: 1, blurRadius: 1.0),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(1.0),
-        child: Column(children: <Widget>[
-          Container(
-              padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Container(
+              padding: const EdgeInsets.only(bottom: 12),
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1.5),
+                ),
+              ),
               child: const Text(
                 "Today Summary",
-                textAlign: TextAlign.start,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              )),
-          Container(
-              child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Container(
-                  padding: const EdgeInsets.only(top: 3.0, left: 10.0),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                          padding: const EdgeInsets.only(left: 3.0),
-                          child: Text(('travelledDistance').tr)),
-                    ],
-                  )),
-              Container(
-                padding:
-                    const EdgeInsets.only(top: 10.0, left: 5.0, right: 10.0),
-                child: Text(totalDistance),
-              )
-            ],
-          )),
-          const SizedBox(height: 5.0),
-          Container(
-              child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Container(
-                  padding: const EdgeInsets.only(top: 3.0, left: 10.0),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                          padding: const EdgeInsets.only(left: 3.0),
-                          child: Text(('maxSpeed').tr)),
-                    ],
-                  )),
-              Container(
-                padding:
-                    const EdgeInsets.only(top: 10.0, left: 5.0, right: 10.0),
-                child: Text(maxSpeed),
-              )
-            ],
-          )),
-          const SizedBox(height: 5.0),
-          Container(
-              child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Container(
-                  padding: const EdgeInsets.only(top: 3.0, left: 10.0),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                          padding: const EdgeInsets.only(left: 3.0),
-                          child: Text(('fuel').tr)),
-                    ],
-                  )),
-              Container(
-                padding:
-                    const EdgeInsets.only(top: 10.0, left: 5.0, right: 10.0),
-                child: Text(fuel),
-              )
-            ],
-          )),
-          const SizedBox(height: 5.0),
-          Container(
-              child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Container(
-                  padding: const EdgeInsets.only(top: 3.0, left: 10.0),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                          padding: const EdgeInsets.only(left: 3.0),
-                          child: Text("time".tr))
-                    ],
-                  )),
-              Container(
-                width: MediaQuery.of(context).size.width * 0.6,
-                padding:
-                    const EdgeInsets.only(top: 10.0, left: 5.0, right: 10.0),
-                child: Text(
-                  args!.device.time!,
-                  textAlign: TextAlign.end,
-                  style: const TextStyle(overflow: TextOverflow.ellipsis),
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  color: Color(0xFF0F172A),
                 ),
-              )
-            ],
-          )),
-          const SizedBox(height: 5.0),
-          Container(
-              child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Container(
-                  padding: const EdgeInsets.only(top: 3.0, left: 10.0),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                          padding: const EdgeInsets.only(left: 3.0),
-                          child: Text(('stopDuration').tr))
-                    ],
-                  )),
-              Container(
-                padding:
-                    const EdgeInsets.only(top: 10.0, left: 5.0, right: 10.0),
-                child: Text(args!.device.stopDuration!),
-              )
-            ],
-          )),
-          Container(
-              child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Container(
-                  padding: const EdgeInsets.only(top: 3.0, left: 10.0),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                          padding: const EdgeInsets.only(left: 3.0),
-                          child: Text("driver".tr))
-                    ],
-                  )),
-              Container(
-                padding:
-                    const EdgeInsets.only(top: 10.0, left: 5.0, right: 10.0),
-                child: Text(args!.device.driver!),
-              )
-            ],
-          )),
-        ]),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildSummaryRow(
+              iconPath: 'assets/images/track_distance.svg',
+              label: ('travelledDistance').tr,
+              value: totalDistance,
+            ),
+            _buildSummaryDivider(),
+            _buildSummaryRow(
+              iconPath: 'assets/images/track_speed.svg',
+              label: ('maxSpeed').tr,
+              value: maxSpeed,
+            ),
+            _buildSummaryDivider(),
+            _buildSummaryRow(
+              iconPath: 'assets/images/track_fuel.svg',
+              label: ('fuel').tr,
+              value: fuel,
+            ),
+            _buildSummaryDivider(),
+            _buildSummaryRow(
+              iconPath: 'assets/images/track_time.svg',
+              label: "time".tr,
+              value: args!.device.time!,
+              isTime: true,
+            ),
+            _buildSummaryDivider(),
+            _buildSummaryRow(
+              iconPath: 'assets/images/track_stop.svg',
+              label: ('stopDuration').tr,
+              value: args!.device.stopDuration!,
+            ),
+            _buildSummaryDivider(),
+            _buildSummaryRow(
+              iconPath: 'assets/images/track_driver.svg',
+              label: "driver".tr,
+              value: args!.device.driver!,
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildSummaryRow({
+    required String iconPath,
+    required String label,
+    required String value,
+    bool isTime = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              SvgPicture.asset(
+                iconPath,
+                width: 24,
+                height: 24,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+          isTime
+              ? Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.48,
+                  ),
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+              : Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryDivider() {
+    return const Divider(
+      color: Color(0xFFE2E8F0),
+      height: 16,
+      thickness: 1.2,
     );
   }
 
   Widget bottomButton() {
     return Container(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
         width: MediaQuery.of(context).size.width * 100,
         child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,42 +415,56 @@ class _DeviceInfoState extends State<DeviceInfo> {
                 },
                 child: Column(children: [
                   Container(
-                    child: const m.Icon(
-                      Icons.play_circle_outline,
-                      color: Colors.white,
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: SvgPicture.asset(
+                      'assets/images/track_play.svg',
+                      width: 26,
+                      height: 26,
+                      colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
                     ),
                   ),
                   Text(
                     ("playback").tr,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
                   )
                 ]),
               ),
               SizedBox(
-                  height: 50,
+                  height: 40,
                   child:
-                      const VerticalDivider(thickness: 1, color: Colors.white)),
+                      const m.VerticalDivider(thickness: 1.2, color: Colors.white60)),
               GestureDetector(
                 onTap: () {
                   showCommandDialog(context, args!.device);
                 },
                 child: Column(children: [
                   Container(
-                    child: const m.Icon(
-                      Icons.lock,
-                      color: Colors.white,
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: SvgPicture.asset(
+                      'assets/images/track_lock.svg',
+                      width: 26,
+                      height: 26,
+                      colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
                     ),
                   ),
                   Text(
                     ("command").tr,
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
                   )
                 ]),
               ),
               SizedBox(
-                  height: 50,
+                  height: 40,
                   child:
-                      const VerticalDivider(thickness: 1, color: Colors.white)),
+                      const m.VerticalDivider(thickness: 1.2, color: Colors.white60)),
               GestureDetector(
                 onTap: () {
                   showReportDialog(context, ('report').tr);
@@ -462,14 +472,21 @@ class _DeviceInfoState extends State<DeviceInfo> {
                 child: Column(
                   children: [
                     Container(
-                      child: const m.Icon(
-                        Icons.analytics,
-                        color: Colors.white,
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: SvgPicture.asset(
+                        'assets/images/track_report.svg',
+                        width: 26,
+                        height: 26,
+                        colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
                       ),
                     ),
                     Text(
                       ('report').tr,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
                     )
                   ],
                 ),
@@ -615,47 +632,64 @@ class _DeviceInfoState extends State<DeviceInfo> {
   }
 
   Widget sensorInfo() {
-    double fontWidth = MediaQuery.of(context).size.aspectRatio;
-
     List<Widget> sensors = [];
-    double iconWidth = 30;
+    double iconWidth = 26;
 
     if (args!.device.sensors != []) {
       try {
         for (var sensor in args!.device.sensors!) {
           if (sensor['value'] != null) {
-            sensors.add(Card(
-                elevation: 1,
-                child: Container(
-                    padding: const EdgeInsets.all(5),
-                    child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: <Widget>[
-                          Image.asset(
-                            "${"assets/images/sensors/" + sensor['type']}.png",
-                            width: iconWidth,
-                            height: iconWidth,
+            sensors.add(Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+                ),
+                child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: <Widget>[
+                      Image.asset(
+                        "assets/images/sensors/${sensor['type']}.png",
+                        width: iconWidth,
+                        height: iconWidth,
+                        errorBuilder: (context, error, stackTrace) {
+                          return m.Icon(m.Icons.sensors, color: const Color(0xFF64748B), size: iconWidth);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            sensor["name"],
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF475569),
+                            ),
                           ),
-                          const Padding(padding: EdgeInsets.only(left: 2)),
-                          Column(children: [
-                            Text(sensor["name"],
-                                style: TextStyle(fontSize: fontWidth * 19)),
-                            const Padding(padding: EdgeInsets.only(top: 2)),
-                            Text(
-                              sensor['value'],
-                              style: TextStyle(fontSize: fontWidth * 19),
-                            )
-                          ])
-                        ]))));
+                          const SizedBox(height: 2),
+                          Text(
+                            sensor['value'],
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
+                            ),
+                          )
+                        ],
+                      )
+                    ])));
           }
-
-          if (sensor['type'] == "fuel_tank") {}
         }
       } catch (e) {}
 
       return Container(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -663,53 +697,19 @@ class _DeviceInfoState extends State<DeviceInfo> {
                   child: Text(
                 ('sensors').tr,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  color: Color(0xFF0F172A),
+                ),
               )),
+              const SizedBox(height: 12),
               SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: sensors,
                   )),
-              // const Padding(
-              //   padding: EdgeInsets.all(10),
-              // ),
-              // Center(
-              //   child: Column(
-              //     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              //     crossAxisAlignment: CrossAxisAlignment.center,
-              //     children: [
-              //       const Padding(
-              //         padding: EdgeInsets.all(5),
-              //       ),
-              //       Text(
-              //         AppLocalizations.of(context)!.translate("sharedMaintenance"),
-              //         textAlign: TextAlign.center,
-              //         style: TextStyle(fontWeight: FontWeight.bold),
-              //       ),
-              //       Row(
-              //         children: [
-              //           Image.asset("assets/images/sensors/main.png",
-              //             width: iconWidth,
-              //             height: iconWidth,),
-              //           Container(
-              //               width: 120,
-              //               child:Text(maintenance, style: TextStyle(fontSize:12,overflow: TextOverflow.ellipsis), maxLines: 3,))
-              //         ],
-              //       ),
-              //       Padding(padding: EdgeInsets.all(5)),
-              //       Row(
-              //         children: [
-              //           Image.asset("assets/images/sensors/tier.png",  width: iconWidth,
-              //             height: iconWidth,),
-              //           Container(
-              //               width: 120,
-              //               child:Text(tires, style: TextStyle(fontSize:12,overflow: TextOverflow.ellipsis), maxLines: 3,))
-              //         ],
-              //       ),
-              //     ],
-              //   ),
-              // )
             ],
           ));
     } else {

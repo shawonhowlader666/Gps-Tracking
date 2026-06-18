@@ -22,6 +22,8 @@ import 'package:gpspro/services/model/share_perm.dart';
 import 'package:gpspro/services/model/single_device.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/widgets/address.dart';
+import 'package:gpspro/widgets/svg_asset_colorizer.dart';
+import 'package:gpspro/util/util.dart';
 import 'package:gpspro/widgets/banner_ad_widget.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -69,13 +71,15 @@ class _DevicePageState extends State<DevicePage> {
   final RxInt _idleCount = 0.obs;
   final RxInt _stopCount = 0.obs;
   final RxInt _offlineCount = 0.obs;
+  final RxInt _expiredCount = 0.obs;
+  final RxInt _suspendedCount = 0.obs;
 
   // Colors
   static const Color _primaryBlue = CustomColor.primary; // Brand Red
-  static const Color _greenColor = Color(0xFF22C55E);
-  static const Color _yellowColor = Color(0xFFF59E0B);
-  static const Color _redColor = Color(0xFFEF4444);
-  static const Color _greyColor = Color(0xFF6B7280);
+  static const Color _greenColor = Color(0xFF00C853);
+  static const Color _yellowColor = Color(0xFFFF9100);
+  static const Color _redColor = Color(0xFFFF0000);
+  static const Color _greyColor = Color(0xFF475569);
 
   StreamSubscription? _onlyDevicesSubscription;
   StreamSubscription? _isLoadingSubscription;
@@ -317,34 +321,42 @@ class _DevicePageState extends State<DevicePage> {
 
     final allDevices = _getMergedDevices();
 
-    int running = 0;
-    int idle = 0;
-    int stop = 0;
-    int offline = 0;
+    int running = 0, idle = 0, stop = 0, offline = 0, expired = 0, suspended = 0;
 
     for (var device in allDevices) {
+      // Check expired
+      final imei = device.imei ?? device.deviceData?.imei;
+      final billing = imei != null ? _billingMap[imei] : null;
+      bool isExpired = false;
+      bool isSuspended = false;
+      if (billing != null) {
+        if (!billing.isActive) isSuspended = true;
+        if (billing.expirationDate != null) {
+          try {
+            final exp = DateTime.parse(billing.expirationDate!);
+            if (exp.isBefore(DateTime.now())) isExpired = true;
+          } catch (_) {}
+        }
+      }
+      if (isSuspended) { suspended++; continue; }
+      if (isExpired) { expired++; continue; }
+
       final status = _getDeviceStatus(device);
       switch (status) {
-        case DeviceStatus.running:
-          running++;
-          break;
-        case DeviceStatus.idle:
-          idle++;
-          break;
-        case DeviceStatus.stop:
-          stop++;
-          break;
-        case DeviceStatus.offline:
-          offline++;
-          break;
+        case DeviceStatus.running: running++; break;
+        case DeviceStatus.idle:    idle++;    break;
+        case DeviceStatus.stop:    stop++;    break;
+        case DeviceStatus.offline: offline++; break;
       }
     }
 
-    _allCount.value = allDevices.length;
-    _runningCount.value = running;
-    _idleCount.value = idle;
-    _stopCount.value = stop;
-    _offlineCount.value = offline;
+    _allCount.value       = allDevices.length;
+    _runningCount.value   = running;
+    _idleCount.value      = idle;
+    _stopCount.value      = stop;
+    _offlineCount.value   = offline;
+    _expiredCount.value   = expired;
+    _suspendedCount.value = suspended;
   }
 
   /// Check if device is online based on multiple factors
@@ -513,36 +525,45 @@ class _DevicePageState extends State<DevicePage> {
 
   void _filterDevices(String filter) {
     if (_isDisposed || !mounted) return;
-
     final allDevices = _getMergedDevices();
-
-    // Recalculate counts
     _calculateCounts();
 
     switch (filter) {
       case "running":
-        _displayDevices = allDevices
-            .where((d) => _getDeviceStatus(d) == DeviceStatus.running)
-            .toList();
+        _displayDevices = allDevices.where((d) => _getDeviceStatus(d) == DeviceStatus.running).toList();
         _selectedFilterIndex = 1;
         break;
       case "idle":
-        _displayDevices = allDevices
-            .where((d) => _getDeviceStatus(d) == DeviceStatus.idle)
-            .toList();
+        _displayDevices = allDevices.where((d) => _getDeviceStatus(d) == DeviceStatus.idle).toList();
         _selectedFilterIndex = 2;
         break;
       case "stop":
-        _displayDevices = allDevices
-            .where((d) => _getDeviceStatus(d) == DeviceStatus.stop)
-            .toList();
+        _displayDevices = allDevices.where((d) => _getDeviceStatus(d) == DeviceStatus.stop).toList();
         _selectedFilterIndex = 3;
         break;
       case "offline":
-        _displayDevices = allDevices
-            .where((d) => _getDeviceStatus(d) == DeviceStatus.offline)
-            .toList();
+        _displayDevices = allDevices.where((d) => _getDeviceStatus(d) == DeviceStatus.offline).toList();
         _selectedFilterIndex = 4;
+        break;
+      case "expired":
+        _displayDevices = allDevices.where((d) {
+          final imei = d.imei ?? d.deviceData?.imei;
+          final billing = imei != null ? _billingMap[imei] : null;
+          if (billing == null) return false;
+          if (billing.expirationDate == null) return false;
+          try {
+            return DateTime.parse(billing.expirationDate!).isBefore(DateTime.now());
+          } catch (_) { return false; }
+        }).toList();
+        _selectedFilterIndex = 5;
+        break;
+      case "suspended":
+        _displayDevices = allDevices.where((d) {
+          final imei = d.imei ?? d.deviceData?.imei;
+          final billing = imei != null ? _billingMap[imei] : null;
+          return billing != null && !billing.isActive;
+        }).toList();
+        _selectedFilterIndex = 6;
         break;
       default:
         _displayDevices = allDevices;
@@ -554,7 +575,6 @@ class _DevicePageState extends State<DevicePage> {
       final bPriority = _getStatusPriority(_getDeviceStatus(b));
       return aPriority.compareTo(bPriority);
     });
-
     _safeSetState(() {});
   }
 
@@ -608,8 +628,8 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   String _getFilterName(int index) {
-    const names = ["all", "running", "idle", "stop", "offline"];
-    return names[index];
+    const names = ["all", "running", "idle", "stop", "offline", "expired", "suspended"];
+    return index < names.length ? names[index] : "all";
   }
 
   Color _getStatusColor(DeviceStatus status) {
@@ -805,6 +825,7 @@ class _DevicePageState extends State<DevicePage> {
 
         return Column(
           children: [
+            _buildFilterChips(),
             if (controller.isSearchVisible.value) _buildSearchBar(),
             Expanded(child: _buildDeviceList()),
           ],
@@ -820,27 +841,27 @@ class _DevicePageState extends State<DevicePage> {
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
       systemOverlayStyle: const SystemUiOverlayStyle(
-        statusBarColor: Color(0xFF8B1A1A),
+        statusBarColor: Color(0xFFFF0000),
         statusBarBrightness: Brightness.dark,
         statusBarIconBrightness: Brightness.light,
       ),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(16),
-        ),
-        side: BorderSide(
-          color: Color(0xFFE2E8F0),
-          width: 1,
+        side: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+      ),
+      titleSpacing: 0,
+      title: const Text(
+        'Vehicles',
+        style: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF1E293B),
         ),
       ),
-      titleSpacing: 8,
-      title: _buildFilterChips(),
-      centerTitle: false,
+      centerTitle: true,
       actions: [
         Obx(() {
           final due = totalDue.value;
           if (due <= 0) return const SizedBox.shrink();
-
           return TextButton(
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -848,26 +869,18 @@ class _DevicePageState extends State<DevicePage> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: () {
-              Get.to(() => PaymentListScreen())?.then((_) {
-                _loadDueAmount();
-              });
+              Get.to(() => PaymentListScreen())?.then((_) => _loadDueAmount());
             },
             child: Text(
-              'বকেয়া টাকা ৳${(due)}',
-              style: const TextStyle(
-                color: Colors.red,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+              '৳${due.toStringAsFixed(0)}',
+              style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.w600),
             ),
           );
         }),
         Obx(() => IconButton(
           icon: Icon(
             Icons.search,
-            color: controller.isSearchVisible.value
-                ? _primaryBlue
-                : const Color(0xFF6B7280),
+            color: controller.isSearchVisible.value ? _primaryBlue : const Color(0xFF6B7280),
           ),
           onPressed: controller.toggleSearchVisibility,
         )),
@@ -909,51 +922,78 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   Widget _buildFilterChips() {
-    return SizedBox(
-      height: 38,
-      child: Obx(() => ListView(
+    return Obx(() => Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        children: [
-          _buildFilterChip(0, 'All', _allCount.value),
-          _buildFilterChip(1, 'Moving', _runningCount.value),
-          _buildFilterChip(2, 'Idle', _idleCount.value),
-          _buildFilterChip(3, 'Stopped', _stopCount.value),
-          _buildFilterChip(4, 'Offline', _offlineCount.value),
-        ],
-      )),
-    );
+        child: Row(
+          children: [
+            _buildFilterChip(0, 'All',       _allCount.value,       CustomColor.primary),
+            const SizedBox(width: 8),
+            _buildFilterChip(1, 'Moving',    _runningCount.value,   const Color(0xFF16A34A)),
+            const SizedBox(width: 8),
+            _buildFilterChip(2, 'Stop',      _stopCount.value,      const Color(0xFF475569)),
+            const SizedBox(width: 8),
+            _buildFilterChip(3, 'Idle',      _idleCount.value,      const Color(0xFFD97706)),
+            const SizedBox(width: 8),
+            _buildFilterChip(4, 'Offline',   _offlineCount.value,   const Color(0xFF64748B)),
+            const SizedBox(width: 8),
+            _buildFilterChip(5, 'Expired',   _expiredCount.value,   const Color(0xFFDC2626)),
+            const SizedBox(width: 8),
+            _buildFilterChip(6, 'Suspended', _suspendedCount.value, const Color(0xFF7C3AED)),
+          ],
+        ),
+      ),
+    ));
   }
 
-  Widget _buildFilterChip(int index, String label, int count) {
+  Widget _buildFilterChip(int index, String label, int count, [Color? chipColor]) {
     final isSelected = _selectedFilterIndex == index;
-    const activeColor = Color(0xFF8B1A1A); // Crimson maroon theme color
+    final activeColor = chipColor ?? CustomColor.primary;
     return GestureDetector(
       onTap: () {
         _searchController.clear();
         _filterDevices(_getFilterName(index));
       },
-      child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeInOut,
+        width: index == 0 ? 65 : 60,
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          color: isSelected ? activeColor : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? activeColor : const Color(0xFFD1D5DB),
+            width: 1.5,
+          ),
         ),
         alignment: Alignment.center,
-        child: Text(
-          "$label (​$count​)",
-          style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF1F2937),
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-            fontFeatures: const [
-              FontFeature.disable('liga'),
-              FontFeature.disable('dlig'),
-              FontFeature.disable('calt'),
-              FontFeature.disable('clig'),
-            ],
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF111827),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$count',
+              style: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF0F172A),
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -990,7 +1030,6 @@ class _DevicePageState extends State<DevicePage> {
       child: ListView.builder(
         padding: const EdgeInsets.all(8),
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-        cacheExtent: 800, // pre-render extra cards offscreen = smoother scroll
         itemCount: _displayDevices.length,
         itemBuilder: (context, index) {
           final device = _displayDevices[index];
@@ -1014,11 +1053,9 @@ class _DevicePageState extends State<DevicePage> {
     final statusColor = _getStatusColor(status);
     final isEngineOn = _isEngineOn(device);
     final speed = double.tryParse(device.speed.toString())?.toInt() ?? 0;
-    final gpsValid = device.lat != null && device.lng != null;
-    final gsmOnline = _isDeviceOnline(device);
     final isExpanded = device.id != null && _expandedDeviceIds.contains(device.id);
 
-    String expiryDate = "Unlimited";
+    String expiryDate = 'Unlimited';
     final imei = device.imei ?? device.deviceData?.imei;
     final billingInfo = imei != null ? _billingMap[imei] : null;
     if (billingInfo != null && billingInfo.expirationDate != null) {
@@ -1029,11 +1066,33 @@ class _DevicePageState extends State<DevicePage> {
       expiryDate = _formatBillingDate(device.simExpirationDate!.toString());
     }
 
-    // Determine status text
-    String statusLabel = "Offline";
-    if (status == DeviceStatus.running) statusLabel = "Running";
-    if (status == DeviceStatus.idle) statusLabel = "Idle";
-    if (status == DeviceStatus.stop) statusLabel = "Stop";
+    // Format the last update time nicely
+    String timeLabel = '';
+    final rawTime = device.time ?? device.deviceData?.time ?? device.deviceData?.traccar?.time;
+    if (rawTime != null && rawTime.isNotEmpty) {
+      try {
+        final dt = DateTime.parse(rawTime).toLocal();
+        final d = '${dt.day.toString().padLeft(2,'0')}-${dt.month.toString().padLeft(2,'0')}-${dt.year}';
+        final h = '${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}:${dt.second.toString().padLeft(2,'0')}';
+        timeLabel = '$d $h';
+      } catch (_) {
+        timeLabel = rawTime;
+      }
+    }
+
+    // Stopped / Offline duration text
+    String durationLabel = '';
+    Color durationColor = Colors.grey;
+    if (status == DeviceStatus.stop && device.stopDuration != null && device.stopDuration!.isNotEmpty) {
+      durationLabel = 'Stopped: ${device.stopDuration!}';
+      durationColor = const Color(0xFFE53935);
+    } else if (status == DeviceStatus.idle && device.stopDuration != null && device.stopDuration!.isNotEmpty) {
+      durationLabel = 'Idle: ${device.stopDuration!}';
+      durationColor = const Color(0xFFFF9100);
+    } else if (status == DeviceStatus.offline) {
+      durationLabel = 'Offline: -';
+      durationColor = const Color(0xFFE53935);
+    }
 
     return GestureDetector(
       onTap: () {
@@ -1048,130 +1107,150 @@ class _DevicePageState extends State<DevicePage> {
           _showDetailsSheet(device);
         }
       },
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // --- LEFT COLUMN: Speed & Car Silhouette ---
-          SizedBox(
-            width: 50,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  "$speed",
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: statusColor,
-                  ),
-                ),
-                Text(
-                  "KM/H",
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    color: statusColor,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: 32,
-                  height: 40,
-                  child: (device.icon?.path != null)
-                      ? CachedNetworkImage(
-                          imageUrl: "${UserRepository.getServerUrl()}/${device.icon!.path!}",
-                          fit: BoxFit.contain,
-                          placeholder: (context, url) => Icon(
-                            Icons.directions_car,
-                            color: statusColor,
-                            size: 28,
-                          ),
-                          errorWidget: (context, url, error) => Icon(
-                            Icons.directions_car,
-                            color: statusColor,
-                            size: 28,
-                          ),
-                        )
-                      : Icon(
-                          Icons.directions_car,
-                          color: statusColor,
-                          size: 28,
-                        ),
-                ),
-              ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
             ),
-          ),
-          const SizedBox(width: 12), // Spacing between left section and right details card
-
-          // --- RIGHT COLUMN: Main Vehicle Details Card ---
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(
-                  color: const Color(0xFFE2E8F0),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 1,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Row 1: Vehicle Name & Custom Small Status Icons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          device.name ?? 'Unknown Vehicle',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Top row: avatar circle + info column ──
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Car avatar circle + speed
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 62,
+                      height: 62,
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.10),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: statusColor.withValues(alpha: 0.30), width: 1.5),
                       ),
-                      // Status indicators: Ignition, GPS, GSM
+                      child: Center(
+                        child: (device.icon?.path != null)
+                            ? SvgAssetColorizer(
+                                assetPath: Util.getLocalSvgPath(device.icon!.path!),
+                                color: statusColor,
+                                width: 40,
+                                height: 40,
+                              )
+                            : _buildCarFallback(statusColor),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$speed km/h',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                // Info column
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Vehicle name + engine status badge
                       Row(
-                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          _buildMiniStatusIcon(
-                            icon: Icons.vpn_key,
-                            label: "Ignition",
-                            isActive: isEngineOn,
-                            activeColor: const Color(0xFF1B851C),
+                          Expanded(
+                            child: Text(
+                              device.name ?? 'Unknown Vehicle',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF0A0A0A),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          _buildMiniStatusIcon(
-                            icon: Icons.location_on,
-                            label: "GPS",
-                            isActive: gpsValid,
-                            activeColor: const Color(0xFF1B851C),
+                          const SizedBox(width: 6),
+                          // Engine On/Off status badge
+                          GestureDetector(
+                            onTap: () {
+                              if (!_isDeviceSuspended(device) && !_checkNoPermission(device)) {
+                                Get.to(() => LockUnlockScreen(device: device));
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFEBEE),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isEngineOn ? Icons.lock_open_rounded : Icons.lock_rounded,
+                                    size: 11,
+                                    color: const Color(0xFFE53935),
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    isEngineOn ? 'On' : 'Off',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFE53935),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          _buildMiniStatusIcon(
-                            icon: Icons.wifi,
-                            label: "GSM",
-                            isActive: gsmOnline,
-                            activeColor: const Color(0xFF1B851C),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      // IMEI row
+                      if (imei != null && imei.isNotEmpty)
+                        _buildCardInfoRow(Icons.tag, 'IMEI: $imei', color: const Color(0xFF111827)),
+                      const SizedBox(height: 3),
+                      // Expired row
+                      _buildCardInfoRow(Icons.calendar_today_outlined, 'Expired: $expiryDate',
+                          color: const Color(0xFF111827)),
+                      const SizedBox(height: 3),
+                      // Stopped/Idle/Offline duration row
+                      if (durationLabel.isNotEmpty)
+                        _buildCardInfoRow(Icons.timer_outlined, durationLabel, color: durationColor, bold: true),
+                      if (durationLabel.isNotEmpty) const SizedBox(height: 3),
+                      // Time row + expand chevron on same line
+                      Row(
+                        children: [
+                          Expanded(
+                            child: timeLabel.isNotEmpty
+                                ? _buildCardInfoRow(Icons.access_time_rounded, 'Time: $timeLabel',
+                                    color: const Color(0xFF111827))
+                                : const SizedBox.shrink(),
                           ),
-                          const SizedBox(width: 8),
-                          InkWell(
+                          // Expand/collapse chevron inline with time
+                          GestureDetector(
                             onTap: () {
                               if (device.id != null) {
                                 setState(() {
@@ -1183,19 +1262,16 @@ class _DevicePageState extends State<DevicePage> {
                                 });
                               }
                             },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 200),
-                                transitionBuilder: (Widget child, Animation<double> animation) {
-                                  return ScaleTransition(scale: animation, child: child);
-                                },
-                                child: Icon(
-                                  isExpanded ? Icons.keyboard_arrow_up : Icons.more_vert,
-                                  key: ValueKey<bool>(isExpanded),
-                                  color: const Color(0xFF64748B),
-                                  size: 20,
-                                ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Icon(
+                                isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                size: 16,
+                                color: const Color(0xFF64748B),
                               ),
                             ),
                           ),
@@ -1203,107 +1279,60 @@ class _DevicePageState extends State<DevicePage> {
                       ),
                     ],
                   ),
-                  const Divider(
-                    color: Color(0xFFE2E8F0),
-                    thickness: 1,
-                    height: 12,
-                  ),
-
-                  // Row 2: Columns layout for Status Pill + Duration (left) & Expiration (right)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Left Column: Status Pill & Duration
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: statusColor,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              statusLabel,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          if ((status == DeviceStatus.stop || status == DeviceStatus.idle) && 
-                              device.stopDuration != null && device.stopDuration!.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              device.stopDuration!,
-                              style: TextStyle(
-                                color: statusColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      // Right Column: Expiration Info
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            "Expires On",
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1B851C),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              expiryDate,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeInOut,
-                    child: isExpanded
-                        ? Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Divider(
-                                color: Color(0xFFE2E8F0),
-                                thickness: 1,
-                                height: 12,
-                              ),
-                              _buildCardActionButtons(device),
-                            ],
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ),
-        ],
+
+            // ── Expanded action buttons ──
+            AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: isExpanded
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Divider(color: Color(0xFFE2E8F0), thickness: 1, height: 16),
+                        _buildCardActionButtons(device),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  /// Small icon + text info row used inside vehicle card
+  Widget _buildCardInfoRow(IconData icon, String text, {Color color = const Color(0xFF111827), bool bold = false}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 13,
+              color: color,
+              fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Car fallback widget using local top-down car asset
+  Widget _buildCarFallback(Color statusColor) {
+    return SvgAssetColorizer(
+      assetPath: 'assets/images/track_car.svg',
+      color: statusColor,
+      width: 40,
+      height: 40,
     );
   }
 
@@ -3551,19 +3580,11 @@ class _DevicePageState extends State<DevicePage> {
                             child: Stack(
                               children: [
                                 Center(
-                                  child: CachedNetworkImage(
-                                    imageUrl: "${APIService.serverURL ?? ''}/${icon["path"]}",
+                                  child: SvgAssetColorizer(
+                                    assetPath: Util.getLocalSvgPath(icon["path"]),
+                                    color: const Color(0xFF00C853),
                                     width: 55,
                                     height: 55,
-                                    fit: BoxFit.contain,
-                                    placeholder: (context, url) => const SizedBox(
-                                      width: 30,
-                                      height: 30,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    ),
-                                    errorWidget: (context, url, error) =>
-                                        Icon(Icons.image_not_supported,
-                                            color: Colors.grey[400]),
                                   ),
                                 ),
                                 if (isSelected)

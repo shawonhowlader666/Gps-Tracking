@@ -15,3 +15,8 @@ const PREF_URL = "url";
 const String PREF_USER_PHONE = "user_phone";
 const String PREF_COMPANY_NAME = "company_name";
 const String PREF_USER_ID = "user_id";
+
+// Tracksolid API mode
+const String PREF_API_MODE = "api_mode"; // "traccar" or "tracksolid"
+const String PREF_TRACKSOLID_TOKEN = "tracksolid_access_token";
+const String PREF_TRACKSOLID_ACCOUNT = "tracksolid_account";

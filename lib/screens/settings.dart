@@ -113,45 +113,24 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(70),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(16),
-              bottomRight: Radius.circular(16),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: CustomColor.primary.withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 16),
+          child: Icon(
+            Icons.settings_outlined,
+            color: Color(0xFF2D3142),
+            size: 24,
           ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              child: Row(
-                children: [
-                 Icon(
-                    Icons.settings,
-                    color: CustomColor.primary,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 60),
-                  Text(
-                    'Settings',
-                    style: const TextStyle(
-                      color: CustomColor.primary,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        ),
+        title: const Text(
+          'Settings',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF2D3142),
           ),
         ),
       ),

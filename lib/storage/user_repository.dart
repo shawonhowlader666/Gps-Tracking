@@ -56,7 +56,6 @@ class UserRepository {
     _sessionPassword = null;
   }
 
-  // NEW: Phone number
   static String? getPhone() {
     return prefs!.getString(PREF_USER_PHONE);
   }
@@ -65,7 +64,6 @@ class UserRepository {
     prefs!.setString(PREF_USER_PHONE, phone);
   }
 
-  // NEW: Company name
   static String? getCompanyName() {
     return prefs!.getString(PREF_COMPANY_NAME);
   }
@@ -74,7 +72,6 @@ class UserRepository {
     prefs!.setString(PREF_COMPANY_NAME, companyName);
   }
 
-  // NEW: User ID
   static String? getUserId() {
     return prefs!.getString(PREF_USER_ID);
   }
@@ -83,7 +80,6 @@ class UserRepository {
     prefs!.setString(PREF_USER_ID, userId);
   }
 
-  // NEW: Get all user details for PDF
   static Map<String, String?> getAllUserDetails() {
     return {
       'email': getEmail(),
@@ -94,7 +90,7 @@ class UserRepository {
   }
 
   static void doLogout() {
-    _sessionPassword = null; // clear memory password on logout
+    _sessionPassword = null;
     prefs!.clear();
   }
 
@@ -104,5 +100,40 @@ class UserRepository {
 
   static void setServerUrl(String url) {
     prefs!.setString(PREF_URL, url);
+  }
+
+  // ==================== TRACKSOLID API MODE ====================
+
+  /// Returns "traccar" (default) or "tracksolid"
+  static String getApiMode() {
+    return prefs!.getString(PREF_API_MODE) ?? 'traccar';
+  }
+
+  static void setApiMode(String mode) {
+    prefs!.setString(PREF_API_MODE, mode);
+  }
+
+  static bool isTracksolidMode() {
+    return getApiMode() == 'tracksolid';
+  }
+
+  static String? getTracksolidToken() {
+    return prefs!.getString(PREF_TRACKSOLID_TOKEN);
+  }
+
+  static void setTracksolidToken(String token) {
+    prefs!.setString(PREF_TRACKSOLID_TOKEN, token);
+  }
+
+  static void clearTracksolidToken() {
+    prefs!.remove(PREF_TRACKSOLID_TOKEN);
+  }
+
+  static String? getTracksolidAccount() {
+    return prefs!.getString(PREF_TRACKSOLID_ACCOUNT);
+  }
+
+  static void setTracksolidAccount(String account) {
+    prefs!.setString(PREF_TRACKSOLID_ACCOUNT, account);
   }
 }

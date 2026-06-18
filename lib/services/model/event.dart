@@ -8,7 +8,7 @@ class Event extends Object {
   dynamic speed;
 
   Event(
-      {this.id, this.message, this.latitude, this.longitude, this.device_name});
+      {this.id, this.message, this.latitude, this.longitude, this.device_name, this.speed});
 
   Event.fromJson(Map<String, dynamic> json) {
     id = json["id"];

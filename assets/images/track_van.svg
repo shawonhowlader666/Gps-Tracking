@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Wheels -->
+  <rect x="15" y="12" width="4" height="10" rx="1.5" fill="#1E293B"/>
+  <rect x="45" y="12" width="4" height="10" rx="1.5" fill="#1E293B"/>
+  <rect x="15" y="42" width="4" height="10" rx="1.5" fill="#1E293B"/>
+  <rect x="45" y="42" width="4" height="10" rx="1.5" fill="#1E293B"/>
+  <!-- Body -->
+  <rect x="18" y="5" width="28" height="54" rx="5" fill="#MAIN_COLOR" stroke="#0F172A" stroke-width="2"/>
+  <!-- Windshield -->
+  <path d="M20 13 H44 L42 9 H22 Z" fill="#38BDF8" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Sunroof panel -->
+  <rect x="23" y="19" width="18" height="14" rx="2" fill="#MAIN_COLOR" stroke="#0F172A" stroke-width="1.5" opacity="0.8"/>
+  <line x1="23" y1="26" x2="41" y2="26" stroke="#0F172A" stroke-width="1"/>
+  <!-- Rear Window -->
+  <path d="M20 51 H44 L42 54 H22 Z" fill="#38BDF8" stroke="#0F172A" stroke-width="1.5"/>
+</svg>

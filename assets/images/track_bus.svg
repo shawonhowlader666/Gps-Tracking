@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Wheels -->
+  <rect x="14" y="12" width="4" height="12" rx="1" fill="#1E293B"/>
+  <rect x="46" y="12" width="4" height="12" rx="1" fill="#1E293B"/>
+  <rect x="14" y="44" width="4" height="12" rx="1" fill="#1E293B"/>
+  <rect x="46" y="44" width="4" height="12" rx="1" fill="#1E293B"/>
+  <!-- Body -->
+  <rect x="17" y="4" width="30" height="56" rx="4" fill="#MAIN_COLOR" stroke="#0F172A" stroke-width="2"/>
+  <!-- Windshield -->
+  <path d="M19 10 H45 V7 H19 Z" fill="#38BDF8" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Roof AC / Vents -->
+  <rect x="24" y="18" width="16" height="12" rx="2" fill="#F1F5F9" stroke="#0F172A" stroke-width="1.5"/>
+  <line x1="28" y1="21" x2="36" y2="21" stroke="#0F172A" stroke-width="1.5"/>
+  <line x1="28" y1="24" x2="36" y2="24" stroke="#0F172A" stroke-width="1.5"/>
+  <line x1="28" y1="27" x2="36" y2="27" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Rear Window -->
+  <path d="M19 56 H45 V54 H19 Z" fill="#38BDF8" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Side Mirrors -->
+  <line x1="17" y1="9" x2="13" y2="9" stroke="#0F172A" stroke-width="2" stroke-linecap="round"/>
+  <line x1="47" y1="9" x2="51" y2="9" stroke="#0F172A" stroke-width="2" stroke-linecap="round"/>
+</svg>

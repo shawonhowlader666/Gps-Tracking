@@ -533,7 +533,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Color(0xFF8B1A1A),
+      statusBarColor: Color(0xFFE53935),
       statusBarBrightness: Brightness.dark,
       statusBarIconBrightness: Brightness.light,
     ));

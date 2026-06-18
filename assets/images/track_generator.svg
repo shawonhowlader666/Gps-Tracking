@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Frame outer body -->
+  <rect x="12" y="10" width="40" height="44" rx="6" fill="#MAIN_COLOR" stroke="#0F172A" stroke-width="2"/>
+  <!-- Grill Lines -->
+  <line x1="18" y1="18" x2="46" y2="18" stroke="#0F172A" stroke-width="2"/>
+  <line x1="18" y1="24" x2="46" y2="24" stroke="#0F172A" stroke-width="2"/>
+  <!-- Control Panel -->
+  <rect x="18" y="32" width="28" height="16" rx="2" fill="#F8FAFC" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Gauges & Knobs -->
+  <circle cx="24" cy="40" r="3" fill="#475569"/>
+  <circle cx="32" cy="40" r="2" fill="#0F172A"/>
+  <circle cx="40" cy="40" r="2" fill="#0F172A"/>
+</svg>

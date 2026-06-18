@@ -290,21 +290,21 @@ class _MapPageState extends State<MapPage> {
               bool rotation = true;
               if (subElement.iconType == "arrow") {
                 rotation = true;
-                markerIcon = await Util.getMarkerIcon(subElement.icon!.path!);
+                markerIcon = await Util.getMarkerIcon(subElement.icon!.path!, statusColor: subElement.iconColor);
               } else if (subElement.icon!.path!.contains("v2")) {
                 if (subElement.iconType == "rotating") {
                   rotation = true;
                 } else {
                   rotation = false;
                 }
-                markerIcon = await Util.getMarkerIcon(subElement.icon!.path!);
+                markerIcon = await Util.getMarkerIcon(subElement.icon!.path!, statusColor: subElement.iconColor);
               } else {
                 if (subElement.iconType == "rotating") {
                   rotation = true;
                 } else {
                   rotation = false;
                 }
-                markerIcon = await Util.getMarkerIcon(subElement.icon!.path!);
+                markerIcon = await Util.getMarkerIcon(subElement.icon!.path!, statusColor: subElement.iconColor);
               }
               _markers.add(
                 Marker(
@@ -436,11 +436,11 @@ class _MapPageState extends State<MapPage> {
                 .then((_) async {
               BitmapDescriptor markerIcon;
               if (element.iconType == "arrow") {
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
+                markerIcon = await Util.getMarkerIcon(element.icon!.path!, statusColor: element.iconColor);
               } else if (element.icon!.path!.contains("v2")) {
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
+                markerIcon = await Util.getMarkerIcon(element.icon!.path!, statusColor: element.iconColor);
               } else {
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
+                markerIcon = await Util.getMarkerIcon(element.icon!.path!, statusColor: element.iconColor);
               }
 
               var pinPosition = LatLng(double.parse(element.lat.toString()),
@@ -741,14 +741,14 @@ class _MapPageState extends State<MapPage> {
 
     if (d.iconColor != null) {
       if (d.iconColor == "green") {
-        color = Colors.green;
+        color = const Color(0xFF00C853);
       } else if (d.iconColor == "yellow") {
-        color = YELLOW_CUSTOM;
+        color = const Color(0xFFFF9100);
       } else if (d.iconColor == "red") {
-        color = Colors.red;
+        color = const Color(0xFFFF0000);
       }
     } else {
-      color = Colors.red;
+      color = const Color(0xFFFF0000);
     }
 
     return GestureDetector(

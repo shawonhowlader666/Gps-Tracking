@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Hull (Outer Body) -->
+  <path d="M32 4 C32 4 45 18 45 36 C45 48 42 58 39 58 L25 58 C22 58 19 48 19 36 C19 18 32 4 32 4 Z" fill="#MAIN_COLOR" stroke="#0F172A" stroke-width="2"/>
+  <!-- Inner deck (white) -->
+  <path d="M32 14 C32 14 39 22 39 34 C39 42 38 52 36 54 H28 C26 52 25 42 25 34 C25 22 32 14 32 14 Z" fill="#FFFFFF" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Windshield -->
+  <path d="M26 26 C26 26 32 23 38 26 C37 28 27 28 26 26 Z" fill="#38BDF8" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Seats -->
+  <rect x="27" y="32" width="10" height="4" rx="1.5" fill="#475569" stroke="#0F172A" stroke-width="1"/>
+  <rect x="27" y="40" width="10" height="4" rx="1.5" fill="#475569" stroke="#0F172A" stroke-width="1"/>
+  <!-- Propeller motor -->
+  <rect x="29" y="58" width="6" height="4" rx="1" fill="#1E293B"/>
+</svg>

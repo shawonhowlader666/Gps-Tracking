@@ -25,7 +25,7 @@ class MainBottomNav extends StatefulWidget {
 }
 
 class _MainBottomNavState extends State<MainBottomNav> {
-  int _selectedIndex = 2;
+  int _selectedIndex = 0;
   late final PageController _pageController = PageController(initialPage: _selectedIndex);
   double _dueAmount = 0.0;
   bool _isLoadingDue = true;
@@ -187,7 +187,7 @@ class _MainBottomNavState extends State<MainBottomNav> {
   @override
   Widget build(BuildContext context) {
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Color(0xFF8B1A1A),
+      statusBarColor: Color(0xFFFF0000),
       statusBarBrightness: Brightness.dark,
       statusBarIconBrightness: Brightness.light,
     ));
@@ -257,12 +257,12 @@ class _MainBottomNavState extends State<MainBottomNav> {
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
           child: GNav(
             gap: 8,
-            activeColor: const Color(0xFF8B1A1A),
+            activeColor: Colors.white,
             iconSize: 22,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             duration: const Duration(milliseconds: 300),
-            tabBackgroundColor: const Color(0xFF8B1A1A).withOpacity(0.12),
-            color: const Color(0xFF6B7280),
+            tabBackgroundColor: const Color(0xFFFF0000),
+            color: const Color(0xFF9E9E9E),
             tabs: [
               GButton(
                 icon: LineIcons.home,

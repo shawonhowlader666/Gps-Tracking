@@ -1,16 +1,13 @@
 import 'dart:async';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:get/get.dart';
-import 'package:gpspro/config.dart';
-import 'package:gpspro/constants/app_constants.dart';
 import 'package:gpspro/screens/home/home_controller.dart';
 import 'package:gpspro/screens/payment_list.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:gpspro/storage/user_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/payment_service.dart';
@@ -19,6 +16,7 @@ import 'data_controller/data_controller.dart';
 import 'quick_links/driving_instructor_screen.dart';
 import 'quick_links/traffic_signs_screen.dart';
 import 'quick_links/car_knowledge_screen.dart';
+import 'report/get_today_report.dart' show ReportPeriod;
 
 // Status enum for consistency
 enum VehicleStatus { running, idle, stop, offline, noData, expired }
@@ -36,47 +34,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Timer? _countdownTimer;
   Timer? _statusRefreshTimer;
-  Duration? _timeLeft;
-  double? _dueAmount;
   bool _isVisible = true;
 
-  // Reactive counts for status
-  final RxInt _runningCount = 0.obs;
-  final RxInt _idleCount = 0.obs;
-  final RxInt _stopCount = 0.obs;
-  final RxInt _offlineCount = 0.obs;
-  final RxInt _noDataCount = 0.obs;
-  final RxInt _expiredCount = 0.obs;
+  // â”€â”€ Fully reactive â€” zero setState â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  final RxDouble _dueAmount   = RxDouble(0.0);
+  final RxBool   _hasDue      = false.obs;
+  final RxInt    _runningCount = 0.obs;
+  final RxInt    _idleCount    = 0.obs;
+  final RxInt    _stopCount    = 0.obs;
+  final RxInt    _offlineCount = 0.obs;
+  final RxInt    _noDataCount  = 0.obs;
+  final RxInt    _expiredCount = 0.obs;
+  final RxString _timeLeftStr  = ''.obs;  // replaces _timeLeft Duration
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   // Simple color palette
-  static const Color primaryColor = Color(0xFF8B1A1A);
-  static const Color successColor = Color(0xFF22C55E);
-  static const Color warningColor = Color(0xFFF59E0B);
-  static const Color dangerColor = Color(0xFFEF4444);
-  static const Color neutralColor = Color(0xFF64748B);
+  static const Color primaryColor  = Color(0xFFFF0000);
+  static const Color successColor  = Color(0xFF00C853);
+  static const Color warningColor  = Color(0xFFFF9100);
+  static const Color dangerColor   = Color(0xFFFF0000);
+  static const Color neutralColor  = Color(0xFF475569);
 
-  Map<String, BillingVehicle> _billingMap = {};
+  int _currentBannerIndex = 0;
+  final List<String> _localBanners = const [
+    'images/banner_dashcam.png',
+    'images/banner_discount.png',
+    'images/banner_security.png',
+  ];
+
+  final RxMap<String, BillingVehicle> _billingMap = <String, BillingVehicle>{}.obs;
   bool _isLoadingBilling = false;
 
   Future<void> _loadBillingInfo() async {
-    if (!mounted || _isLoadingBilling) return;
+    if (_isLoadingBilling) return;
     _isLoadingBilling = true;
-
     try {
       final billingList = await PaymentService.getBillingVehicles();
-      if (billingList != null && mounted) {
-        setState(() {
-          _billingMap = {for (var v in billingList) v.imei: v};
-        });
-        debugPrint('Home Screen loaded billing map: ${_billingMap.length} items');
+      if (billingList != null) {
+        // RxMap update â€” no setState, only affected Obx rebuild
+        _billingMap.assignAll({for (final v in billingList) v.imei: v});
         _calculateStatusCounts();
       }
     } catch (e) {
-      debugPrint('Home Screen error loading billing info: $e');
+      debugPrint('Home billing error: $e');
     } finally {
-      if (mounted) {
-        _isLoadingBilling = false;
-      }
+      _isLoadingBilling = false;
     }
   }
 
@@ -84,22 +86,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
     dataController = Get.put(DataController(), permanent: true);
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _loadBillingInfo();
-        _calculateStatusCounts();
-        _startStatusRefresh();
-      }
+      _loadBillingInfo();
+      _calculateStatusCounts();
+      _startStatusRefresh();
     });
   }
 
   void _startStatusRefresh() {
     _statusRefreshTimer?.cancel();
-    _statusRefreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      if (mounted && _isVisible) {
+    // 60 s is enough â€” avoids janky rebuilds every 10 s
+    _statusRefreshTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      if (_isVisible) {
         _loadBillingInfo();
         _calculateStatusCounts();
       }
@@ -163,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         break;
       case AppLifecycleState.resumed:
         _isVisible = true;
-        if (_timeLeft != null && _dueAmount != null) {
+        if (_timeLeftStr.value.isNotEmpty || _dueAmount.value > 0) {
           _resumeCountdownIfNeeded();
         }
         _calculateStatusCounts();
@@ -203,11 +202,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (stats == null || stats.due <= 0) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('grace_end_time');
-        if (mounted) setState(() => _dueAmount = null);
+        _dueAmount.value = 0.0;
+        _hasDue.value = false;
         return;
       }
 
-      if (mounted) setState(() => _dueAmount = stats.due);
+      _dueAmount.value = stats.due;
+      _hasDue.value = true;
 
       final prefs = await SharedPreferences.getInstance();
       final graceEnd = prefs.getInt('grace_end_time');
@@ -230,18 +231,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _updateTimeLeft(endTime);
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted || !_isVisible) {
+      if (!_isVisible) {
         timer.cancel();
         return;
       }
-
       final now = DateTime.now();
       if (now.isAfter(endTime)) {
         timer.cancel();
-        if (mounted) {
-          setState(() => _timeLeft = null);
-          _checkPaymentStatus();
-        }
+        _timeLeftStr.value = '';
+        _checkPaymentStatus();
       } else {
         _updateTimeLeft(endTime);
       }
@@ -249,15 +247,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _updateTimeLeft(DateTime endTime) {
-    if (!mounted) return;
-
     final now = DateTime.now();
     if (now.isBefore(endTime)) {
-      final newTimeLeft = endTime.difference(now);
-      if (_timeLeft == null ||
-          (_timeLeft!.inSeconds - newTimeLeft.inSeconds).abs() >= 1) {
-        setState(() => _timeLeft = newTimeLeft);
-      }
+      final d = endTime.difference(now);
+      _timeLeftStr.value = _formatDuration(d);
     }
   }
 
@@ -470,13 +463,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case VehicleStatus.idle:
         return warningColor;
       case VehicleStatus.stop:
-        return neutralColor;
+        return dangerColor; // Stopped is Red
       case VehicleStatus.offline:
-        return dangerColor;
+        return neutralColor; // Offline is Grey
       case VehicleStatus.noData:
         return Colors.grey[500]!;
       case VehicleStatus.expired:
-        return Colors.black;
+        return dangerColor; // Expired is Red
     }
   }
 
@@ -484,11 +477,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _getStatusLabel(DeviceItem device) {
     switch (_getVehicleStatus(device)) {
       case VehicleStatus.running:
-        return 'Running';
+        return 'Moving';
       case VehicleStatus.idle:
-        return 'Idle';
+        return 'idle';
       case VehicleStatus.stop:
-        return 'Parking';
+        return 'Stopped';
       case VehicleStatus.offline:
         return 'Offline';
       case VehicleStatus.noData:
@@ -544,7 +537,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: isBlocking
-                          ? [const Color(0xFFE53935), const Color(0xFFD32F2F)]
+                          ? [const Color(0xFFFF0000), const Color(0xFFB71C1C)]
                           : [const Color(0xFFFF9800), const Color(0xFFF57C00)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -572,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        isBlocking ? 'পেমেন্ট জরুরি!' : 'পেমেন্ট বকেয়া',
+                        isBlocking ? 'à¦ªà§‡à¦®à§‡à¦¨à§à¦Ÿ à¦œà¦°à§à¦°à¦¿!' : 'à¦ªà§‡à¦®à§‡à¦¨à§à¦Ÿ à¦¬à¦•à§‡à¦¯à¦¼à¦¾',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
@@ -587,7 +580,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   child: Column(
                     children: [
                       const Text(
-                        'মোট বকেয়া',
+                        'à¦®à§‹à¦Ÿ à¦¬à¦•à§‡à¦¯à¦¼à¦¾',
                         style: TextStyle(fontSize: 14, color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
@@ -596,7 +589,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            '৳',
+                            'à§³',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
@@ -636,8 +629,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             Expanded(
                               child: Text(
                                 isBlocking
-                                    ? 'আপনার গ্রেস পিরিয়ড শেষ। সেবা চালু রাখতে এখনই পেমেন্ট করুন।'
-                                    : 'সেবা অব্যাহত রাখতে বকেয়া পরিশোধ করুন।',
+                                    ? 'à¦†à¦ªà¦¨à¦¾à¦° à¦—à§à¦°à§‡à¦¸ à¦ªà¦¿à¦°à¦¿à¦¯à¦¼à¦¡ à¦¶à§‡à¦·à¥¤ à¦¸à§‡à¦¬à¦¾ à¦šà¦¾à¦²à§ à¦°à¦¾à¦–à¦¤à§‡ à¦à¦–à¦¨à¦‡ à¦ªà§‡à¦®à§‡à¦¨à§à¦Ÿ à¦•à¦°à§à¦¨à¥¤'
+                                    : 'à¦¸à§‡à¦¬à¦¾ à¦…à¦¬à§à¦¯à¦¾à¦¹à¦¤ à¦°à¦¾à¦–à¦¤à§‡ à¦¬à¦•à§‡à¦¯à¦¼à¦¾ à¦ªà¦°à¦¿à¦¶à§‹à¦§ à¦•à¦°à§à¦¨à¥¤',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: isBlocking
@@ -685,7 +678,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               Icon(Icons.payment_rounded, size: 20),
                               SizedBox(width: 8),
                               Text(
-                                'এখনই পেমেন্ট করুন',
+                                'à¦à¦–à¦¨à¦‡ à¦ªà§‡à¦®à§‡à¦¨à§à¦Ÿ à¦•à¦°à§à¦¨',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -728,7 +721,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 Icon(Icons.schedule_rounded, size: 20),
                                 SizedBox(width: 8),
                                 Text(
-                                  '৭ দিন পরে মনে করিয়ে দিন',
+                                  'à§­ à¦¦à¦¿à¦¨ à¦ªà¦°à§‡ à¦®à¦¨à§‡ à¦•à¦°à¦¿à¦¯à¦¼à§‡ à¦¦à¦¿à¦¨',
                                   style: TextStyle(fontSize: 14),
                                 ),
                               ],
@@ -759,7 +752,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 Icon(Icons.support_agent, size: 20),
                                 SizedBox(width: 8),
                                 Text(
-                                  'সাপোর্টে যোগাযোগ করুন',
+                                  'à¦¸à¦¾à¦ªà§‹à¦°à§à¦Ÿà§‡ à¦¯à§‹à¦—à¦¾à¦¯à§‹à¦— à¦•à¦°à§à¦¨',
                                   style: TextStyle(fontSize: 14),
                                 ),
                               ],
@@ -787,7 +780,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           children: [
             Icon(Icons.support_agent, color: primaryColor),
             SizedBox(width: 8),
-            Text('সাপোর্ট', style: TextStyle(fontSize: 18)),
+            Text('à¦¸à¦¾à¦ªà§‹à¦°à§à¦Ÿ', style: TextStyle(fontSize: 18)),
           ],
         ),
         content: Column(
@@ -795,7 +788,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           children: [
             ListTile(
               leading: const Icon(Icons.phone, color: successColor),
-              title: const Text('ফোন করুন'),
+              title: const Text('à¦«à§‹à¦¨ à¦•à¦°à§à¦¨'),
               subtitle: const Text('+8801960446666'),
               onTap: () {
                 Navigator.pop(ctx);
@@ -816,7 +809,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('বন্ধ করুন'),
+            child: const Text('à¦¬à¦¨à§à¦§ à¦•à¦°à§à¦¨'),
           ),
         ],
       ),
@@ -844,44 +837,60 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            await homeController.refreshData();
-            _calculateStatusCounts();
-          },
-          color: primaryColor,
+      appBar: _buildAppBar(),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await homeController.refreshData();
+          _calculateStatusCounts();
+        },
+        color: primaryColor,
+        child: ScrollConfiguration(
+          // Remove Android overscroll glow â€” gives a clean fluid feel
+          behavior: const _NoGlowScrollBehavior(),
           child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              _buildAppBar(),
-              SliverPadding(
-                padding: const EdgeInsets.all(12),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    if (_dueAmount != null && _dueAmount! > 0)
-                      RepaintBoundary(child: _buildDueReminderContainer()),
-                    if (_dueAmount != null && _dueAmount! > 0)
-                      const SizedBox(height: 16),
-                    RepaintBoundary(child: _buildStatsRow()),
-                    const SizedBox(height: 16),
-                    RepaintBoundary(child: _buildQuickLinksCard()),
-                    const SizedBox(height: 16),
-                    RepaintBoundary(child: _buildVehicleSelector()),
-                    const SizedBox(height: 16),
-                    RepaintBoundary(child: _buildMileageChart()),
-                    const SizedBox(height: 16),
-                    RepaintBoundary(child: _buildVehicleSummary()),
-                    const SizedBox(height: 16),
-                    RepaintBoundary(child: _buildSubscriptionCard()),
-                    const SizedBox(height: 24),
-                  ]),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+          physics: const ClampingScrollPhysics(),
+
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.all(12),
+              sliver: Obx(() {
+                // Build item list reactively â€” only Obx rebuilds, not whole Scaffold
+                final hasDue = _hasDue.value;
+                final items = <Widget>[
+                  if (hasDue) RepaintBoundary(child: _buildDueReminderContainer()),
+                  if (hasDue) const SizedBox(height: 16),
+                  RepaintBoundary(child: _buildBannerCarousel()),
+                  const SizedBox(height: 16),
+                  RepaintBoundary(child: _buildStatsRow()),
+                  const SizedBox(height: 16),
+                  RepaintBoundary(child: _buildVehicleSelector()),
+                  const SizedBox(height: 16),
+                  RepaintBoundary(child: _buildVehicleSummary()),
+                  const SizedBox(height: 16),
+                  RepaintBoundary(child: _buildNearByPlacesCard()),
+                  const SizedBox(height: 16),
+                  RepaintBoundary(child: _buildMileageChart()),
+                  const SizedBox(height: 16),
+                  RepaintBoundary(child: _buildQuickLinksCard()),
+                  const SizedBox(height: 16),
+                  RepaintBoundary(child: _buildSubscriptionCard()),
+                  const SizedBox(height: 24),
+                ];
+                return SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (_, i) => items[i],
+                    childCount: items.length,
+                    // addRepaintBoundaries already handled per-item above
+                    addRepaintBoundaries: false,
+                    addAutomaticKeepAlives: true,
+                  ),
+                );
+              }),
+            ),
+          ],
+        ),        // CustomScrollView
+        ),         // ScrollConfiguration
+      ),           // RefreshIndicator
     );
   }
 
@@ -897,16 +906,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: [
           BoxShadow(
-            color: dangerColor.withOpacity(0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.40),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
           BoxShadow(
-            color: dangerColor.withOpacity(0.08),
-            blurRadius: 4,
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 3,
             offset: const Offset(0, 2),
           ),
         ],
@@ -934,7 +943,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'পেমেন্ট বকেয়া রয়েছে!',
+                      'à¦ªà§‡à¦®à§‡à¦¨à§à¦Ÿ à¦¬à¦•à§‡à¦¯à¦¼à¦¾ à¦°à¦¯à¦¼à§‡à¦›à§‡!',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 18,
@@ -943,7 +952,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'মোট বকেয়া: ৳ ${_dueAmount?.toStringAsFixed(2) ?? '0.00'}',
+                      'à¦®à§‹à¦Ÿ à¦¬à¦•à§‡à¦¯à¦¼à¦¾: à§³ ${_dueAmount.value.toStringAsFixed(2)}',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 13,
@@ -954,42 +963,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
-          if (_timeLeft != null) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
+          Obx(() => _timeLeftStr.value.isNotEmpty
+            ? Column(
                 children: [
-                  const Icon(
-                    Icons.timer_outlined,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'গ্রেস পিরিয়ড বাকি: ${_formatDuration(_timeLeft!)}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.timer_outlined, color: Colors.white, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'à¦—à§à¦°à§‡à¦¸ à¦ªà¦¿à¦°à¦¿à¦¯à¦¼à¦¡ à¦¬à¦¾à¦•à¦¿: ${_timeLeftStr.value}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ),
-          ],
+              )
+            : const SizedBox.shrink()
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: Text(
-                  'সেবা অব্যাহত রাখতে অনুগ্রহ করে বকেয়া পরিশোধ করুন।',
+                  'à¦¸à§‡à¦¬à¦¾ à¦…à¦¬à§à¦¯à¦¾à¦¹à¦¤ à¦°à¦¾à¦–à¦¤à§‡ à¦…à¦¨à§à¦—à§à¦°à¦¹ à¦•à¦°à§‡ à¦¬à¦•à§‡à¦¯à¦¼à¦¾ à¦ªà¦°à¦¿à¦¶à§‹à¦§ à¦•à¦°à§à¦¨à¥¤',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 11,
@@ -1016,7 +1026,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 child: const Text(
-                  'পেমেন্ট করুন',
+                  'à¦ªà§‡à¦®à§‡à¦¨à§à¦Ÿ à¦•à¦°à§à¦¨',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -1030,66 +1040,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildAppBar() {
-    return SliverAppBar(
-      floating: true,
-      snap: true,
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
       backgroundColor: Colors.white,
+      elevation: 3,
+      shadowColor: Colors.black.withValues(alpha: 0.3),
+      scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
       systemOverlayStyle: const SystemUiOverlayStyle(
-        statusBarColor: Color(0xFF8B1A1A),
+        statusBarColor: Color(0xFFFF0000), // Pure red status bar
         statusBarBrightness: Brightness.dark,
         statusBarIconBrightness: Brightness.light,
       ),
-      elevation: 0,
-      toolbarHeight: 48,
-      automaticallyImplyLeading: false,
-      flexibleSpace: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(5),
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Row(
-              children: [
-                Image.asset(
-                  AppConstants.appIcon,
-                  height: 40,
-                  width: 40,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) =>
-                  const Icon(Icons.apps, size: 40),
-                ),
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      AppConstants.appName,
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Obx(() => _buildAppBarIcon(
-                  Icons.notifications_outlined,
-                      () {
-                    // Navigate to events page
-                  },
-                  badge: dataController.events.length,
-                )),
-              ],
-            ),
-          ),
+      ),
+      centerTitle: true,
+      toolbarHeight: 50,
+      automaticallyImplyLeading: false,
+      title: const Text(
+        'Home',
+        style: TextStyle(
+          color: Colors.black,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );
@@ -1161,46 +1137,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 10,
-              offset: const Offset(0, 6),
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
             ),
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.pie_chart, color: primaryColor, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'Vehicle Status',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Fleet Status',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF1E293B),
                 ),
-                const Spacer(),
-                Text(
-                  '$allCount Total',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+              ),
             ),
+            Divider(color: Colors.grey[200], height: 1, thickness: 1),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -1233,17 +1199,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         children: [
                           Text(
                             allCount.toString(),
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 26,
                               fontWeight: FontWeight.bold,
-                              color: Colors.black,
+                              color: primaryColor,
                             ),
                           ),
-                          Text(
+                          const Text(
                             'Total',
                             style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey[600],
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
                             ),
                           ),
                         ],
@@ -1259,42 +1226,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     children: [
                       _buildLegendItem(
                         color: successColor,
-                        label: 'Running',
+                        label: 'Moving:',
                         count: running,
                         total: allCount,
                       ),
                       const SizedBox(height: 10),
                       _buildLegendItem(
+                        color: dangerColor,
+                        label: 'Stopped:',
+                        count: parking,
+                        total: allCount,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildLegendItem(
                         color: warningColor,
-                        label: 'Idle',
+                        label: 'idle:',
                         count: idle,
                         total: allCount,
                       ),
                       const SizedBox(height: 10),
                       _buildLegendItem(
                         color: neutralColor,
-                        label: 'Parking',
-                        count: parking,
-                        total: allCount,
-                      ),
-                      const SizedBox(height: 10),
-                      _buildLegendItem(
-                        color: dangerColor,
-                        label: 'Offline',
+                        label: 'Offline:',
                         count: offline,
                         total: allCount,
                       ),
                       const SizedBox(height: 10),
                       _buildLegendItem(
-                        color: Colors.grey[500]!,
-                        label: 'No Data',
-                        count: noData,
-                        total: allCount,
-                      ),
-                      const SizedBox(height: 10),
-                      _buildLegendItem(
-                        color: Colors.black,
-                        label: 'Expired',
+                        color: dangerColor,
+                        label: 'Expired:',
                         count: expired,
                         total: allCount,
                       ),
@@ -1347,7 +1307,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (parking > 0) {
       sections.add(
         PieChartSectionData(
-          color: neutralColor,
+          color: dangerColor, // Red for Stopped
           value: parking.toDouble(),
           title: '',
           radius: 42,
@@ -1358,7 +1318,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (offline > 0) {
       sections.add(
         PieChartSectionData(
-          color: dangerColor,
+          color: neutralColor, // Grey for Offline
           value: offline.toDouble(),
           title: '',
           radius: 42,
@@ -1380,7 +1340,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (expired > 0) {
       sections.add(
         PieChartSectionData(
-          color: Colors.black,
+          color: dangerColor, // Red for Expired
           value: expired.toDouble(),
           title: '',
           radius: 42,
@@ -1452,10 +1412,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         const SizedBox(width: 8),
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 13,
             color: Colors.black,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.bold,
           ),
         ),
         const Spacer(),
@@ -1466,6 +1426,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             fontWeight: FontWeight.bold,
             color: Colors.black,
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBannerCarousel() {
+    return Column(
+      children: [
+        CarouselSlider(
+          options: CarouselOptions(
+            height: 220,
+            viewportFraction: 1.0,
+            autoPlay: true,
+            autoPlayInterval: const Duration(seconds: 5),
+            enlargeCenterPage: false,
+            onPageChanged: (index, reason) {
+              setState(() {
+                _currentBannerIndex = index;
+              });
+            },
+          ),
+          items: _localBanners.map((bannerPath) {
+            return Container(
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage(bannerPath),
+                  fit: BoxFit.fill,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: _localBanners.asMap().entries.map((entry) {
+            return Container(
+              width: 14.0,
+              height: 4.0,
+              margin: const EdgeInsets.symmetric(horizontal: 3.0),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+                color: _currentBannerIndex == entry.key
+                    ? const Color(0xFFFF0000)
+                    : const Color(0xFFD1D5DB),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
@@ -1490,111 +1498,92 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final validSelectedId =
       vehicleList.any((d) => d.id == selectedId) ? selectedId : null;
 
-      return Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 10,
-              offset: const Offset(0, 6),
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.directions_car, color: primaryColor, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'Select Vehicle',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(
+                color: const Color(0xFFFF0000), // red border
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.22),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
                 ),
-                const Spacer(),
-                Text(
-                  '${vehicleList.length} available',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey[200]!),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  isExpanded: true,
-                  value: (validSelectedId == 0 || validSelectedId == null)
-                      ? null
-                      : validSelectedId,
-                  hint: Text(
-                    'Choose vehicle...',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
-                  ),
-                  icon: Icon(Icons.keyboard_arrow_down,
-                      color: Colors.grey[600]),
-                  items: vehicleList.map((device) {
-                    final statusColor = _getStatusColor(device);
-                    return DropdownMenuItem<int>(
-                      value: device.id,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: statusColor,
-                              shape: BoxShape.circle,
-                            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                isExpanded: true,
+                value: (validSelectedId == 0 || validSelectedId == null)
+                    ? null
+                    : validSelectedId,
+                hint: Text(
+                  'Choose vehicle...',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                ),
+                icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 24),
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                items: vehicleList.map((device) {
+                  final statusColor = _getStatusColor(device);
+                  return DropdownMenuItem<int>(
+                    value: device.id,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              device.name ?? 'Unnamed',
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                          ),
-                          Text(
-                            _getStatusLabel(device),
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: statusColor,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            device.name ?? 'Unnamed',
+                            style: const TextStyle(
+                              color: Colors.black87,
+                              fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (id) {
-                    if (id != null) homeController.onVehicleChanged(id);
-                  },
-                ),
+                        ),
+                        Text(
+                          _getStatusLabel(device),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: statusColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (id) {
+                  if (id != null) homeController.onVehicleChanged(id);
+                },
               ),
             ),
-            if (selected != null) ...[
-              const SizedBox(height: 8),
-              _buildLiveStatus(),
-            ],
-          ],
-        ),
+          ),
+
+        ],
       );
     });
   }
@@ -1612,17 +1601,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.85),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(5),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.15),
-              blurRadius: 10,
-              offset: const Offset(0, 6),
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
             ),
             BoxShadow(
-              color: color.withOpacity(0.08),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
             ),
           ],
         ),
@@ -1673,7 +1662,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 _buildLiveStat(Icons.speed, '${device.speed ?? 0}', 'km/h'),
                 _buildLiveDivider(),
                 _buildLiveStat(
-                    Icons.explore, '${device.course ?? 0}°', 'Course'),
+                    Icons.explore, '${device.course ?? 0}Â°', 'Course'),
                 _buildLiveDivider(),
                 _buildLiveStat(
                   isEngineOn ? Icons.power : Icons.power_off,
@@ -1695,7 +1684,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Expanded(
       child: Column(
         children: [
-          Icon(icon, color: Colors.white70, size: 16),
+          Icon(icon, color: Colors.white, size: 18),
           const SizedBox(height: 4),
           Text(
             value,
@@ -1724,19 +1713,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildMileageChart() {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.40),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 4,
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 3,
             offset: const Offset(0, 2),
           ),
         ],
@@ -1750,16 +1740,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(width: 8),
               Text(
                 'Weekly Mileage',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
                 ),
               ),
               const Spacer(),
               Text(
                 homeController.getFormattedDateRange(),
-                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                style: const TextStyle(fontSize: 11, color: Color(0xFF475569), fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -1825,8 +1815,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         reservedSize: 32,
                         getTitlesWidget: (value, _) => Text(
                           '${value.toInt()}',
-                          style: TextStyle(
-                              fontSize: 10, color: Colors.grey[500]),
+                          style: const TextStyle(
+                              fontSize: 10, color: Color(0xFF475569), fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
@@ -1840,9 +1830,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               padding: const EdgeInsets.only(top: 6),
                               child: Text(
                                 data[i].dayLabel,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 10,
-                                  color: Colors.grey[600],
+                                  color: Color(0xFF1E293B),
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             );
@@ -1909,179 +1900,289 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   double _getInterval(List<MileageData> data) => _getMaxY(data) / 4;
 
-  Widget _buildVehicleSummary() {
+  Widget _buildPeriodTabs() {
+    final periods = [
+      {'label': 'Today',      'period': ReportPeriod.today},
+      {'label': 'Yesterday',  'period': ReportPeriod.yesterday},
+      {'label': 'This Week',  'period': ReportPeriod.thisWeek},
+      {'label': 'This Month', 'period': ReportPeriod.thisMonth},
+      {'label': 'Custom',     'period': ReportPeriod.custom},
+    ];
+
     return Obx(() {
-      final isLoading = homeController.isLoadingReport.value;
-      final report = homeController.todayReport.value;
-      final device = homeController.selectedDevice;
-      final error = homeController.reportError.value;
-
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 10,
-              offset: const Offset(0, 6),
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Row
-            Row(
-              children: [
-                const Icon(Icons.analytics, color: primaryColor, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  "Today's Summary",
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                ),
-                const Spacer(),
-                // Refresh button
-                if (!isLoading)
-                  GestureDetector(
-                    onTap: () {
-                      if (device != null && device.id != null) {
-                        homeController.loadTodayReport(device.id!,
-                            forceRefresh: true);
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
+      final currentPeriod = homeController.selectedPeriod.value;
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: periods.map((p) {
+            final isSelected = p['period'] == currentPeriod;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: InkWell(
+                onTap: () async {
+                  final tapped = p['period'] as ReportPeriod;
+                  if (tapped == ReportPeriod.custom) {
+                    final picked = await showDateRangePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                      initialDateRange: DateTimeRange(
+                        start: DateTime.now().subtract(const Duration(days: 6)),
+                        end: DateTime.now(),
                       ),
-                      child: Icon(Icons.refresh,
-                          size: 16, color: Colors.grey[600]),
-                    ),
-                  )
-                else
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                      builder: (context, child) => Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: const ColorScheme.light(
+                            primary: primaryColor,
+                            onPrimary: Colors.white,
+                            surface: Colors.white,
+                          ),
+                        ),
+                        child: child!,
+                      ),
+                    );
+                    if (picked != null) {
+                      homeController.onCustomRangePicked(picked.start, picked.end);
+                    }
+                  } else {
+                    homeController.onPeriodChanged(tapped);
+                  }
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? primaryColor : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: isSelected
+                        ? null
+                        : Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: primaryColor.withValues(alpha: 0.40),
+                              blurRadius: 6,
+                              offset: const Offset(0, 3),
+                            ),
+                          ]
+                        : null,
                   ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // Content
-            if (isLoading && report == null)
-              const SizedBox(
-                height: 200,
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (device == null)
-              _buildEmptyState('Select a vehicle to view summary')
-            else if (report == null || report.isEmpty)
-                _buildEmptyState(
-                    error.isNotEmpty ? error : 'No data available for today')
-              else
-              // DATA AVAILABLE - Show Grid
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 2.4,
-                  children: [
-                    _buildSummaryItem(
-                      Icons.route,
-                      'Distance',
-                      report.routeLength ?? '0 Km',
-                      primaryColor,
+                  child: Text(
+                    p['label'] as String,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : const Color(0xFF475569),
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
                     ),
-                    _buildSummaryItem(
-                      Icons.speed,
-                      'Top Speed',
-                      report.topSpeed ?? '0 kph',
-                      warningColor,
-                    ),
-                    _buildSummaryItem(
-                      Icons.play_arrow,
-                      'Moving',
-                      report.moveDuration ?? '0h 0m',
-                      successColor,
-                    ),
-                    _buildSummaryItem(
-                      Icons.pause,
-                      'Stopped',
-                      report.stopDuration ?? '0h 0m',
-                      dangerColor,
-                    ),
-                    _buildSummaryItem(
-                      Icons.speed_outlined,
-                      'Avg Speed',
-                      report.averageSpeed ?? '0 kph',
-                      neutralColor,
-                    ),
-                    _buildSummaryItem(
-                      Icons.engineering,
-                      'Engine Hrs',
-                      report.engineHours ?? '0h 0m',
-                      successColor,
-                    ),
-                    _buildSummaryItem(
-                      Icons.build_circle,
-                      'Engine Work',
-                      report.engineWork ?? '0s',
-                      warningColor,
-                    ),
-                    _buildSummaryItem(
-                      Icons.hourglass_empty,
-                      'Engine Idle',
-                      report.engineIdle ?? '0h 0m',
-                      dangerColor,
-                    ),
-                    _buildSummaryItem(
-                      Icons.warning_amber,
-                      'Overspeed',
-                      report.overspeedCount ?? '0',
-                      dangerColor,
-                    ),
-                    _buildSummaryItem(
-                      Icons.local_gas_station,
-                      'Fuel',
-                      report.fuelConsumption ??
-                          device.deviceData?.fuelQuantity ??
-                          '0 L',
-                      successColor,
-                    ),
-                    _buildSummaryItem(
-                      Icons.straighten,
-                      'Odometer',
-                      report.odometer ??
-                          '${device.totalDistance?.toStringAsFixed(1) ?? '0'} Km',
-                      primaryColor,
-                    ),
-                    _buildSummaryItem(
-                      Icons.explore,
-                      'Course',
-                      '${device.course ?? 0}°',
-                      neutralColor,
-                    ),
-                  ],
+                  ),
                 ),
-          ],
+              ),
+            );
+          }).toList(),
         ),
       );
     });
+  }
+
+  Widget _buildVehicleSummary() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildPeriodTabs(),
+        const SizedBox(height: 16),
+        Obx(() {
+          final isLoading = homeController.isLoadingReport.value;
+          final report = homeController.todayReport.value;
+          final device = homeController.selectedDevice;
+          final error = homeController.reportError.value;
+          final period = homeController.selectedPeriod.value;
+
+          String title = "Today's Summary";
+          if (period == ReportPeriod.yesterday) {
+            title = "Yesterday's Summary";
+          } else if (period == ReportPeriod.thisWeek) {
+            title = "Weekly Summary";
+          } else if (period == ReportPeriod.thisMonth) {
+            title = "Monthly Summary";
+          } else if (period == ReportPeriod.custom) {
+            final s = homeController.customStart.value;
+            final e = homeController.customEnd.value;
+            if (s != null && e != null) {
+              title = "${s.day}/${s.month}/${s.year} â€“ ${e.day}/${e.month}/${e.year}";
+            } else {
+              title = "Custom Summary";
+            }
+          }
+
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.40),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 3,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Row
+                Row(
+                  children: [
+                    const Icon(Icons.analytics, color: primaryColor, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    const Spacer(),
+                    // Refresh button
+                    if (!isLoading)
+                      GestureDetector(
+                        onTap: () {
+                          if (device != null && device.id != null) {
+                            homeController.loadTodayReport(device.id!,
+                                forceRefresh: true);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(Icons.refresh,
+                              size: 16, color: Colors.grey[600]),
+                        ),
+                      )
+                    else
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Content
+                if (isLoading && report == null)
+                  const SizedBox(
+                    height: 200,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (device == null)
+                  _buildEmptyState('Select a vehicle to view summary')
+                else if (report == null || report.isEmpty)
+                  _buildEmptyState(
+                      error.isNotEmpty ? error : 'No data available for $title')
+                else
+                  // DATA AVAILABLE - Show Grid
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 2.4,
+                    children: [
+                      _buildSummaryItem(
+                        Icons.route,
+                        'Distance',
+                        report.routeLength ?? '0 Km',
+                        primaryColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.speed,
+                        'Top Speed',
+                        report.topSpeed ?? '0 kph',
+                        warningColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.play_arrow,
+                        'Moving',
+                        report.moveDuration ?? '0h 0m',
+                        successColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.pause,
+                        'Stopped',
+                        report.stopDuration ?? '0h 0m',
+                        dangerColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.speed_outlined,
+                        'Avg Speed',
+                        report.averageSpeed ?? '0 kph',
+                        neutralColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.engineering,
+                        'Engine Hrs',
+                        report.engineHours ?? '0h 0m',
+                        successColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.build_circle,
+                        'Engine Work',
+                        report.engineWork ?? '0s',
+                        warningColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.hourglass_empty,
+                        'Engine Idle',
+                        report.engineIdle ?? '0h 0m',
+                        dangerColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.warning_amber,
+                        'Overspeed',
+                        report.overspeedCount ?? '0',
+                        dangerColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.local_gas_station,
+                        'Fuel',
+                        report.fuelConsumption ??
+                            device.deviceData?.fuelQuantity ??
+                            '0 L',
+                        successColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.straighten,
+                        'Odometer',
+                        report.odometer ??
+                            '${device.totalDistance?.toStringAsFixed(1) ?? '0'} Km',
+                        primaryColor,
+                      ),
+                      _buildSummaryItem(
+                        Icons.explore,
+                        'Course',
+                        '${device.course ?? 0}Â°',
+                        neutralColor,
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
   }
 
   Widget _buildSummaryItem(
@@ -2089,20 +2190,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.1)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.40),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 3,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(icon, color: color, size: 16),
-          ),
+          Icon(icon, color: color, size: 24),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -2112,7 +2218,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: color,
                   ),
@@ -2121,7 +2227,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 Text(
                   label,
-                  style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
                 ),
               ],
             ),
@@ -2129,6 +2239,158 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+
+  Widget _buildNearByPlacesCard() {
+    final List<Map<String, dynamic>> items = [
+      {
+        'title': 'Hospital',
+        'query': 'hospital near me',
+        'assetPath': 'assets/images/nearby_hospital.svg',
+      },
+      {
+        'title': 'Restaurant',
+        'query': 'restaurant near me',
+        'assetPath': 'assets/images/nearby_restaurant.svg',
+      },
+      {
+        'title': 'ATM',
+        'query': 'atm near me',
+        'assetPath': 'assets/images/nearby_atm.svg',
+      },
+      {
+        'title': 'Bus Stop',
+        'query': 'bus stop near me',
+        'assetPath': 'assets/images/nearby_bus_stop.svg',
+      },
+      {
+        'title': 'Train Station',
+        'query': 'train station near me',
+        'assetPath': 'assets/images/nearby_train_station.svg',
+      },
+      {
+        'title': 'Hotel',
+        'query': 'hotel near me',
+        'assetPath': 'assets/images/nearby_hotel.svg',
+      },
+      {
+        'title': 'Gas Station',
+        'query': 'gas station near me',
+        'assetPath': 'assets/images/nearby_gas_station.svg',
+      },
+      {
+        'title': 'Petrol Pump',
+        'query': 'petrol pump near me',
+        'assetPath': 'assets/images/nearby_petrol_pump.svg',
+      },
+      {
+        'title': 'Police Station',
+        'query': 'police station near me',
+        'assetPath': 'assets/images/nearby_police_station.svg',
+      },
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.40),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 3,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.place, color: Color(0xFFFF0000), size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Near By Place',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 0.95,
+            ),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return InkWell(
+                onTap: () => _launchMapQuery(item['query'] as String),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SvgPicture.asset(
+                        item['assetPath'] as String,
+                        width: 42,
+                        height: 42,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        item['title'] as String,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _launchMapQuery(String query) async {
+    try {
+      final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}');
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('Error launching map: $e');
+      Get.snackbar(
+        'Error',
+        'Could not open Google Maps. Make sure Google Maps is installed.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 
   Widget _buildEmptyState(String message) {
@@ -2163,17 +2425,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 10,
-              offset: const Offset(0, 6),
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
             ),
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
             ),
           ],
         ),
@@ -2475,16 +2738,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.40),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 4,
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 3,
             offset: const Offset(0, 2),
           ),
         ],
@@ -2498,10 +2762,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(width: 8),
               Text(
                 'Quick Links',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
                 ),
               ),
             ],
@@ -2561,13 +2825,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(5),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.grey[200]!, width: 0.5),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 0.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -2583,10 +2859,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             Expanded(
               child: Text(
                 label,
-                style: TextStyle(
-                  fontSize: 10.0,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
+                style: const TextStyle(
+                  fontSize: 11.0,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
                   height: 1.1,
                 ),
                 maxLines: 2,
@@ -2607,7 +2883,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } else {
         Get.snackbar('Error', 'Could not open link: $urlString',
             snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: dangerColor.withOpacity(0.8),
+            backgroundColor: dangerColor.withValues(alpha: 0.8),
             colorText: Colors.white);
       }
     } catch (e) {
@@ -2678,11 +2954,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               SizedBox(height: 8),
-              Text('• Red Light: Stop immediately.\n'
-                  '• Yellow Light: Slow down and prepare to stop.\n'
-                  '• Green Light: Go safely.\n'
-                  '• Speed Limit: Observe speed limit signs in urban zones (typically 30-50 km/h).\n'
-                  '• Overtaking: Do not overtake on bridges, curves, or narrow roads.'),
+              Text('â€¢ Red Light: Stop immediately.\n'
+                  'â€¢ Yellow Light: Slow down and prepare to stop.\n'
+                  'â€¢ Green Light: Go safely.\n'
+                  'â€¢ Speed Limit: Observe speed limit signs in urban zones (typically 30-50 km/h).\n'
+                  'â€¢ Overtaking: Do not overtake on bridges, curves, or narrow roads.'),
               Divider(),
               Text(
                 'Tip: Orbit GPS tracking sends dynamic notifications when you exceed speed limits.',
@@ -2744,4 +3020,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
   }
+}
+
+/// Removes the Android overscroll glow indicator for a clean, fluid scroll feel.
+/// This is a zero-cost wrapper â€” no animations, no extra layers.
+class _NoGlowScrollBehavior extends ScrollBehavior {
+  const _NoGlowScrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) =>
+      child; // Simply skip the glow â€” nothing to render
 }

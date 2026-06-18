@@ -75,7 +75,7 @@ class _CarKnowledgeScreenState extends State<CarKnowledgeScreen> {
           'Car Knowledge & Care',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
         ),
-        backgroundColor: const Color(0xFF8B1A1A),
+        backgroundColor: const Color(0xFFE53935),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
@@ -88,14 +88,14 @@ class _CarKnowledgeScreenState extends State<CarKnowledgeScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF8B1A1A), Color(0xFFB22222)],
+                  colors: [Color(0xFFE53935), Color(0xFFB22222)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF8B1A1A).withOpacity(0.25),
+                    color: const Color(0xFFE53935).withOpacity(0.25),
                     blurRadius: 10,
                     offset: const Offset(0, 6),
                   ),
@@ -281,14 +281,14 @@ class _CarKnowledgeScreenState extends State<CarKnowledgeScreen> {
               child: Text(
                 title,
                 style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF8B1A1A)),
+                    fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFE53935)),
               ),
             ),
             ...items.keys.map((key) {
               return CheckboxListTile(
                 title: Text(key, style: const TextStyle(fontSize: 13)),
                 value: items[key],
-                activeColor: const Color(0xFF8B1A1A),
+                activeColor: const Color(0xFFE53935),
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
                 dense: true,

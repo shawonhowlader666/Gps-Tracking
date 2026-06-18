@@ -102,7 +102,7 @@ class _DrivingInstructorScreenState extends State<DrivingInstructorScreen> {
           'Driving Instructors',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
         ),
-        backgroundColor: const Color(0xFF8B1A1A), // Maroon crimson accent matching home
+        backgroundColor: const Color(0xFFE53935), // Crimson red theme color
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -110,7 +110,7 @@ class _DrivingInstructorScreenState extends State<DrivingInstructorScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(12),
-            color: const Color(0xFF8B1A1A),
+            color: const Color(0xFFE53935),
             child: TextField(
               controller: _searchController,
               onChanged: (val) {
@@ -189,11 +189,11 @@ class _DrivingInstructorScreenState extends State<DrivingInstructorScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF8B1A1A).withOpacity(0.1),
+                                      color: const Color(0xFFE53935).withOpacity(0.1),
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(Icons.directions_car,
-                                        color: Color(0xFF8B1A1A), size: 20),
+                                        color: Color(0xFFE53935), size: 20),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -288,7 +288,7 @@ class _DrivingInstructorScreenState extends State<DrivingInstructorScreen> {
                                       style: TextStyle(fontSize: 11, color: Colors.white),
                                     ),
                                     style: TextButton.styleFrom(
-                                      backgroundColor: const Color(0xFF8B1A1A),
+                                      backgroundColor: const Color(0xFFE53935),
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12, vertical: 6),
                                       shape: RoundedRectangleBorder(

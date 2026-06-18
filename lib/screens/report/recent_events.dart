@@ -34,7 +34,7 @@ class _EventsPageState extends State<EventsPage> {
       elevation: 0,
       centerTitle: false,
       systemOverlayStyle: const SystemUiOverlayStyle(
-        statusBarColor: Color(0xFF8B1A1A),
+        statusBarColor: Color(0xFFE53935),
         statusBarBrightness: Brightness.dark,
         statusBarIconBrightness: Brightness.light,
       ),
@@ -113,8 +113,12 @@ class _EventsPageState extends State<EventsPage> {
 
   void _deleteEvent(int index) {
     final deletedEvent = controller.events[index];
-    // Remove event
+
+    // Remove from in-memory list
     controller.events.removeAt(index);
+
+    // Also remove from local persistent storage (if it's a local alert event)
+    controller.deleteLocalEvent(deletedEvent.id);
 
     // Haptic feedback
     HapticFeedback.mediumImpact();
@@ -123,11 +127,11 @@ class _EventsPageState extends State<EventsPage> {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
+        content: const Row(
           children: [
-            const Icon(Icons.delete_outline, color: Colors.white, size: 20),
-            const SizedBox(width: 12),
-            const Expanded(
+            Icon(Icons.delete_outline, color: Colors.white, size: 20),
+            SizedBox(width: 12),
+            Expanded(
               child: Text(
                 'Event deleted',
                 style: TextStyle(fontWeight: FontWeight.w500),
@@ -143,7 +147,10 @@ class _EventsPageState extends State<EventsPage> {
           label: 'UNDO',
           textColor: const Color(0xFF6C63FF),
           onPressed: () {
+            // Re-insert into memory and re-save to local storage
             controller.events.insert(index, deletedEvent);
+            controller.localEvents.removeWhere((e) => e.id == deletedEvent.id);
+            controller.localEvents.insert(0, deletedEvent);
           },
         ),
       ),
@@ -170,7 +177,9 @@ class _EventsPageState extends State<EventsPage> {
           ),
           ElevatedButton(
             onPressed: () {
+              // Clear both in-memory list AND persistent local storage
               controller.events.clear();
+              controller.clearLocalEvents();
               Navigator.pop(context);
               HapticFeedback.mediumImpact();
             },

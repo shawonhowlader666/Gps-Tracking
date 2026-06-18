@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Battery Body -->
+  <rect x="12" y="18" width="36" height="28" rx="4" fill="none" stroke="#334155" stroke-width="4"/>
+  <!-- Battery Cap -->
+  <rect x="48" y="26" width="4" height="12" rx="1" fill="#334155"/>
+  <!-- Green charge blocks (3 bars) -->
+  <rect x="18" y="23" width="7" height="18" rx="1.5" fill="#22C55E"/>
+  <rect x="28" y="23" width="7" height="18" rx="1.5" fill="#22C55E"/>
+  <rect x="38" y="23" width="7" height="18" rx="1.5" fill="#22C55E"/>
+</svg>

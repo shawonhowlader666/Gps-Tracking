@@ -202,6 +202,22 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   final Set<Polyline> _playbackPolyLines = {};
   final Set<Polyline> _animatedPolyLines = {};
 
+  // High-performance ValueNotifiers to update overlays without rebuilding the entire screen at 60fps
+  final ValueNotifier<Set<Marker>> _markersNotifier = ValueNotifier<Set<Marker>>({});
+  final ValueNotifier<Set<Polyline>> _polylinesNotifier = ValueNotifier<Set<Polyline>>({});
+
+  void _syncMarkers() {
+    if (!_isDisposed) {
+      _markersNotifier.value = Set<Marker>.of(_playbackMarkers.values);
+    }
+  }
+
+  void _syncPolylines() {
+    if (!_isDisposed) {
+      _polylinesNotifier.value = {..._playbackPolyLines, ..._animatedPolyLines};
+    }
+  }
+
   // SMOOTH ANIMATION
   PlaybackCarAnimator? _carAnimator;
   Timer? _cameraFollowTimer;
@@ -318,15 +334,14 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       initialBearing: 0,
     );
 
-    // IMPORTANT: Add initial car marker
+    // IMPORTANT: Add initial car marker & animated polyline
     _addCarMarker(playbackRoutePoints.first, 0);
+    _updateAnimatedPolyline(0);
   }
 
   void _onCarPositionUpdate(LatLng position, double bearing) {
     if (_isDisposed) return;
     _addCarMarker(position, bearing);
-    _updateAnimatedPolyline(_currentPointIndex);
-    if (mounted) setState(() {});
   }
 
   void _onCarReachedTarget() {
@@ -334,15 +349,18 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
     _currentPointIndex++;
     _playbackProgress = _currentPointIndex.toDouble();
+    _updateAnimatedPolyline(_currentPointIndex);
 
     if (_currentPointIndex >= playbackRoutePoints.length - 1) {
       _stopPlayback();
       _currentPointIndex = 0;
       _playbackProgress = 0;
+      _updateAnimatedPolyline(0);
       if (mounted) setState(() {});
       return;
     }
 
+    if (mounted) setState(() {});
     _moveToNextPoint();
   }
 
@@ -379,6 +397,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         zIndex: 10,
       );
       _playbackMarkers[const MarkerId('playback_car')] = marker;
+      _syncMarkers();
       return;
     }
 
@@ -393,6 +412,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     );
 
     _playbackMarkers[const MarkerId('playback_car')] = marker;
+    _syncMarkers();
   }
 
   void _updateAnimatedPolyline(int currentIndex) {
@@ -413,6 +433,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       startCap: Cap.roundCap,
       endCap: Cap.roundCap,
     ));
+    _syncPolylines();
   }
 
   void _startCameraFollowTimer() {
@@ -747,6 +768,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     _isPlaying = false;
     _carAnimator?.dispose();
     _carAnimator = null;
+    _syncMarkers();
+    _syncPolylines();
   }
 
   void _loadPlaybackData() {
@@ -844,6 +867,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             startCap: Cap.roundCap,
             endCap: Cap.roundCap,
           ));
+          _syncPolylines();
 
           await _addStartEndMarkers();
           _addParkingMarkers();
@@ -952,6 +976,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       );
 
       await _safeAnimateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+      _syncMarkers();
       setState(() {});
     } catch (e) {
       debugPrint('Error adding markers: $e');
@@ -1037,6 +1062,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       index++;
     }
 
+    _syncMarkers();
     if (mounted) setState(() {});
   }
 
@@ -1073,6 +1099,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       index++;
     }
 
+    _syncMarkers();
     if (mounted) setState(() {});
   }
 
@@ -1150,6 +1177,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       } else {
         _parkingMarkers?.forEach((id, _) => _playbackMarkers.remove(id));
       }
+      _syncMarkers();
     });
   }
 
@@ -1162,6 +1190,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       } else {
         _eventMarkers?.forEach((id, _) => _playbackMarkers.remove(id));
       }
+      _syncMarkers();
     });
   }
 
@@ -1247,28 +1276,38 @@ class _PlaybackScreenState extends State<PlaybackScreen>
       body: Stack(
         children: [
           // Map
-          GoogleMap(
-            mapType: _currentMapType,
-            initialCameraPosition: CameraPosition(
-              target: _initialCameraPosition,
-              zoom: 14,
-            ),
-            onMapCreated: (controller) {
-              _mapController = controller;
-              _isMapCreated = true;
-              if (_mapStyle != null) {
-                controller.setMapStyle(_mapStyle);
-              }
+          ValueListenableBuilder<Set<Marker>>(
+            valueListenable: _markersNotifier,
+            builder: (context, markers, _) {
+              return ValueListenableBuilder<Set<Polyline>>(
+                valueListenable: _polylinesNotifier,
+                builder: (context, polylines, _) {
+                  return GoogleMap(
+                    mapType: _currentMapType,
+                    initialCameraPosition: CameraPosition(
+                      target: _initialCameraPosition,
+                      zoom: 14,
+                    ),
+                    onMapCreated: (controller) {
+                      _mapController = controller;
+                      _isMapCreated = true;
+                      if (_mapStyle != null) {
+                        controller.setMapStyle(_mapStyle);
+                      }
+                    },
+                    onCameraMove: (pos) => currentZoom = pos.zoom,
+                    markers: markers,
+                    polylines: polylines,
+                    myLocationEnabled: true,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    mapToolbarEnabled: false,
+                    buildingsEnabled: false,
+                    padding: const EdgeInsets.only(bottom: 120),
+                  );
+                },
+              );
             },
-            onCameraMove: (pos) => currentZoom = pos.zoom,
-            markers: Set<Marker>.of(_playbackMarkers.values),
-            polylines: {..._playbackPolyLines, ..._animatedPolyLines},
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            mapToolbarEnabled: false,
-            buildingsEnabled: false,
-            padding: const EdgeInsets.only(bottom: 120),
           ),
 
           if (_isPlaybackLoading)

@@ -14,6 +14,8 @@ import 'package:gpspro/services/model/bottom_menu.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/widgets/address.dart';
+import 'package:gpspro/widgets/svg_asset_colorizer.dart';
+import 'package:gpspro/util/util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class DeviceSelection extends StatefulWidget {
@@ -224,14 +226,14 @@ class _DevicePageState extends State<DeviceSelection> {
 
     if (device.iconColor != null) {
       if (device.iconColor == "green") {
-        color = Colors.green;
+        color = const Color(0xFF00C853);
       } else if (device.iconColor == "yellow") {
-        color = Colors.yellow.shade700;
+        color = const Color(0xFFFF9100);
       } else {
-        color = Colors.red;
+        color = const Color(0xFFFF0000);
       }
     } else {
-      color = Colors.yellow.shade700;
+      color = const Color(0xFFFF9100);
     }
 
     return Padding(
@@ -311,9 +313,9 @@ class _DevicePageState extends State<DeviceSelection> {
                               shape: BoxShape.circle,
                               color: color.withValues(alpha: 0.3),
                             ),
-                            child: Image(
-                              image: CachedNetworkImageProvider(
-                                  "${UserRepository.getServerUrl()}/${device.icon!.path!}"),
+                            child: SvgAssetColorizer(
+                              assetPath: Util.getLocalSvgPath(device.icon!.path!),
+                              color: color,
                               width: 35,
                               height: 35,
                             ),

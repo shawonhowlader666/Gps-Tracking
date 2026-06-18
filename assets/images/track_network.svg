@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Transmitter Tower (Triangle style) -->
+  <path d="M32 16 L20 52 h24 L32 16 z" fill="none" stroke="#475569" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Tower Cross bars -->
+  <line x1="26" y1="34" x2="38" y2="34" stroke="#475569" stroke-width="3"/>
+  <line x1="23" y1="44" x2="41" y2="44" stroke="#475569" stroke-width="3"/>
+  <!-- Top transmitter node -->
+  <circle cx="32" cy="16" r="5" fill="#EF4444"/>
+  <!-- Radio Waves -->
+  <path d="M22 22 A 15 15 0 0 1 42 22" fill="none" stroke="#3B82F6" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M14 30 A 25 25 0 0 1 50 30" fill="none" stroke="#60A5FA" stroke-width="3" stroke-linecap="round"/>
+</svg>

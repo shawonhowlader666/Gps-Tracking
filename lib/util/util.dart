@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:gpspro/util/image_fetcher.dart';
@@ -15,6 +16,8 @@ import 'package:xml/xml.dart' as xml;
 import 'package:gpspro/storage/user_repository.dart';
 
 class Util {
+  static final Map<String, BitmapDescriptor> _markerIconCache = {};
+
   static String convertSpeed(var speed, String type) {
     return "${speed.toInt()} $type";
   }
@@ -543,11 +546,117 @@ class Util {
     await imageFetcher.downloadAndSaveImages();
   }
 
-  static Future<BitmapDescriptor> getMarkerIcon(String imagePath) async {
-    final String imageUrl = "${UserRepository.getServerUrl()!}/$imagePath";
-    final File imageFile = await DefaultCacheManager().getSingleFile(imageUrl);
-    final Uint8List bytes = await imageFile.readAsBytes();
-    return BitmapDescriptor.bytes(bytes);
+  static String getLocalSvgPath(String? serverPath) {
+    if (serverPath == null) return 'assets/images/track_car.svg';
+    final path = serverPath.toLowerCase().trim();
+    
+    // Check by ID or exact name parts
+    if (path.contains('sportscar') || path.contains('sports-car') || path.contains('sports_car') || path.contains('2.png')) {
+      return 'assets/images/track_sportscar.svg';
+    } else if (path.contains('motorcycle') || path.contains('bike') || path.contains('moto') || path.contains('3.png')) {
+      return 'assets/images/track_motorcycle.svg';
+    } else if (path.contains('bus') || path.contains('4.png')) {
+      return 'assets/images/track_bus.svg';
+    } else if (path.contains('police') || path.contains('5.png')) {
+      return 'assets/images/track_police.svg';
+    } else if (path.contains('cargo_truck') || path.contains('cargo-truck') || path.contains('pickup') || path.contains('6.png')) {
+      return 'assets/images/track_truck.svg';
+    } else if (path.contains('cng') || path.contains('rickshaw') || path.contains('auto') || path.contains('7.png')) {
+      return 'assets/images/track_cng.svg';
+    } else if (path.contains('speedboat') || path.contains('speed-boat') || path.contains('15.png')) {
+      return 'assets/images/track_speedboat.svg';
+    } else if (path.contains('boat') || path.contains('ship') || path.contains('marine') || path.contains('8.png')) {
+      return 'assets/images/track_boat.svg';
+    } else if (path.contains('bicycle') || path.contains('cycle') || path.contains('9.png')) {
+      return 'assets/images/track_bicycle.svg';
+    } else if (path.contains('container') || path.contains('heavy-truck') || path.contains('heavy_truck') || path.contains('10.png')) {
+      return 'assets/images/track_container.svg';
+    } else if (path.contains('person') || path.contains('walk') || path.contains('11.png')) {
+      return 'assets/images/track_person.svg';
+    } else if (path.contains('van') || path.contains('micro') || path.contains('12.png')) {
+      return 'assets/images/track_van.svg';
+    } else if (path.contains('tractor') || path.contains('13.png')) {
+      return 'assets/images/track_tractor.svg';
+    } else if (path.contains('ambulance') || path.contains('14.png')) {
+      return 'assets/images/track_ambulance.svg';
+    } else if (path.contains('generator') || path.contains('16.png')) {
+      return 'assets/images/track_generator.svg';
+    } else if (path.contains('concrete') || path.contains('mixer') || path.contains('dump') || path.contains('17.png')) {
+      return 'assets/images/track_concrete.svg';
+    }
+    
+    // Default fallback
+    return 'assets/images/track_car.svg';
+  }
+
+  static Future<BitmapDescriptor> getMarkerIcon(String imagePath, {String? statusColor}) async {
+    final String cacheKey = "${imagePath}_${statusColor ?? 'default'}";
+    if (_markerIconCache.containsKey(cacheKey)) {
+      return _markerIconCache[cacheKey]!;
+    }
+
+    final String svgPath = getLocalSvgPath(imagePath);
+    
+    try {
+      final String svgString = await rootBundle.loadString(svgPath);
+      
+      // Map status color string to dynamic color tint
+      Color tintColor = const Color(0xFF10B981); // Default green
+      if (statusColor != null) {
+        final lower = statusColor.toLowerCase().trim();
+        if (lower == 'green') {
+          tintColor = const Color(0xFF00C853); // Green moving
+        } else if (lower == 'yellow' || lower == 'idle') {
+          tintColor = const Color(0xFFFF9100); // Yellow/orange idle
+        } else if (lower == 'red' || lower == 'stopped') {
+          tintColor = const Color(0xFFFF3D00); // Red stopped
+        } else if (lower == 'gray' || lower == 'offline') {
+          tintColor = const Color(0xFF94A3B8); // Slate offline
+        }
+      } else {
+        // Fallback: check if the path itself contains color words
+        final lowerPath = imagePath.toLowerCase();
+        if (lowerPath.contains('red')) {
+          tintColor = const Color(0xFFFF3D00);
+        } else if (lowerPath.contains('yellow')) {
+          tintColor = const Color(0xFFFF9100);
+        } else if (lowerPath.contains('gray') || lowerPath.contains('grey')) {
+          tintColor = const Color(0xFF94A3B8);
+        } else if (lowerPath.contains('green')) {
+          tintColor = const Color(0xFF00C853);
+        }
+      }
+
+      final hexColor = '#${tintColor.toARGB32().toRadixString(16).substring(2).padLeft(6, '0')}';
+      final String colorizedSvg = svgString.replaceAll('#MAIN_COLOR', hexColor);
+
+      // Render SVG to picture
+      final SvgLoader loader = SvgStringLoader(colorizedSvg);
+      final PictureInfo pictureInfo = await vg.loadPicture(loader, null);
+      
+      // We want high-res marker images for Google Maps (100x100 pixels)
+      final int size = 100;
+      final ui.Image image = await pictureInfo.picture.toImage(size, size);
+      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final Uint8List uint8List = byteData!.buffer.asUint8List();
+      
+      final descriptor = BitmapDescriptor.bytes(uint8List);
+      _markerIconCache[cacheKey] = descriptor;
+      return descriptor;
+    } catch (e) {
+      debugPrint("Error generating SVG marker: $e. Falling back to server network image.");
+      try {
+        final String imageUrl = "${UserRepository.getServerUrl()!}/$imagePath";
+        final File imageFile = await DefaultCacheManager().getSingleFile(imageUrl);
+        final Uint8List bytes = await imageFile.readAsBytes();
+        final descriptor = BitmapDescriptor.bytes(bytes);
+        _markerIconCache[cacheKey] = descriptor;
+        return descriptor;
+      } catch (ex) {
+        debugPrint("Failed to fetch server fallback icon: $ex. Returning default marker.");
+        return BitmapDescriptor.defaultMarker;
+      }
+    }
   }
 
   // static Future<BitmapDescriptor> getMarkerVehicleIcon(String imagePath, {required int width,required int height}) async {

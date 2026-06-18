@@ -484,7 +484,7 @@ class _MyAppPageState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Color(0xFF8B1A1A),
+      statusBarColor: Color(0xFFFF0000),
       statusBarBrightness: Brightness.dark,
       statusBarIconBrightness: Brightness.light,
     ));
@@ -518,17 +518,18 @@ class _MyAppPageState extends State<MyApp> with WidgetsBindingObserver {
               colorScheme: ColorScheme.fromSeed(
                 seedColor: CustomColor.primary,
                 primary: CustomColor.primary,
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: Colors.black,
               ),
               visualDensity: VisualDensity.adaptivePlatformDensity,
               splashFactory: InkSparkle.splashFactory,
-              fontFamily: GoogleFonts.plusJakartaSans().fontFamily,
-              textTheme: GoogleFonts.plusJakartaSansTextTheme(),
-              primaryTextTheme: GoogleFonts.plusJakartaSansTextTheme(),
+              fontFamily: 'Plus Jakarta Sans',
               appBarTheme: const AppBarTheme(
                 elevation: 0,
                 scrolledUnderElevation: 0,
                 systemOverlayStyle: SystemUiOverlayStyle(
-                  statusBarColor: Color(0xFF8B1A1A),
+                  statusBarColor: Color(0xFFFF0000),
                   statusBarBrightness: Brightness.dark,
                   statusBarIconBrightness: Brightness.light,
                 ),
@@ -551,7 +552,7 @@ class _MyAppPageState extends State<MyApp> with WidgetsBindingObserver {
                     height: MediaQuery.of(context).padding.top,
                     child: IgnorePointer(
                       child: Container(
-                        color: const Color(0xFF8B1A1A),
+                        color: const Color(0xFFFF0000),
                       ),
                     ),
                   ),

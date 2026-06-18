@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Left Foot -->
+  <rect x="23" y="44" width="6" height="12" rx="3" fill="#1E293B" stroke="#0F172A" stroke-width="1"/>
+  <!-- Right Foot (Walking forward) -->
+  <rect x="35" y="32" width="6" height="12" rx="3" fill="#1E293B" stroke="#0F172A" stroke-width="1"/>
+  <!-- Torso / Shoulders (Tilted) -->
+  <ellipse cx="32" cy="30" rx="14" ry="10" fill="#MAIN_COLOR" stroke="#0F172A" stroke-width="2"/>
+  <!-- Head -->
+  <circle cx="32" cy="27" r="7" fill="#FDE047" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Hair/Cap detail -->
+  <path d="M27 25 C27 20 37 20 37 25 Z" fill="#1E293B"/>
+</svg>

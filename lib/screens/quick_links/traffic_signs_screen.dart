@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:gpspro/theme/custom_color.dart';
 
 class TrafficSignsScreen extends StatefulWidget {
   const TrafficSignsScreen({super.key});
@@ -159,7 +160,7 @@ class _TrafficSignsScreenState extends State<TrafficSignsScreen> with SingleTick
         actions: [
           TextButton(
             onPressed: () => Get.back(),
-            child: const Text('Close', style: TextStyle(color: Color(0xFF8B1A1A))),
+            child: Text('Close', style: TextStyle(color: CustomColor.primaryColor)),
           ),
         ],
       ),
@@ -276,7 +277,7 @@ class _TrafficSignsScreenState extends State<TrafficSignsScreen> with SingleTick
           'Traffic Signs Guide',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
         ),
-        backgroundColor: const Color(0xFF8B1A1A),
+        backgroundColor: CustomColor.primaryColor,
         iconTheme: const IconThemeData(color: Colors.white),
         bottom: TabBar(
           controller: _tabController,

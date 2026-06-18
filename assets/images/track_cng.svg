@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Wheels -->
+  <rect x="30" y="8" width="4" height="10" rx="1.5" fill="#1E293B"/>
+  <rect x="16" y="44" width="4" height="12" rx="1.5" fill="#1E293B"/>
+  <rect x="44" y="44" width="4" height="12" rx="1.5" fill="#1E293B"/>
+  <!-- Body Outer Shape -->
+  <path d="M30 14 C30 14 32 12 34 14 L42 22 L44 48 C44 52 20 52 20 48 L22 22 Z" fill="#MAIN_COLOR" stroke="#0F172A" stroke-width="2"/>
+  <!-- Cream front windshield / canopy hood -->
+  <path d="M27 22 L37 22 L34 16 L30 16 Z" fill="#FEF08A" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Back passenger seats/cabin roof -->
+  <path d="M22 26 H42 V48 H22 Z" fill="#MAIN_COLOR" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Back Window -->
+  <path d="M25 44 H39 V40 H25 Z" fill="#38BDF8" stroke="#0F172A" stroke-width="1.2"/>
+  <!-- Handlebars inside -->
+  <line x1="26" y1="23" x2="38" y2="23" stroke="#0F172A" stroke-width="1.5"/>
+</svg>

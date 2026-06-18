@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Hull -->
+  <path d="M32 3 C32 3 47 16 47 38 C47 48 43 59 39 59 L25 59 C21 59 17 48 17 38 C17 16 32 3 32 3 Z" fill="#MAIN_COLOR" stroke="#0F172A" stroke-width="2"/>
+  <!-- White Deck -->
+  <path d="M32 10 C32 10 41 18 41 36 C41 46 38 55 36 55 H28 C26 55 23 46 23 36 C23 18 32 10 32 10 Z" fill="#FFFFFF" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Windshield -->
+  <path d="M25 24 C25 24 32 20 39 24 C38 27 26 27 25 24 Z" fill="#38BDF8" stroke="#0F172A" stroke-width="1.5"/>
+  <!-- Outboard engine -->
+  <rect x="29" y="59" width="6" height="3" fill="#1E293B"/>
+</svg>

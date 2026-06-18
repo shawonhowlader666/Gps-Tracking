@@ -138,7 +138,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
               device.lng != null) {
             try {
               BitmapDescriptor markerIcon =
-              await Util.getMarkerIcon(device.icon?.path ?? '');
+              await Util.getMarkerIcon(device.icon?.path ?? '', statusColor: device.iconColor);
 
               _markers.add(Marker(
                 markerId: MarkerId(device.id.toString()),
@@ -486,10 +486,10 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                       final isSelected = _selectedDevices.any((d) => d.id == device.id);
 
                       Color statusColor = device.iconColor == "green"
-                          ? Colors.green
+                          ? const Color(0xFF00C853)
                           : device.iconColor == "yellow"
-                          ? Colors.orange
-                          : Colors.red;
+                          ? const Color(0xFFFF9100)
+                          : const Color(0xFFFF0000);
 
                       return ListTile(
                         dense: true,

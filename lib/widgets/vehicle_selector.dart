@@ -18,13 +18,13 @@ class VehicleSelector extends StatelessWidget {
   Color _getStatusColor(String? iconColor) {
     switch (iconColor?.toLowerCase()) {
       case 'green':
-        return const Color(0xFF00D68F);
+        return const Color(0xFF00C853);
       case 'yellow':
-        return const Color(0xFFFFB020);
+        return const Color(0xFFFF9100);
       case 'red':
-        return const Color(0xFFFF6B6B);
+        return const Color(0xFFFF0000);
       default:
-        return Colors.grey;
+        return const Color(0xFF475569);
     }
   }
 

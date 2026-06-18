@@ -22,6 +22,26 @@ class HomeController extends GetxController {
   Rx<TodayReportData?> todayReport = Rx<TodayReportData?>(null);
   RxBool isLoadingReport = false.obs;
   RxString reportError = ''.obs;
+  Rx<ReportPeriod> selectedPeriod = ReportPeriod.today.obs;
+  Rx<DateTime?> customStart = Rx<DateTime?>(null);
+  Rx<DateTime?> customEnd   = Rx<DateTime?>(null);
+
+  void onPeriodChanged(ReportPeriod period) {
+    if (period == selectedPeriod.value) return;
+    selectedPeriod.value = period;
+    if (selectedDeviceId.value != 0) {
+      loadTodayReport(selectedDeviceId.value, forceRefresh: true);
+    }
+  }
+
+  void onCustomRangePicked(DateTime start, DateTime end) {
+    customStart.value = start;
+    customEnd.value   = end;
+    selectedPeriod.value = ReportPeriod.custom;
+    if (selectedDeviceId.value != 0) {
+      loadTodayReport(selectedDeviceId.value, forceRefresh: true);
+    }
+  }
 
   // Mileage Chart Data
   RxList<MileageData> mileageData = <MileageData>[].obs;
@@ -66,49 +86,45 @@ class HomeController extends GetxController {
   }
 
   void _initializeData() {
-    // Listen for device list changes
     ever(dataController.onlyDevices, (List<DeviceItem> devices) {
-     // log('🏠 [HomeController] Devices changed: ${devices.length}');
-
       if (devices.isNotEmpty) {
         updateSubscriptionStatus(devices);
-
-        // Auto-select first device if none selected
         if (selectedDeviceId.value == 0) {
           final first = devices.first;
           if (first.id != null) {
-          //  log('🏠 [HomeController] Auto-selecting device: ${first.id}');
             selectedDeviceId.value = first.id!;
-            loadTodayReport(first.id!);
-            loadMileageData(first.id!);
+            // Parallel — both load simultaneously on first device selection
+            Future.wait([
+              loadTodayReport(first.id!),
+              loadMileageData(first.id!),
+            ]);
           }
         }
       }
     });
 
-    // Initial load if devices already exist
     if (dataController.onlyDevices.isNotEmpty) {
-     // log('🏠 [HomeController] Initial devices: ${dataController.onlyDevices.length}');
       updateSubscriptionStatus(dataController.onlyDevices);
-
       final first = dataController.onlyDevices.first;
       if (first.id != null) {
         selectedDeviceId.value = first.id!;
-        loadTodayReport(first.id!);
-        loadMileageData(first.id!);
+        Future.wait([
+          loadTodayReport(first.id!),
+          loadMileageData(first.id!),
+        ]);
       }
     }
   }
 
   Future<void> refreshData() async {
-    //log('🔄 [HomeController] Manual refresh');
     ReportService.clearCache();
-
     await dataController.getDevices();
-
     if (selectedDeviceId.value != 0) {
-      await loadTodayReport(selectedDeviceId.value, forceRefresh: true);
-      await loadMileageData(selectedDeviceId.value);
+      // Parallel — both start at the same time
+      await Future.wait([
+        loadTodayReport(selectedDeviceId.value, forceRefresh: true),
+        loadMileageData(selectedDeviceId.value),
+      ]);
     }
   }
 
@@ -139,9 +155,12 @@ class HomeController extends GetxController {
     reportError.value = '';
 
     try {
-      // Call ReportService
-      final report = await ReportService.getTodayReportData(
+      // Call ReportService with the selected period
+      final report = await ReportService.getReportForPeriod(
         deviceId: deviceId,
+        period: selectedPeriod.value,
+        customStart: selectedPeriod.value == ReportPeriod.custom ? customStart.value : null,
+        customEnd:   selectedPeriod.value == ReportPeriod.custom ? customEnd.value   : null,
         forceRefresh: forceRefresh,
       );
       //
@@ -156,11 +175,8 @@ class HomeController extends GetxController {
       // UPDATE THE REACTIVE VARIABLE - THIS IS KEY!
       todayReport.value = report;
 
-      // Trigger update notification
-      todayReport.refresh();
-
       if (report.isEmpty) {
-        reportError.value = 'No data for today';
+        reportError.value = 'No data for ${selectedPeriod.value.name}';
       //  log('⚠️ [HomeController] Report is empty');
       } else {
        // log('✅ [HomeController] Report loaded successfully');
@@ -177,35 +193,33 @@ class HomeController extends GetxController {
 
   void onVehicleChanged(int deviceId) {
     if (deviceId == selectedDeviceId.value) return;
-
-   // log('🚗 [HomeController] Vehicle changed: $deviceId');
     selectedDeviceId.value = deviceId;
-
-    // Clear previous data
     todayReport.value = null;
     reportError.value = '';
-
-    // Load new data
-    loadTodayReport(deviceId);
-    loadMileageData(deviceId);
+    // Parallel — report and mileage load simultaneously
+    Future.wait([
+      loadTodayReport(deviceId),
+      loadMileageData(deviceId),
+    ]);
   }
 
   Future<void> loadMileageData(int deviceId) async {
     if (deviceId == 0) return;
-
     isLoadingMileage.value = true;
-    mileageData.clear();
     isDummyMileageData.value = false;
 
     try {
-      for (int i = 6; i >= 0; i--) {
-        final date = DateTime.now().subtract(Duration(days: i));
-        final m = await _fetchDayMileage(deviceId, date);
-        mileageData.add(m);
-        if (m.isRealData && m.distance > 0) isDummyMileageData.value = false;
+      // Parallel: fetch all 7 days at the same time instead of sequentially
+      final futures = List.generate(7, (i) {
+        final date = DateTime.now().subtract(Duration(days: 6 - i));
+        return _fetchDayMileage(deviceId, date);
+      });
+      final results = await Future.wait(futures);
+      mileageData.assignAll(results);
+      if (results.any((m) => m.isRealData && m.distance > 0)) {
+        isDummyMileageData.value = false;
       }
     } catch (e) {
-     // log('❌ [HomeController] Mileage error: $e');
       _addDummyMileageData();
     } finally {
       isLoadingMileage.value = false;
