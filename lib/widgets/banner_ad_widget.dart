@@ -10,9 +10,12 @@ final bool forceShow;
   State<BannerAdWidget> createState() => _BannerAdWidgetState();
 }
 
-class _BannerAdWidgetState extends State<BannerAdWidget> {
+class _BannerAdWidgetState extends State<BannerAdWidget> with AutomaticKeepAliveClientMixin {
   BannerAd? _bannerAd;
   bool _isAdLoaded = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -53,6 +56,7 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if ((!SHOW_ADS && !widget.forceShow) || !_isAdLoaded) {
       return const SizedBox.shrink();
     }

@@ -1,5 +1,7 @@
 // ignore_for_file: file_names
 
+import 'package:gpspro/util/util.dart';
+
 class DeviceItem extends Object {
   int? id;
   int? alarm;
@@ -122,8 +124,8 @@ class DeviceItem extends Object {
     unitOfAltitude = json['unit_of_altitude'];
     unitOfCapacity = json['unit_of_capacity'];
     stopDuration = json['stop_duration'];
-    stopDurationSec = json['stop_duration_sec'];
-    movedTimestamp = json['moved_timestamp'];
+    stopDurationSec = Util.parseStopDurationSec(json['stop_duration_sec']);
+    movedTimestamp = Util.parseTimestamp(json['moved_timestamp']);
     engineStatus = json['engine_status'];
     detectEngine = json['detect_engine'];
     engineHours = json['engine_hours'];

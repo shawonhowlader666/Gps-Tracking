@@ -1,9 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- Engine Outline -->
-  <path d="M12 26 h8 v-8 h24 v8 h8 v14 h-4 v12 h-10 v4 h-16 v-4 h-10 v-12 h-4 z" fill="#F97316"/>
-  <!-- Engine Details/Pipes -->
-  <rect x="26" y="24" width="12" height="18" rx="2" fill="#334155"/>
-  <circle cx="32" cy="33" r="4" fill="#EAB308"/>
-  <!-- Spark lightning bolt -->
-  <path d="M32 18 l-3 6 h6 l-3 6" stroke="#EAB308" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="#F97316" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Clean Check Engine Dashboard Warning Light Icon -->
+  <path d="M8 28 H14 V22 H24 V28 H46 V22 H50 C53 22 56 25 56 28 V40 C56 43 53 46 50 46 H46 V42 H24 V46 H18 L10 38 V33 H8 Z" />
+  <!-- Air intake block on top -->
+  <path d="M28 22 V15 H36 V22" stroke-width="4.5" />
+  <!-- Pulley belts line on left -->
+  <line x1="14" y1="28" x2="14" y2="42" stroke-width="4.5" />
+  <!-- Lightning bolt/Ignition indicator in center -->
+  <path d="M34 26 L27 34 H36 L29 42" stroke="#EAB308" stroke-width="4.5" />
 </svg>

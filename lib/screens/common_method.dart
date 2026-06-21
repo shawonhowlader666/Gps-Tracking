@@ -114,9 +114,11 @@ Future<Uint8List?> getBytesFromBytes(var data, int width) async {
 }
 
 LatLngBounds boundsFromLatLngList(Set<Marker> list) {
-  assert(list.isNotEmpty);
+  final validList = list.where((m) => m.position.latitude != 0.0 || m.position.longitude != 0.0).toList();
+  final targetList = validList.isNotEmpty ? validList : list.toList();
+  assert(targetList.isNotEmpty);
   double? x0, x1, y0, y1;
-  for (var value in list) {
+  for (var value in targetList) {
     if (x0 == null) {
       x0 = x1 = value.position.latitude;
       y0 = y1 = value.position.longitude;

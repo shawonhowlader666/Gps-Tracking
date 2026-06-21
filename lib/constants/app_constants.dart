@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gpspro/theme/custom_color.dart';
 
 class AppConstants {
   // App Name
@@ -11,8 +12,8 @@ class AppConstants {
 }
 
 class ShimmerAppTitle extends StatelessWidget {
-  static const Color _primaryColor = Color(0xFF1B851C);
-  static const Color _lightAccent = Color(0xFFB30B0B);
+  static const Color _primaryColor = CustomColor.primary;
+  static const Color _lightAccent = Color(0xFFFF5252);
 
   final Animation<double> animation;
   final String title;

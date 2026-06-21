@@ -20,22 +20,34 @@ class SvgAssetColorizer extends StatelessWidget {
   });
 
   Future<String> _loadSvg(String path) async {
-    final data = await rootBundle.loadString(path);
-    _svgCache[path] = data;
-    return data;
+    try {
+      debugPrint("SvgAssetColorizer: Loading asset path -> $path");
+      final data = await rootBundle.loadString(path);
+      _svgCache[path] = data;
+      return data;
+    } catch (e, stack) {
+      debugPrint("SvgAssetColorizer: Failed to load asset $path. Error: $e\n$stack");
+      rethrow;
+    }
   }
 
   Widget _buildSvg(String svgData) {
-    // Convert color to hex code (e.g. #00C853)
-    final hexColor = '#${color.toARGB32().toRadixString(16).substring(2).padLeft(6, '0')}';
-    final colorizedSvg = svgData.replaceAll('#MAIN_COLOR', hexColor);
-    
-    return SvgPicture.string(
-      colorizedSvg,
-      width: width,
-      height: height,
-      fit: BoxFit.contain,
-    );
+    try {
+      // Safely convert color to 6-digit hex code, compatible with all Flutter SDK versions
+      final hexColor = '#${color.value.toRadixString(16).padLeft(8, '0').substring(2).toLowerCase()}';
+      final colorizedSvg = svgData.replaceAll('#MAIN_COLOR', hexColor);
+      
+      debugPrint("SvgAssetColorizer: Colorized $assetPath with $hexColor");
+      return SvgPicture.string(
+        colorizedSvg,
+        width: width,
+        height: height,
+        fit: BoxFit.contain,
+      );
+    } catch (e, stack) {
+      debugPrint("SvgAssetColorizer: Error colorizing/building SVG $assetPath: $e\n$stack");
+      return _buildPlaceholder();
+    }
   }
 
   Widget _buildPlaceholder() {
@@ -57,7 +69,6 @@ class SvgAssetColorizer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // If SVG string is cached in memory, render it synchronously to avoid build flickering
     if (_svgCache.containsKey(assetPath)) {
       return _buildSvg(_svgCache[assetPath]!);
     }
@@ -67,9 +78,12 @@ class SvgAssetColorizer extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
           return _buildSvg(snapshot.data!);
+        } else if (snapshot.hasError) {
+          debugPrint("SvgAssetColorizer: FutureBuilder error for $assetPath: ${snapshot.error}");
+          // Return a fallback asset directly if loading fails
+          return const Icon(Icons.directions_car, color: Colors.grey, size: 24);
         }
         
-        // Return a circular loader while the SVG file is loading
         return _buildPlaceholder();
       },
     );

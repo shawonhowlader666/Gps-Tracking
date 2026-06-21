@@ -24,7 +24,7 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
   Timer? _timer;
   SharedPreferences? prefs;
   User? user;
-  bool isLoading = false;
+  bool isLoading = true;
   List<Alert> alertList = [];
   List<DeviceItem> devicesList = [];
   List<Geofence> fenceList = [];
@@ -79,6 +79,7 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
     _initController();
+    _loadDevices();
     _initialize();
   }
 
@@ -109,9 +110,10 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
   }
 
   Future<void> _initialize() async {
-    await getUser();
-    _loadDevices();
-    _loadFences();
+    Future.wait([
+      getUser(),
+      _loadFences(),
+    ]);
   }
 
   void _initController() {
@@ -1774,7 +1776,7 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
           _buildQuickAlertsSection(),
 
           // 3. Custom Alerts List or Empty state
-          if (alertList.isNotEmpty) ...[
+          if (alertList.isNotEmpty || isLoading) ...[
             _buildRulesHeader(),
             if (isLoading)
               _buildSkeletonLoader()

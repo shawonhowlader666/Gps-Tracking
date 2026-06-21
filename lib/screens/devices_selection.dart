@@ -8,7 +8,7 @@ import 'package:get/get.dart';
 import 'package:gpspro/arguments/report_args.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/model/device.dart';
-import 'package:gpspro/services/model/device_item.dart';
+import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/services/model/single_device.dart';
 import 'package:gpspro/services/model/bottom_menu.dart';
 import 'package:gpspro/storage/user_repository.dart';
@@ -121,8 +121,8 @@ class _DevicePageState extends State<DeviceSelection> {
           title: Text(('devices').tr,
               style: TextStyle(color: CustomColor.secondaryColor)),
         ),
-        body: GetX<DataController>(
-            init: DataController(),
+        body: GetBuilder<DataController>(
+            init: Get.find<DataController>(),
             builder: (controller) {
               devicesList = controller.onlyDevices;
 
@@ -305,20 +305,45 @@ class _DevicePageState extends State<DeviceSelection> {
                     children: [
                       Padding(
                           padding: const EdgeInsets.fromLTRB(5, 10, 5, 5),
-                          child: Container(
-                            height: 35,
-                            width: 35,
-                            padding: const EdgeInsets.all(1.0),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: color.withValues(alpha: 0.3),
-                            ),
-                            child: SvgAssetColorizer(
-                              assetPath: Util.getLocalSvgPath(device.icon!.path!),
-                              color: color,
-                              width: 35,
-                              height: 35,
-                            ),
+                          child: Stack(
+                            children: [
+                              Container(
+                                height: 35,
+                                width: 35,
+                                padding: const EdgeInsets.all(1.0),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: color.withValues(alpha: 0.15),
+                                  border: Border.all(
+                                      color: color.withValues(alpha: 0.3),
+                                      width: 1),
+                                ),
+                                child: Center(
+                                  child: Util.getVehicleIconWidget(
+                                    device.icon?.path,
+                                    color,
+                                    size: 25,
+                                    iconType: device.icon?.type ?? device.iconType,
+                                    deviceName: device.name,
+                                    deviceId: device.id,
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  width: 9,
+                                  height: 9,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.white, width: 1.5),
+                                  ),
+                                ),
+                              ),
+                            ],
                           )),
                     ],
                   ),
@@ -378,7 +403,7 @@ class _DevicePageState extends State<DeviceSelection> {
                                                 padding:
                                                     EdgeInsets.only(left: 2)),
                                             Text(
-                                              device.stopDuration!,
+                                              Util.formatDurationString(device.stopDuration!),
                                               style: const TextStyle(
                                                   color: Colors.grey,
                                                   fontWeight: FontWeight.w500,

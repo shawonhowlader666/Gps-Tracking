@@ -14,11 +14,13 @@ import 'package:gpspro/services/model/login.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
+import 'package:gpspro/services/tracksolid_repository.dart';
 import 'package:gpspro/config.dart';
 import 'package:gpspro/constants/app_constants.dart';
 import 'package:gpspro/widgets/scale_button.dart';
+import 'package:gpspro/theme/custom_color.dart';
 
-const Color kPrimaryOrange = Color(0xFF1B851C);
+const Color kPrimaryOrange = CustomColor.primary;
 const Color kLightGrey = Color(0xFFE0E0E0);
 
 class LoginPage extends StatefulWidget {
@@ -39,8 +41,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final TextEditingController _emailFilter = TextEditingController();
   final TextEditingController _passwordFilter = TextEditingController();
 
-  static const Color _primaryColor = Color(0xFF1B851C);
-  static const Color _lightAccent = Color(0xFFB30B0B);
+  static const Color _primaryColor = CustomColor.primary;
+  static const Color _lightAccent = Color(0xFFFF5252);
 
   FocusNode? emailAddressFocusNode;
   late bool passwordVisibility;
@@ -182,6 +184,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               } catch (e) {}
             }
 
+            print("FETCHED SERVERS FROM FIREBASE: $serverList");
             SERVER_URL = serverList;
             SHOW_ADS = (spytrackConfig['ads'] as bool? ?? false) && serverType == 'free';
             WHATS_APP = spytrackConfig['whatsapp'] as String? ?? '';
@@ -533,7 +536,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Color(0xFFE53935),
+      statusBarColor: CustomColor.primary,
       statusBarBrightness: Brightness.dark,
       statusBarIconBrightness: Brightness.light,
     ));
@@ -560,15 +563,19 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           ScaleButton(
                             onTap: () {},
                             child: Container(
-                              padding: const EdgeInsets.all(8),
+                              width: 40,
+                              height: 40,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: kLightGrey, width: 1),
+                                border: Border.all(color: kLightGrey, width: 1.5),
+                                color: Colors.grey.shade50,
                               ),
-                              child: const Icon(
-                                Icons.settings,
-                                size: 20,
-                                color: kPrimaryOrange,
+                              child: const Center(
+                                child: Icon(
+                                  Icons.settings,
+                                  size: 22,
+                                  color: kPrimaryOrange,
+                                ),
                               ),
                             ),
                           ),
@@ -653,16 +660,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               }
                             },
                             child: Container(
-                              width: 30,
-                              height: 30,
+                              width: 40,
+                              height: 40,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: kLightGrey, width: 1),
+                                border: Border.all(color: kLightGrey, width: 1.5),
+                                color: Colors.grey.shade50,
                               ),
                               child: const Center(
                                 child: Icon(
                                   Icons.support_agent_outlined,
-                                  size: 20,
+                                  size: 22,
                                   color: kPrimaryOrange,
                                 ),
                               ),
@@ -934,6 +942,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   void updateToken() async {
+    if (UserRepository.isTracksolidMode()) return;
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     await messaging.getToken().then((value) => {_notificationToken = value!});
     APIService.getUserData().then((user) {
@@ -990,21 +999,19 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         return;
       }
 
+      print("ACTIVE SERVERS TO TRY: $activeServers");
       for (final server in activeServers) {
         try {
-          final response = await APIService.login(server['url'], _email, _password);
+          final isTracksolid = (server['mode'] == 'tracksolid') ||
+              (server['url']?.toString().toLowerCase().contains('tracksolid') ?? false) ||
+              (server['name']?.toString().toLowerCase().contains('tracksolid') ?? false);
+          print("Attempting login on server: ${server['name']} (${server['url']}) - isTracksolid: $isTracksolid");
 
-          if (response == null) continue;
-
-          lastStatusCode = response.statusCode;
-
-          if (response.statusCode == 200) {
-            final jsonMap = jsonDecode(response.body.replaceAll("ï»¿", ""));
-            final user = UserLogin.fromJson(jsonMap);
-
-            if (user.userApiHash != null) {
+          if (isTracksolid) {
+            final trackRepo = TracksolidRepository();
+            final success = await trackRepo.login(_email, _password);
+            if (success) {
               UserRepository.setServerUrl(server['url']);
-              UserRepository.setHash(user.userApiHash!);
               prefs?.setString('serverType', server['type'] ?? 'free');
 
               // Always keep password in memory for payment service (session only)
@@ -1024,7 +1031,44 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               loginSuccess = true;
               break;
             } else {
-              apiErrorMessage = jsonMap['message']?.toString();
+              lastStatusCode = 401;
+              continue;
+            }
+          } else {
+            final response = await APIService.login(server['url'], _email, _password);
+
+            if (response == null) continue;
+
+            lastStatusCode = response.statusCode;
+
+            if (response.statusCode == 200) {
+              final jsonMap = jsonDecode(response.body.replaceAll("ï»¿", ""));
+              final user = UserLogin.fromJson(jsonMap);
+
+              if (user.userApiHash != null) {
+                UserRepository.setServerUrl(server['url']);
+                UserRepository.setHash(user.userApiHash!);
+                prefs?.setString('serverType', server['type'] ?? 'free');
+
+                // Always keep password in memory for payment service (session only)
+                UserRepository.setSessionPassword(_password);
+
+                if (_rememberMe) {
+                  UserRepository.setEmail(_email);
+                  UserRepository.setPassword(_password);
+                  prefs?.setBool('rememberMe', true);
+                } else {
+                  prefs?.remove('email');
+                  prefs?.remove('password');
+                  prefs?.setBool('rememberMe', false);
+                }
+
+                successfulServer = server;
+                loginSuccess = true;
+                break;
+              } else {
+                apiErrorMessage = jsonMap['message']?.toString();
+              }
             }
           }
         } catch (_) {

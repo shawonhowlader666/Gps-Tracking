@@ -141,7 +141,7 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
+        physics: const ClampingScrollPhysics(),
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,24 +164,24 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> {
                 Expanded(
                   child: _buildSupportCard(
                     title: 'Phone Support',
-                    subtitle: '01901388950',
+                    subtitle: '01912609087',
                     icon: Icons.phone_in_talk_rounded,
                     iconColor: const Color(0xFF0083B0),
                     iconBgColor: const Color(0xFFE0F7FA),
                     shadowColor: const Color(0xFF0083B0),
-                    onTap: () => _makeCall('01901388950'),
+                    onTap: () => _makeCall('01912609087'),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: _buildSupportCard(
                     title: 'Helpline Hotline',
-                    subtitle: '01901645999',
+                    subtitle: '01912609087',
                     icon: Icons.support_agent_rounded,
                     iconColor: const Color(0xFFF12711),
                     iconBgColor: const Color(0xFFFFEBEE),
                     shadowColor: const Color(0xFFF12711),
-                    onTap: () => _makeCall('01901645999'),
+                    onTap: () => _makeCall('01912609087'),
                   ),
                 ),
               ],
@@ -192,24 +192,24 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> {
                 Expanded(
                   child: _buildSupportCard(
                     title: 'Email Support',
-                    subtitle: 'info@orbitgps.com.bd',
+                    subtitle: 'asthahelpbd@gmail.com',
                     icon: Icons.alternate_email_rounded,
                     iconColor: const Color(0xFF8E2DE2),
                     iconBgColor: const Color(0xFFF3E8FF),
                     shadowColor: const Color(0xFF8E2DE2),
-                    onTap: () => _sendEmail('info@orbitgps.com.bd'),
+                    onTap: () => _sendEmail('asthahelpbd@gmail.com'),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: _buildSupportCard(
                     title: 'WhatsApp Chat',
-                    subtitle: '+8801901645999',
+                    subtitle: '+8801912609087',
                     icon: Icons.question_answer_rounded,
                     iconColor: const Color(0xFF11998E),
                     iconBgColor: const Color(0xFFE8F5E9),
                     shadowColor: const Color(0xFF11998E),
-                    onTap: () => _openWhatsApp('+8801901645999'),
+                    onTap: () => _openWhatsApp('+8801912609087'),
                   ),
                 ),
               ],

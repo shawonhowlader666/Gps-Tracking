@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:gpspro/util/image_fetcher.dart';
@@ -13,7 +12,9 @@ import 'package:flutter/material.dart' as m;
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart' as xml;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:gpspro/storage/user_repository.dart';
+import 'package:gpspro/theme/custom_color.dart';
 
 class Util {
   static final Map<String, BitmapDescriptor> _markerIconCache = {};
@@ -169,9 +170,13 @@ class Util {
   }
 
   static LatLngBounds boundsFromLatLngList(Set<Marker> list) {
-    assert(list.isNotEmpty);
+    final validList = list
+        .where((m) => m.position.latitude != 0.0 || m.position.longitude != 0.0)
+        .toList();
+    final targetList = validList.isNotEmpty ? validList : list.toList();
+    assert(targetList.isNotEmpty);
     double? x0, x1, y0, y1;
-    for (var value in list) {
+    for (var value in targetList) {
       if (x0 == null) {
         x0 = x1 = value.position.latitude;
         y0 = y1 = value.position.longitude;
@@ -187,12 +192,18 @@ class Util {
   }
 
   static LatLngBounds getLatLngBounds(Set<Marker> markers) {
+    final validMarkers = markers
+        .where((m) => m.position.latitude != 0.0 || m.position.longitude != 0.0)
+        .toList();
+    final targetMarkers =
+        validMarkers.isNotEmpty ? validMarkers : markers.toList();
+
     double minLat = double.infinity;
     double maxLat = -double.infinity;
     double minLng = double.infinity;
     double maxLng = -double.infinity;
 
-    for (final marker in markers) {
+    for (final marker in targetMarkers) {
       final lat = marker.position.latitude;
       final lng = marker.position.longitude;
 
@@ -200,6 +211,13 @@ class Util {
       maxLat = lat > maxLat ? lat : maxLat;
       minLng = lng < minLng ? lng : minLng;
       maxLng = lng > maxLng ? lng : maxLng;
+    }
+
+    if (minLat == double.infinity) {
+      return LatLngBounds(
+        southwest: const LatLng(23.6850, 90.3563),
+        northeast: const LatLng(23.6850, 90.3563),
+      );
     }
 
     final southwest = LatLng(minLat, minLng);
@@ -212,9 +230,13 @@ class Util {
   }
 
   static LatLngBounds boundsFromLatLngListCluster(List<LatLng> list) {
-    assert(list.isNotEmpty);
+    final validList = list
+        .where((latLng) => latLng.latitude != 0.0 || latLng.longitude != 0.0)
+        .toList();
+    final targetList = validList.isNotEmpty ? validList : list;
+    assert(targetList.isNotEmpty);
     double? x0, x1, y0, y1;
-    for (LatLng latLng in list) {
+    for (LatLng latLng in targetList) {
       if (x0 == null) {
         x0 = x1 = latLng.latitude;
         y0 = y1 = latLng.longitude;
@@ -229,12 +251,8 @@ class Util {
         northeast: LatLng(x1!, y1!), southwest: LatLng(x0!, y0!));
   }
 
-  static Future<BitmapDescriptor> getMarkerIconImagePath(
-      String imagePath,
-      String infoText,
-      Color color,
-      double rotateDegree,
-      bool showTitle) async {
+  static Future<BitmapDescriptor> getMarkerIconImagePath(String imagePath,
+      String infoText, Color color, double rotateDegree, bool showTitle) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
 
@@ -393,12 +411,8 @@ class Util {
     return completer.future;
   }
 
-  static Future<BitmapDescriptor> getMarkerIconFromUrl(
-      String imagePath,
-      String infoText,
-      Color color,
-      double rotateDegree,
-      bool showTitle) async {
+  static Future<BitmapDescriptor> getMarkerIconFromUrl(String imagePath,
+      String infoText, Color color, double rotateDegree, bool showTitle) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
 
@@ -546,34 +560,81 @@ class Util {
     await imageFetcher.downloadAndSaveImages();
   }
 
+  static String _getCacheKey(String imagePath, int size,
+      {String? statusColor, String? iconType, String? deviceName, dynamic deviceId}) {
+    return "${imagePath}_${size}_${statusColor ?? 'default'}_${iconType ?? 'default'}_${deviceName ?? 'default'}_${deviceId ?? 'default'}_v7";
+  }
+
+  static BitmapDescriptor? getCachedMarkerIcon(String imagePath, int size,
+      {String? statusColor, String? iconType, String? deviceName, dynamic deviceId}) {
+    final String cacheKey = _getCacheKey(imagePath, size,
+        statusColor: statusColor, iconType: iconType, deviceName: deviceName, deviceId: deviceId);
+    return _markerIconCache[cacheKey];
+  }
+
+  static int getMarkerSizeForZoom(double zoom) {
+    if (zoom >= 20) return 65;
+    if (zoom >= 18) return 55;
+    if (zoom >= 16) return 46;
+    if (zoom >= 14) return 38;
+    if (zoom >= 12) return 30;
+    return 22;
+  }
+
   static String getLocalSvgPath(String? serverPath) {
     if (serverPath == null) return 'assets/images/track_car.svg';
     final path = serverPath.toLowerCase().trim();
-    
+
     // Check by ID or exact name parts
-    if (path.contains('sportscar') || path.contains('sports-car') || path.contains('sports_car') || path.contains('2.png')) {
+    if (path.contains('sportscar') ||
+        path.contains('sports-car') ||
+        path.contains('sports_car') ||
+        path.contains('2.png')) {
       return 'assets/images/track_sportscar.svg';
-    } else if (path.contains('motorcycle') || path.contains('bike') || path.contains('moto') || path.contains('3.png')) {
+    } else if (path.contains('motorcycle') ||
+        path.contains('bike') ||
+        path.contains('moto') ||
+        path.contains('3.png')) {
       return 'assets/images/track_motorcycle.svg';
     } else if (path.contains('bus') || path.contains('4.png')) {
       return 'assets/images/track_bus.svg';
     } else if (path.contains('police') || path.contains('5.png')) {
       return 'assets/images/track_police.svg';
-    } else if (path.contains('cargo_truck') || path.contains('cargo-truck') || path.contains('pickup') || path.contains('6.png')) {
+    } else if (path.contains('cargo_truck') ||
+        path.contains('cargo-truck') ||
+        path.contains('pickup') ||
+        path.contains('6.png')) {
       return 'assets/images/track_truck.svg';
-    } else if (path.contains('cng') || path.contains('rickshaw') || path.contains('auto') || path.contains('7.png')) {
+    } else if (path.contains('cng') ||
+        path.contains('rickshaw') ||
+        path.contains('auto') ||
+        path.contains('7.png')) {
       return 'assets/images/track_cng.svg';
-    } else if (path.contains('speedboat') || path.contains('speed-boat') || path.contains('15.png')) {
+    } else if (path.contains('speedboat') ||
+        path.contains('speed-boat') ||
+        path.contains('15.png')) {
       return 'assets/images/track_speedboat.svg';
-    } else if (path.contains('boat') || path.contains('ship') || path.contains('marine') || path.contains('8.png')) {
+    } else if (path.contains('boat') ||
+        path.contains('ship') ||
+        path.contains('marine') ||
+        path.contains('8.png')) {
       return 'assets/images/track_boat.svg';
-    } else if (path.contains('bicycle') || path.contains('cycle') || path.contains('9.png')) {
+    } else if (path.contains('bicycle') ||
+        path.contains('cycle') ||
+        path.contains('9.png')) {
       return 'assets/images/track_bicycle.svg';
-    } else if (path.contains('container') || path.contains('heavy-truck') || path.contains('heavy_truck') || path.contains('10.png')) {
+    } else if (path.contains('container') ||
+        path.contains('heavy-truck') ||
+        path.contains('heavy_truck') ||
+        path.contains('10.png')) {
       return 'assets/images/track_container.svg';
-    } else if (path.contains('person') || path.contains('walk') || path.contains('11.png')) {
+    } else if (path.contains('person') ||
+        path.contains('walk') ||
+        path.contains('11.png')) {
       return 'assets/images/track_person.svg';
-    } else if (path.contains('van') || path.contains('micro') || path.contains('12.png')) {
+    } else if (path.contains('van') ||
+        path.contains('micro') ||
+        path.contains('12.png')) {
       return 'assets/images/track_van.svg';
     } else if (path.contains('tractor') || path.contains('13.png')) {
       return 'assets/images/track_tractor.svg';
@@ -581,81 +642,387 @@ class Util {
       return 'assets/images/track_ambulance.svg';
     } else if (path.contains('generator') || path.contains('16.png')) {
       return 'assets/images/track_generator.svg';
-    } else if (path.contains('concrete') || path.contains('mixer') || path.contains('dump') || path.contains('17.png')) {
+    } else if (path.contains('concrete') ||
+        path.contains('mixer') ||
+        path.contains('dump') ||
+        path.contains('17.png')) {
       return 'assets/images/track_concrete.svg';
     }
-    
+
     // Default fallback
     return 'assets/images/track_car.svg';
   }
 
-  static Future<BitmapDescriptor> getMarkerIcon(String imagePath, {String? statusColor}) async {
-    final String cacheKey = "${imagePath}_${statusColor ?? 'default'}";
+  static String? getLocalMappedAsset(String? imagePath, {String? iconType, String? deviceName, dynamic deviceId}) {
+    if (imagePath == null && iconType == null && deviceName == null && deviceId == null) return null;
+    
+    if (deviceId != null) {
+      final String? savedAsset = UserRepository.prefs?.getString("custom_icon_path_${deviceId.toString()}");
+      if (savedAsset != null && savedAsset.isNotEmpty) {
+        debugPrint("getLocalMappedAsset PREFERENCE matched: '$savedAsset' for device ID '$deviceId'");
+        return savedAsset;
+      }
+    }
+
+    debugPrint("getLocalMappedAsset CALLED with imagePath: '$imagePath', iconType: '$iconType', deviceName: '$deviceName', deviceId: '$deviceId'");
+    final path = "${imagePath?.toLowerCase() ?? ''} ${iconType?.toLowerCase() ?? ''} ${deviceName?.toLowerCase() ?? ''}".trim();
+    if (path.isEmpty) return null;
+    
+    String? result;
+
+    // 1. High priority keyword matching (e.g. from device name) to prioritize user-given device name types
+    if (path.contains('ambulance')) {
+      result = 'assets/images/ambulance_toprunning.png';
+    } else if (path.contains('motorcycle') || path.contains('bike') || path.contains('scooter') || path.contains('scotty')) {
+      if (path.contains('scotty') || path.contains('scooter')) {
+        result = 'assets/images/scotty_toprunning.png';
+      } else {
+        result = 'assets/images/bike_toprunning.png';
+      }
+    } else if (path.contains('bus')) {
+      if (path.contains('school')) {
+        result = 'assets/images/school_toprunning.png';
+      } else {
+        result = 'assets/images/bus_toprunning.png';
+      }
+    } else if (path.contains('crane') || path.contains('tractor')) {
+      result = 'assets/images/crane_toprunning.png';
+    } else if (path.contains('garbage')) {
+      result = 'assets/images/garbage_toprunning.png';
+    } else if (path.contains('mixer') || path.contains('concrete')) {
+      result = 'assets/images/mixer_toprunning.png';
+    } else if (path.contains('muv')) {
+      result = 'assets/images/muv_toprunning.png';
+    } else if (path.contains('pickup') || path.contains('van')) {
+      result = 'assets/images/pickup_toprunning.png';
+    } else if (path.contains('suv')) {
+      result = 'assets/images/suv_toprunning.png';
+    } else if (path.contains('container') || path.contains('tanker')) {
+      result = 'assets/images/tanker_toprunning.png';
+    } else if (path.contains('cng') || path.contains('rickshaw') || path.contains('auto') || path.contains('tempo')) {
+      result = 'assets/images/tempotvr_toprunning.png';
+    } else if (path.contains('truck')) {
+      result = 'assets/images/truck_toprunning.png';
+    }
+
+    // 2. Default/Fallback Server Path & Hash matching
+    if (result == null) {
+      if (path.contains('6877e65ea4be98.96057559') || path.contains('6877e65ea4be98.96057559_online') || path.contains('6877e65ea4be98.96057559_offline')) {
+        result = 'assets/images/car_toprunning.png';
+      } else if (path.contains('6877e682a122d5.26467715')) {
+        result = 'assets/images/suv_toprunning.png';
+      } else if (path.contains('68919e188759f4.90604553_online') || path.contains('68919e188759f4.90604553_offline') || path.contains('68919e188759f4.90604553_ack')) {
+        result = 'assets/images/car_toprunning.png';
+      } else if (path.contains('694676186e6877.76876067')) {
+        result = 'assets/images/muv_toprunning.png';
+      } else if (path.contains('694bd24618ce36.67143977')) {
+        result = 'assets/images/pickup_toprunning.png';
+      } else if (path.contains('697613f6c938a0.41043256')) {
+        result = 'assets/images/car_toprunning.png';
+      } else if (path.contains('697d973eeaedd3.55855774')) {
+        result = 'assets/images/bus_toprunning.png';
+      } else if (path.contains('697daf738d1b75.34407076_online') || path.contains('697daf738d1b75.34407076_offline') || path.contains('697daf738d1b75.34407076_ack')) {
+        result = 'assets/images/car_toprunning.png';
+      } else if (path.contains('697ddf3220bbe8.30991600')) {
+        result = 'assets/images/ambulance_toprunning.png';
+      } else if (path.contains('697de4afdb0ed9.71856605_online') || path.contains('697de4afdb0ed9.71856605_offline') || path.contains('697de4afdb0ed9.71856605_ack') || path.contains('697de4afdb0ed9.71856605_engine')) {
+        result = 'assets/images/car_toprunning.png';
+      } else if (path.contains('697de539b850a9.16646834_online') || path.contains('697de539b850a9.16646834_offline') || path.contains('697de539b850a9.16646834_ack') || path.contains('697de539b850a9.16646834_engine')) {
+        result = 'assets/images/muv_toprunning.png';
+      } else if (path.contains('697de5ef7182f1.91869408_online') || path.contains('697de5ef7182f1.91869408_offline') || path.contains('697de5ef7182f1.91869408_ack')) {
+        result = 'assets/images/bus_toprunning.png';
+      } else if (path.contains('6991da32795029.80377888_online') || path.contains('6991da32795029.80377888_offline') || path.contains('6991da32795029.80377888_ack')) {
+        result = 'assets/images/bike_toprunning.png';
+      } else if (path.contains('69a93ef4b3c047.72210671')) {
+        result = 'assets/images/tempotvr_toprunning.png';
+      } else if (path.contains('14.png')) {
+        result = 'assets/images/ambulance_toprunning.png';
+      } else if (path.contains('3.png')) {
+        result = 'assets/images/bike_toprunning.png';
+      } else if (path.contains('4.png')) {
+        result = 'assets/images/bus_toprunning.png';
+      } else if (path.contains('2.png')) {
+        result = 'assets/images/car_toprunning.png';
+      } else if (path.contains('13.png')) {
+        result = 'assets/images/crane_toprunning.png';
+      } else if (path.contains('17.png')) {
+        result = 'assets/images/mixer_toprunning.png';
+      } else if (path.contains('12.png')) {
+        result = 'assets/images/pickup_toprunning.png';
+      } else if (path.contains('10.png')) {
+        result = 'assets/images/tanker_toprunning.png';
+      } else if (path.contains('7.png')) {
+        result = 'assets/images/tempotvr_toprunning.png';
+      } else if (path.contains('6.png')) {
+        result = 'assets/images/truck_toprunning.png';
+      } else if (path.contains('car') || path.contains('1.png') || path.contains('5.png') || path.contains('rotating/')) {
+        if (path.contains('green')) {
+          result = 'assets/images/car_green.png';
+        } else {
+          result = 'assets/images/car_toprunning.png';
+        }
+      }
+    }
+    debugPrint("getLocalMappedAsset RESULT: '$result' for path: '$imagePath', iconType: '$iconType', deviceName: '$deviceName'");
+    return result;
+  }
+
+  static ColorFilter getTintFilter(Color color) {
+    const double boost = 1.35;
+    final double r = (color.r * boost).clamp(0.0, 1.0);
+    final double g = (color.g * boost).clamp(0.0, 1.0);
+    final double b = (color.b * boost).clamp(0.0, 1.0);
+    return ColorFilter.matrix(<double>[
+      0.15 * r, 1.15 * r, 0.1 * r, 0, 0,
+      0.15 * g, 1.15 * g, 0.1 * g, 0, 0,
+      0.15 * b, 1.15 * b, 0.1 * b, 0, 0,
+      0,        0,        0,       1, 0,
+    ]);
+  }
+
+  static Future<Uint8List?> getTintedBytesFromAsset(String path, int width, Color tintColor) async {
+    if (path.isEmpty) return null;
+    try {
+      ByteData data = await rootBundle.load(path);
+      // Decode image at native size to get exact aspect ratio
+      ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+      ui.FrameInfo fi = await codec.getNextFrame();
+      ui.Image originalImage = fi.image;
+
+      final double originalWidth = originalImage.width.toDouble();
+      final double originalHeight = originalImage.height.toDouble();
+
+      // We make the canvas a perfect square of size `width`
+      final double canvasSize = width.toDouble();
+      double drawWidth, drawHeight;
+      double dx, dy;
+
+      if (originalHeight > originalWidth) {
+        // Vertical/Long image (like top-view cars)
+        drawHeight = canvasSize;
+        drawWidth = originalWidth * (canvasSize / originalHeight);
+        dx = (canvasSize - drawWidth) / 2;
+        dy = 0;
+      } else {
+        // Horizontal/Wide image
+        drawWidth = canvasSize;
+        drawHeight = originalHeight * (canvasSize / originalWidth);
+        dx = 0;
+        dy = (canvasSize - drawHeight) / 2;
+      }
+      
+      final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(pictureRecorder);
+      
+      final paint = Paint()
+        ..colorFilter = getTintFilter(tintColor);
+      
+      // Rotate canvas by 180 degrees (pi radians) to compensate for local vehicle icons that point South
+      canvas.translate(canvasSize / 2, canvasSize / 2);
+      canvas.rotate(pi);
+      canvas.translate(-canvasSize / 2, -canvasSize / 2);
+      
+      canvas.drawImageRect(
+        originalImage,
+        Rect.fromLTWH(0, 0, originalWidth, originalHeight),
+        Rect.fromLTWH(dx, dy, drawWidth, drawHeight),
+        paint,
+      );
+
+      final ui.Image tintedImage = await pictureRecorder.endRecording().toImage(canvasSize.toInt(), canvasSize.toInt());
+      final ByteData? byteData = await tintedImage.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } catch (e) {
+      debugPrint("Error tinting image $path: $e");
+      return null;
+    }
+  }
+
+  static String formatDurationString(String? duration) {
+    if (duration == null || duration.isEmpty || duration == '-') return '-';
+    
+    // Attempt to parse standard HH:mm:ss if colon present
+    if (duration.contains(':')) {
+      final parts = duration.split(':');
+      if (parts.length >= 2) {
+        final hours = int.tryParse(parts[0]) ?? 0;
+        final minutes = int.tryParse(parts[1]) ?? 0;
+        if (hours >= 24) {
+          final days = hours ~/ 24;
+          final remHours = hours % 24;
+          return "${days}d ${remHours}h ${minutes}m";
+        }
+        return "${hours}h ${minutes}m";
+      }
+    }
+
+    // Attempt to parse from text: e.g. "4109h 54min 43s"
+    final RegExp hoursReg = RegExp(r'([0-9]+)\s*h');
+    final RegExp minsReg = RegExp(r'([0-9]+)\s*(?:min|m)');
+    final RegExp secsReg = RegExp(r'([0-9]+)\s*(?:sec|s)');
+
+    final hoursMatch = hoursReg.firstMatch(duration);
+    final minsMatch = minsReg.firstMatch(duration);
+    final secsMatch = secsReg.firstMatch(duration);
+
+    final int hours = hoursMatch != null ? (int.tryParse(hoursMatch.group(1)!) ?? 0) : 0;
+    final int minutes = minsMatch != null ? (int.tryParse(minsMatch.group(1)!) ?? 0) : 0;
+    final int seconds = secsMatch != null ? (int.tryParse(secsMatch.group(1)!) ?? 0) : 0;
+
+    if (hoursMatch == null && minsMatch == null && secsMatch == null) {
+      return duration;
+    }
+
+    if (hours >= 24) {
+      final days = hours ~/ 24;
+      final remHours = hours % 24;
+      if (minutes > 0) {
+        return "${days}d ${remHours}h ${minutes}m";
+      } else {
+        return "${days}d ${remHours}h";
+      }
+    }
+
+    final List<String> parts = [];
+    if (hours > 0) parts.add("${hours}h");
+    if (minutes > 0) parts.add("${minutes}m");
+    if (seconds > 0 && hours == 0) parts.add("${seconds}s");
+
+    if (parts.isEmpty) return "0s";
+    return parts.join(" ");
+  }
+
+  static double parseDurationToSeconds(String? durationStr) {
+    if (durationStr == null || durationStr.isEmpty) return 0.0;
+    try {
+      durationStr = durationStr.toLowerCase().trim();
+
+      // If it contains colon (e.g. 02:30:00)
+      if (durationStr.contains(':')) {
+        final parts = durationStr.split(':');
+        if (parts.length >= 2) {
+          final hours = double.tryParse(parts[0]) ?? 0.0;
+          final minutes = double.tryParse(parts[1]) ?? 0.0;
+          final seconds = parts.length > 2 ? (double.tryParse(parts[2]) ?? 0.0) : 0.0;
+          return hours * 3600.0 + minutes * 60.0 + seconds;
+        }
+      }
+
+      // If it contains h, m, s (e.g. 2h 30m)
+      double totalSeconds = 0.0;
+      final hourReg = RegExp(r'(\d+)\s*h');
+      final minReg = RegExp(r'(\d+)\s*(?:min|m)');
+      final secReg = RegExp(r'(\d+)\s*(?:sec|s)');
+
+      final hourMatch = hourReg.firstMatch(durationStr);
+      if (hourMatch != null) {
+        totalSeconds += (double.tryParse(hourMatch.group(1)!) ?? 0.0) * 3600.0;
+      }
+
+      final minMatch = minReg.firstMatch(durationStr);
+      if (minMatch != null) {
+        totalSeconds += (double.tryParse(minMatch.group(1)!) ?? 0.0) * 60.0;
+      }
+
+      final secMatch = secReg.firstMatch(durationStr);
+      if (secMatch != null) {
+        totalSeconds += double.tryParse(secMatch.group(1)!) ?? 0.0;
+      }
+
+      return totalSeconds;
+    } catch (_) {
+      return 0.0;
+    }
+  }
+
+  static String formatDuration(Duration duration) {
+    if (duration.isNegative) return '-';
+    final days = duration.inDays;
+    final hours = duration.inHours % 24;
+    final minutes = duration.inMinutes % 60;
+    
+    final List<String> parts = [];
+    if (days > 0) {
+      parts.add("${days}d");
+    }
+    if (hours > 0 || days > 0) {
+      parts.add("${hours}h");
+    }
+    if (minutes > 0 || (days == 0 && hours == 0)) {
+      parts.add("${minutes}m");
+    }
+    return parts.join(" ");
+  }
+
+  static Color _getColorFromStatus(String? statusColor, String imagePath) {
+    String status = statusColor?.toLowerCase().trim() ?? '';
+    if (status.isEmpty) {
+      final path = imagePath.toLowerCase();
+      if (path.contains('green')) {
+        status = 'green';
+      } else if (path.contains('yellow')) {
+        status = 'yellow';
+      } else if (path.contains('red')) {
+        status = 'red';
+      }
+    }
+    
+    if (status == 'green' || status.contains('green')) {
+      return const Color(0xFF00C853); // Green for moving
+    } else if (status == 'yellow' || status.contains('yellow')) {
+      return const Color(0xFFFF9100); // Yellow/orange for idle
+    } else if (status == 'red' || status.contains('red')) {
+      return CustomColor.primary; // Red for stopped (brand red)
+    } else {
+      return const Color(0xFF475569); // Slate/gray for offline
+    }
+  }
+
+  static Future<BitmapDescriptor> getMarkerIcon(String imagePath,
+      {int size = 55, String? statusColor, String? iconType, String? deviceName, dynamic deviceId}) async {
+    final String cacheKey = _getCacheKey(imagePath, size,
+        statusColor: statusColor, iconType: iconType, deviceName: deviceName, deviceId: deviceId);
     if (_markerIconCache.containsKey(cacheKey)) {
       return _markerIconCache[cacheKey]!;
     }
-
-    final String svgPath = getLocalSvgPath(imagePath);
-    
     try {
-      final String svgString = await rootBundle.loadString(svgPath);
-      
-      // Map status color string to dynamic color tint
-      Color tintColor = const Color(0xFF10B981); // Default green
-      if (statusColor != null) {
-        final lower = statusColor.toLowerCase().trim();
-        if (lower == 'green') {
-          tintColor = const Color(0xFF00C853); // Green moving
-        } else if (lower == 'yellow' || lower == 'idle') {
-          tintColor = const Color(0xFFFF9100); // Yellow/orange idle
-        } else if (lower == 'red' || lower == 'stopped') {
-          tintColor = const Color(0xFFFF3D00); // Red stopped
-        } else if (lower == 'gray' || lower == 'offline') {
-          tintColor = const Color(0xFF94A3B8); // Slate offline
-        }
-      } else {
-        // Fallback: check if the path itself contains color words
-        final lowerPath = imagePath.toLowerCase();
-        if (lowerPath.contains('red')) {
-          tintColor = const Color(0xFFFF3D00);
-        } else if (lowerPath.contains('yellow')) {
-          tintColor = const Color(0xFFFF9100);
-        } else if (lowerPath.contains('gray') || lowerPath.contains('grey')) {
-          tintColor = const Color(0xFF94A3B8);
-        } else if (lowerPath.contains('green')) {
-          tintColor = const Color(0xFF00C853);
+      // Check if we have a local mapped PNG
+      final String? localAssetPath = getLocalMappedAsset(imagePath, iconType: iconType, deviceName: deviceName, deviceId: deviceId);
+      if (localAssetPath != null) {
+        debugPrint("getMarkerIcon local asset path matched: '$localAssetPath' for '$imagePath', deviceId: '$deviceId'");
+        final tintColor = _getColorFromStatus(statusColor, imagePath);
+        final Uint8List? bytes = await getTintedBytesFromAsset(localAssetPath, size, tintColor);
+        if (bytes != null) {
+          final descriptor = BitmapDescriptor.bytes(bytes);
+          _markerIconCache[cacheKey] = descriptor;
+          debugPrint("getMarkerIcon LOADED local asset: '$localAssetPath' size: $size tint: $tintColor");
+          return descriptor;
+        } else {
+          debugPrint("getMarkerIcon FAILED to load tinted bytes for local asset: '$localAssetPath'");
         }
       }
 
-      final hexColor = '#${tintColor.toARGB32().toRadixString(16).substring(2).padLeft(6, '0')}';
-      final String colorizedSvg = svgString.replaceAll('#MAIN_COLOR', hexColor);
+      // Fetch the server PNG image directly
+      final String imageUrl = "${UserRepository.getServerUrl()!}/$imagePath";
+      final File imageFile =
+          await DefaultCacheManager().getSingleFile(imageUrl);
+      final Uint8List bytes = await imageFile.readAsBytes();
 
-      // Render SVG to picture
-      final SvgLoader loader = SvgStringLoader(colorizedSvg);
-      final PictureInfo pictureInfo = await vg.loadPicture(loader, null);
-      
-      // We want high-res marker images for Google Maps (100x100 pixels)
-      final int size = 100;
-      final ui.Image image = await pictureInfo.picture.toImage(size, size);
-      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      final Uint8List uint8List = byteData!.buffer.asUint8List();
-      
-      final descriptor = BitmapDescriptor.bytes(uint8List);
+      // Resize image using instantiateImageCodec
+      final ui.Codec codec =
+          await ui.instantiateImageCodec(bytes, targetWidth: size);
+      final ui.FrameInfo fi = await codec.getNextFrame();
+      final Uint8List resizedBytes =
+          (await fi.image.toByteData(format: ui.ImageByteFormat.png))!
+              .buffer
+              .asUint8List();
+
+      final descriptor = BitmapDescriptor.bytes(resizedBytes);
       _markerIconCache[cacheKey] = descriptor;
       return descriptor;
     } catch (e) {
-      debugPrint("Error generating SVG marker: $e. Falling back to server network image.");
-      try {
-        final String imageUrl = "${UserRepository.getServerUrl()!}/$imagePath";
-        final File imageFile = await DefaultCacheManager().getSingleFile(imageUrl);
-        final Uint8List bytes = await imageFile.readAsBytes();
-        final descriptor = BitmapDescriptor.bytes(bytes);
-        _markerIconCache[cacheKey] = descriptor;
-        return descriptor;
-      } catch (ex) {
-        debugPrint("Failed to fetch server fallback icon: $ex. Returning default marker.");
-        return BitmapDescriptor.defaultMarker;
-      }
+      debugPrint("Failed to fetch server icon: $e. Returning default marker.");
+      return BitmapDescriptor.defaultMarker;
     }
   }
 
@@ -719,4 +1086,114 @@ class Util {
   //   _cachedMarkerPath = imagePath;
   //   return _cachedMarkerIcon!;
   // }
+
+  static Widget getVehicleIconWidget(String? imagePath, Color color, {double size = 40, String? iconType, String? deviceName, dynamic deviceId}) {
+    if (imagePath != null && imagePath.isNotEmpty) {
+      final String? localAsset = getLocalMappedAsset(imagePath, iconType: iconType, deviceName: deviceName, deviceId: deviceId);
+      if (localAsset != null) {
+        return ColorFiltered(
+          colorFilter: getTintFilter(color),
+          child: Image.asset(
+            localAsset,
+            width: size,
+            height: size,
+            fit: BoxFit.contain,
+          ),
+        );
+      }
+      
+      final String? serverUrl = UserRepository.getServerUrl();
+      if (serverUrl != null && serverUrl.isNotEmpty) {
+        return CachedNetworkImage(
+          imageUrl: "$serverUrl/$imagePath",
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          placeholder: (context, url) => Icon(
+            Icons.directions_car,
+            color: color,
+            size: size * 0.7,
+          ),
+          errorWidget: (context, url, error) => Icon(
+            Icons.directions_car,
+            color: color,
+            size: size * 0.7,
+          ),
+        );
+      }
+    }
+    
+    return Icon(
+      Icons.directions_car,
+      color: color,
+      size: size * 0.7,
+    );
+  }
+
+  static Widget getChangeIconWidget(String? imagePath, {double size = 55, String? iconType, String? deviceName, dynamic deviceId}) {
+    if (imagePath != null && imagePath.isNotEmpty) {
+      final String? localAsset = getLocalMappedAsset(imagePath, iconType: iconType, deviceName: deviceName, deviceId: deviceId);
+      if (localAsset != null) {
+        return Image.asset(
+          localAsset,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      }
+      
+      final String? serverUrl = UserRepository.getServerUrl();
+      if (serverUrl != null && serverUrl.isNotEmpty) {
+        return CachedNetworkImage(
+          imageUrl: "$serverUrl/$imagePath",
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          placeholder: (context, url) => const SizedBox(
+            width: 30,
+            height: 30,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          errorWidget: (context, url, error) => Icon(
+            Icons.image_not_supported,
+            color: Colors.grey[400],
+            size: size * 0.6,
+          ),
+        );
+      }
+    }
+    
+    return Icon(
+      Icons.image_not_supported,
+      color: Colors.grey[400],
+      size: size * 0.6,
+    );
+  }
+
+  static int? parseTimestamp(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    final str = value.toString().trim();
+    if (str.isEmpty) return null;
+    final parsedInt = int.tryParse(str);
+    if (parsedInt != null) return parsedInt;
+    try {
+      return DateTime.parse(str.replaceAll(' ', 'T')).millisecondsSinceEpoch ~/ 1000;
+    } catch (_) {
+      try {
+        return DateTime.parse(str).millisecondsSinceEpoch ~/ 1000;
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  static int? parseStopDurationSec(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    final str = value.toString().trim();
+    if (str.isEmpty) return null;
+    return int.tryParse(str);
+  }
 }
+

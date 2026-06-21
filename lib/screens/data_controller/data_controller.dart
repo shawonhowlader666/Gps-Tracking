@@ -99,29 +99,39 @@ class DataController extends GetxController {
   }
 
   Future<void> getDevices() async {
+    debugPrint("DATA_CONTROLLER getDevices START: this=${hashCode} onlyDevices=${onlyDevices.length}");
     try {
       // Choose API based on user preference
       if (UserRepository.isTracksolidMode()) {
         // Tracksolid path – repository handles token & mapping
         final tracksolidRepo = TracksolidRepository();
         final devicesResponse = await tracksolidRepo.getDevices();
+        debugPrint("Tracksolid devicesResponse: ${devicesResponse?.length}");
         devices.value = devicesResponse ?? [];
         await _processDeviceItems(devicesResponse ?? []);
+        debugPrint("Tracksolid onlyDevices: ${onlyDevices.length}");
       } else {
         // Existing Traccar / WOX server flow
         final devicesResponse = await APIService.getDevices();
         if (devicesResponse != null) {
+          debugPrint("Traccar devicesResponse: ${devicesResponse.length}");
           devices.value = devicesResponse;
           await _processDeviceItems(devicesResponse);
+          debugPrint("Traccar onlyDevices: ${onlyDevices.length}");
+        } else {
+          debugPrint("Traccar devicesResponse is NULL");
         }
       }
       isLoading.value = false;
       _updateStatusCounters();
       _reapplyCurrentFilter();
       _checkLocalAlerts(onlyDevices);
+      debugPrint("DATA_CONTROLLER getDevices SUCCESS: this=${hashCode} onlyDevices=${onlyDevices.length}");
     } catch (e) {
+      debugPrint("Error fetching devices: $e");
       isLoading.value = false;
     }
+    update();
   }
 
   Future<void> _checkLocalAlerts(List<DeviceItem> deviceItems) async {
@@ -268,6 +278,7 @@ class DataController extends GetxController {
   }
 
   Future<void> _processDeviceItems(List<Device> deviceGroups) async {
+    debugPrint("DATA_CONTROLLER _processDeviceItems: clearing onlyDevices (size was ${onlyDevices.length})");
     onlyDevices.clear();
     for (var group in deviceGroups) {
       if (group.items != null) {
@@ -275,6 +286,7 @@ class DataController extends GetxController {
       }
     }
     filteredDevices.assignAll(onlyDevices);
+    debugPrint("DATA_CONTROLLER _processDeviceItems: cleared and added. New size is ${onlyDevices.length}");
   }
 
   void _updateStatusCounters() {
@@ -297,6 +309,7 @@ class DataController extends GetxController {
     if (searchText.isNotEmpty) {
       searchDevices(searchText.value);
     }
+    update();
   }
 
   int _getFilterIndex(String status) {
@@ -320,6 +333,7 @@ class DataController extends GetxController {
     if (text.isEmpty) {
       searchedDevices.clear();
       _applyFilters();
+      update();
       return;
     }
 
@@ -328,6 +342,7 @@ class DataController extends GetxController {
         .where((device) =>
     device.name?.toLowerCase().contains(searchLower) ?? false)
         .toList());
+    update();
   }
 
   void _applyFilters() {
@@ -346,6 +361,7 @@ class DataController extends GetxController {
       searchText.value = '';
       searchedDevices.clear();
     }
+    update();
   }
 
   void _loadLocalEvents() {
@@ -402,12 +418,14 @@ class DataController extends GetxController {
   void deleteLocalEvent(dynamic id) {
     localEvents.removeWhere((e) => e.id == id);
     _saveAllLocalEvents();
+    update();
   }
 
   void clearLocalEvents() {
     localEvents.clear();
     final prefs = UserRepository.prefs;
     prefs?.remove('local_notifications_history');
+    update();
   }
 
   void _createAndSaveLocalEvent({required String message, required DeviceItem device}) {
@@ -488,6 +506,7 @@ class DataController extends GetxController {
       }
     } finally {
       isEventLoading.value = false;
+      update();
     }
   }
 
@@ -530,6 +549,7 @@ class DataController extends GetxController {
 
   void setExpandedIndex(int index) {
     expandedIndex.value = expandedIndex.value == index ? -1 : index;
+    update();
   }
 
   // Manual notification trigger (for testing)

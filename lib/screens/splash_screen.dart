@@ -12,10 +12,12 @@ import 'package:gpspro/services/admob_service.dart';
 import 'package:gpspro/services/model/login.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
+import 'package:gpspro/services/tracksolid_repository.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:gpspro/theme/custom_color.dart';
 
 class SplashScreenPage extends StatefulWidget {
   const SplashScreenPage({super.key});
@@ -35,6 +37,10 @@ class _SplashScreenPageState extends State<SplashScreenPage>
 
   SharedPreferences? prefs;
   String _notificationToken = "";
+
+  // Cached widgets for optimization
+  late final Widget _logoWidget;
+  late final Widget _carIconWidget;
 
   // State variables
   bool _configLoaded = false;
@@ -70,13 +76,24 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   FlutterLocalNotificationsPlugin();
 
   // Theme Colors
-  static const Color _primaryColor = Color(0xFF1B851C);
-  static const Color _accentColor = Color(0xFFB30B0B);
-  static const Color _lightAccent = Color(0xFFB30B0B);
+  static const Color _primaryColor = CustomColor.primary;
+  static const Color _accentColor = Color(0xFF800A0A);
+  static const Color _lightAccent = Color(0xFFFF5252);
 
   @override
   void initState() {
     super.initState();
+    _logoWidget = Padding(
+      padding: const EdgeInsets.all(22),
+      child: Image.asset(
+        AppConstants.appIcon,
+        fit: BoxFit.contain,
+      ),
+    );
+    _carIconWidget = Image.asset(
+      'images/car.png',
+      fit: BoxFit.contain,
+    );
     _initAnimations();
     _requestPermissions();
 
@@ -293,7 +310,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   }
 
   void checkPreference() async {
-    if (UserRepository.getHash() != null) {
+    if (UserRepository.getHash() != null || UserRepository.isTracksolidMode()) {
       checkLogin();
     } else {
       await Future.delayed(const Duration(milliseconds: 300));
@@ -303,6 +320,29 @@ class _SplashScreenPageState extends State<SplashScreenPage>
 
   void checkLogin() {
     _updateStatus('Signing in...');
+
+    if (UserRepository.isTracksolidMode()) {
+      final account = UserRepository.getTracksolidAccount();
+      final password = UserRepository.getPassword();
+      if (account != null && password != null) {
+        TracksolidRepository().login(account, password).then((success) {
+          if (success) {
+            updateToken();
+            _updateStatus('Welcome back!');
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted) Navigator.pushReplacementNamed(context, '/home');
+            });
+          } else {
+            if (mounted) Navigator.pushReplacementNamed(context, '/login');
+          }
+        }).catchError((_) {
+          if (mounted) Navigator.pushReplacementNamed(context, '/login');
+        });
+      } else {
+        if (mounted) Navigator.pushReplacementNamed(context, '/login');
+      }
+      return;
+    }
 
     APIService.login(
       UserRepository.getServerUrl(),
@@ -329,6 +369,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   }
 
   void updateToken() async {
+    if (UserRepository.isTracksolidMode()) return;
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     await messaging.getToken().then((value) => {_notificationToken = value!});
     APIService.getUserData().then((user) {
@@ -345,7 +386,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   Widget build(BuildContext context) {
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
-        statusBarColor: Color(0xFFE53935),
+        statusBarColor: CustomColor.primary,
         statusBarBrightness: Brightness.dark,
         statusBarIconBrightness: Brightness.light,
       ),
@@ -531,45 +572,36 @@ class _SplashScreenPageState extends State<SplashScreenPage>
 
   Widget _buildFloatingElements() {
     return AnimatedBuilder(
-      animation: _floatingAnimation,
+      animation: Listenable.merge([_floatingAnimation, _pulseAnimation]),
       builder: (context, child) {
         double offset = _floatingAnimation.value * 10;
+        double pulseVal = _pulseAnimation.value;
         return Stack(
           children: [
             Positioned(
               top: 300 + offset,
               right: 45,
-              child: AnimatedBuilder(
-                animation: _pulseAnimation,
-                builder: (context, child) {
-                  return Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _primaryColor
-                          .withValues(alpha: 0.15 * _pulseAnimation.value),
-                    ),
-                  );
-                },
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _primaryColor
+                      .withValues(alpha: 0.15 * pulseVal),
+                ),
               ),
             ),
             Positioned(
               top: 350 - offset,
               left: 55,
-              child: AnimatedBuilder(
-                animation: _pulseAnimation,
-                builder: (context, child) {
-                  return Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _accentColor
-                          .withValues(alpha: 0.2 * _pulseAnimation.value),
-                    ),
-                  );
-                },
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _accentColor
+                      .withValues(alpha: 0.2 * pulseVal),
+                ),
               ),
             ),
             Positioned(
@@ -606,76 +638,70 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   }
 
   Widget _buildLogoSection() {
-    return AnimatedBuilder(
-      animation: _logoController,
+    final staticLogoInner = Container(
+      width: 135,
+      height: 135,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: _primaryColor.withValues(alpha: 0.2),
+            blurRadius: 25,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: _logoWidget,
+    );
+
+    final staticLogoGlow = AnimatedBuilder(
+      animation: _pulseAnimation,
       builder: (context, child) {
-        return FadeTransition(
-          opacity: _logoFade,
-          child: ScaleTransition(
-            scale: _logoScale,
-            child: AnimatedBuilder(
-              animation: _pulseAnimation,
-              builder: (context, child) {
-                return Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: _primaryColor
-                            .withValues(alpha: 0.25 * _pulseAnimation.value),
-                        blurRadius: 50,
-                        spreadRadius: 15,
-                      ),
-                    ],
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          _primaryColor.withValues(alpha: 0.2),
-                          _accentColor.withValues(alpha: 0.15),
-                        ],
-                      ),
-                    ),
-                    child: Container(
-                      width: 135,
-                      height: 135,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: _primaryColor.withValues(alpha: 0.2),
-                            blurRadius: 25,
-                            offset: const Offset(0, 12),
-                          ),
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(22),
-                        child: Image.asset(
-                          AppConstants.appIcon,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
+        return Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: _primaryColor
+                    .withValues(alpha: 0.25 * _pulseAnimation.value),
+                blurRadius: 50,
+                spreadRadius: 15,
+              ),
+            ],
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _primaryColor.withValues(alpha: 0.2),
+                  _accentColor.withValues(alpha: 0.15),
+                ],
+              ),
             ),
+            child: child,
           ),
         );
       },
+      child: staticLogoInner,
+    );
+
+    return FadeTransition(
+      opacity: _logoFade,
+      child: ScaleTransition(
+        scale: _logoScale,
+        child: staticLogoGlow,
+      ),
     );
   }
 
@@ -701,10 +727,10 @@ class _SplashScreenPageState extends State<SplashScreenPage>
           child: const Text(
             AppConstants.appName,
             style: TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.w800,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
               color: Colors.white,
-              letterSpacing: 8,
+              letterSpacing: 4,
             ),
           ),
         );
@@ -745,10 +771,10 @@ class _SplashScreenPageState extends State<SplashScreenPage>
           Text(
             'Real-Time Vehicle Tracking',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               color: _primaryColor.withValues(alpha: 0.75),
               fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
+              letterSpacing: 0.3,
             ),
           ),
         ],
@@ -800,14 +826,14 @@ class _SplashScreenPageState extends State<SplashScreenPage>
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    child: _buildRoad(),
+                    child: _buildRoad(_vehicleAnimation.value),
                   ),
 
                   // Car with Progress Badge
                   Positioned(
                     left: carPosition + 10,
                     bottom: 5,
-                    child: _buildCarWithProgress(),
+                    child: _buildCarWithProgress(_vehicleAnimation.value),
                   ),
 
                   // Trail Effect behind car
@@ -826,7 +852,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
     );
   }
 
-  Widget _buildRoad() {
+  Widget _buildRoad(double animValue) {
     return Container(
       height: 55,
       decoration: BoxDecoration(
@@ -858,24 +884,19 @@ class _SplashScreenPageState extends State<SplashScreenPage>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: List.generate(10, (index) {
-              return AnimatedBuilder(
-                animation: _vehicleAnimation,
-                builder: (context, child) {
-                  // Animate dashes
-                  double opacity = 0.15 +
-                      (0.15 *
-                          math.sin(
-                              (_vehicleAnimation.value * 2 * math.pi) +
-                                  (index * 0.5)));
-                  return Container(
-                    width: 16,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: _primaryColor.withValues(alpha: opacity),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  );
-                },
+              // Animate dashes without nested builders!
+              double opacity = 0.15 +
+                  (0.15 *
+                      math.sin(
+                          (animValue * 2 * math.pi) +
+                              (index * 0.5)));
+              return Container(
+                width: 16,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: _primaryColor.withValues(alpha: opacity),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               );
             }),
           ),
@@ -884,57 +905,52 @@ class _SplashScreenPageState extends State<SplashScreenPage>
     );
   }
 
-  Widget _buildCarWithProgress() {
+  Widget _buildCarWithProgress(double animValue) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         // Progress Percentage Badge
         AnimatedBuilder(
-          animation: _progressAnimation,
+          animation: _pulseAnimation,
           builder: (context, child) {
-            return AnimatedBuilder(
-              animation: _pulseAnimation,
-              builder: (context, child) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 7,
+            return Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 7,
+              ),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    _primaryColor,
+                    _accentColor,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                    _primaryColor.withValues(alpha: 0.4 * _pulseAnimation.value),
+                    blurRadius: 15,
+                    spreadRadius: 2,
                   ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        _primaryColor,
-                        _accentColor,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                        _primaryColor.withValues(alpha: 0.4 * _pulseAnimation.value),
-                        blurRadius: 15,
-                        spreadRadius: 2,
-                      ),
-                      BoxShadow(
-                        color: _accentColor.withValues(alpha: 0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                  BoxShadow(
+                    color: _accentColor.withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  child: Text(
-                    '${(_progressAnimation.value * 100).toInt()}%',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                );
-              },
+                ],
+              ),
+              child: Text(
+                '${(animValue * 100).toInt()}%',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
+              ),
             );
           },
         ),
@@ -968,33 +984,26 @@ class _SplashScreenPageState extends State<SplashScreenPage>
               ),
             ],
           ),
-          child: Image.asset(
-            'images/car.png',
-            fit: BoxFit.contain,
-          ),
+          child: child,
         );
       },
+      child: _carIconWidget,
     );
   }
 
   Widget _buildTrailEffect() {
-    return AnimatedBuilder(
-      animation: _vehicleAnimation,
-      builder: (context, child) {
-        return Container(
-          height: 4,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(2),
-            gradient: LinearGradient(
-              colors: [
-                _accentColor.withValues(alpha: 0.0),
-                _accentColor.withValues(alpha: 0.2),
-                _accentColor.withValues(alpha: 0.4),
-              ],
-            ),
-          ),
-        );
-      },
+    return Container(
+      height: 4,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(2),
+        gradient: LinearGradient(
+          colors: [
+            _accentColor.withValues(alpha: 0.0),
+            _accentColor.withValues(alpha: 0.2),
+            _accentColor.withValues(alpha: 0.4),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1057,9 +1066,9 @@ class TopWavePainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Color(0xFF1D4888),
-          Color(0xFF2D5A9A),
-          Color(0xFFFFAC00),
+          Color(0xFF800A0A),
+          CustomColor.primary,
+          Color(0xFFD32F2F),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
@@ -1086,7 +1095,7 @@ class TopWavePainter extends CustomPainter {
 
     canvas.drawPath(path, paint);
 
-    final paint2 = Paint()..color = const Color(0xFF3D6AA8).withValues(alpha: 0.5);
+    final paint2 = Paint()..color = const Color(0xFFC62828).withValues(alpha: 0.4);
 
     final path2 = Path()
       ..lineTo(0, size.height * 0.6)
@@ -1111,7 +1120,7 @@ class TopWavePainter extends CustomPainter {
 
     canvas.drawPath(path2, paint2);
 
-    final paint3 = Paint()..color = const Color(0xFF5A84B8).withValues(alpha: 0.3);
+    final paint3 = Paint()..color = const Color(0xFFE57373).withValues(alpha: 0.25);
 
     final path3 = Path()
       ..lineTo(0, size.height * 0.5)
@@ -1145,12 +1154,12 @@ class BottomWavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..shader = const LinearGradient(
+      ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Color(0x0D1D4888),
-          Color(0x1A1D4888),
+          CustomColor.primary.withValues(alpha: 0.05),
+          CustomColor.primary.withValues(alpha: 0.1),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
@@ -1178,7 +1187,7 @@ class BottomWavePainter extends CustomPainter {
 
     canvas.drawPath(path, paint);
 
-    final paint2 = Paint()..color = const Color(0xFFFFAC00).withValues(alpha: 0.05);
+    final paint2 = Paint()..color = CustomColor.primary.withValues(alpha: 0.04);
 
     final path2 = Path()
       ..moveTo(0, size.height * 0.7)
@@ -1223,21 +1232,4 @@ class ArrowPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class AnimatedBuilder extends AnimatedWidget {
-  final Widget Function(BuildContext context, Widget? child) builder;
-  final Widget? child;
-
-  const AnimatedBuilder({
-    super.key,
-    required Animation<double> animation,
-    required this.builder,
-    this.child,
-  }) : super(listenable: animation);
-
-  @override
-  Widget build(BuildContext context) {
-    return builder(context, child);
-  }
-}
+}

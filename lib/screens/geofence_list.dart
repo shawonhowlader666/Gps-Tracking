@@ -59,7 +59,7 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
       final value = await APIService.getGeoFences();
       if (value != null && value.isNotEmpty) {
         fenceList = value;
-        await _fetchDeviceAssociations();
+        _fetchDeviceAssociations();
       } else {
         fenceList = [];
       }
@@ -75,9 +75,14 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
 
   Future<void> _fetchDeviceAssociations() async {
     try {
-      for (var fence in fenceList) {
-        if (fence.id != null) {
-          final devices = await APIService.getGeofenceDevices(int.tryParse(fence.id.toString()));
+      final futures = fenceList.map((fence) async {
+        final idStr = fence.id?.toString();
+        if (idStr == null) return;
+        final fenceId = int.tryParse(idStr);
+        if (fenceId == null) return;
+
+        try {
+          final devices = await APIService.getGeofenceDevices(fenceId);
           if (devices != null && devices.isNotEmpty) {
             List<Map<String, dynamic>> deviceList = [];
             for (var deviceData in devices) {
@@ -88,11 +93,20 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                 'name': deviceName ?? deviceData['name'] ?? 'Unknown Device',
               });
             }
-            fenceDevices[int.parse(fence.id.toString())] = deviceList;
+            fenceDevices[fenceId] = deviceList;
           } else {
-            fenceDevices[int.parse(fence.id.toString())] = [];
+            fenceDevices[fenceId] = [];
           }
+        } catch (e) {
+          debugPrint('Error fetching associations for fence $fenceId: $e');
+          fenceDevices[fenceId] = [];
         }
+      }).toList();
+
+      await Future.wait(futures);
+
+      if (mounted) {
+        setState(() {});
       }
     } catch (e) {
       debugPrint('Error fetching device associations: $e');

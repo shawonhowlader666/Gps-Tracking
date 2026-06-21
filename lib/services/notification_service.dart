@@ -240,18 +240,32 @@ class NotificationService {
     required String body,
     Map<String, dynamic>? data,
   }) async {
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-      'high_importance_channel',
-      'High Importance Notifications',
-      channelDescription: 'This channel is used for important notifications.',
+    final eventStyle = _getEventStyle(body);
+
+    String channelId;
+    if (eventStyle.isSOS) {
+      channelId = 'sos_channel_v1';
+    } else if (eventStyle.isAlert) {
+      channelId = 'alert_channel_v1';
+    } else {
+      channelId = 'event_channel_v1';
+    }
+
+    final androidDetails = AndroidNotificationDetails(
+      channelId,
+      _getChannelName(channelId),
+      channelDescription: _getChannelDescription(channelId),
       importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
       enableVibration: true,
       playSound: true,
       icon: '@mipmap/ic_launcher',
-      styleInformation: BigTextStyleInformation(''),
+      styleInformation: BigTextStyleInformation(
+        body,
+        contentTitle: '${eventStyle.emoji} $title',
+        summaryText: 'ONFLEET GPS',
+      ),
     );
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
@@ -260,14 +274,14 @@ class NotificationService {
       presentSound: true,
     );
 
-    const NotificationDetails notificationDetails = NotificationDetails(
+    final notificationDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
     await _localNotifications.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title,
+      '${eventStyle.emoji} $title',
       body,
       notificationDetails,
       payload: data?.toString(),

@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:gpspro/screens/home/home_controller.dart';
 import 'package:gpspro/screens/payment_list.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
+import 'package:gpspro/util/util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/payment_service.dart';
@@ -28,7 +29,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   final HomeController homeController = Get.put(HomeController());
   late final DataController dataController;
 
@@ -87,6 +88,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     dataController = Get.put(DataController(), permanent: true);
+
+    // Listen to onlyDevices changes reactively to update counts without triggering build loop
+    ever(dataController.onlyDevices, (_) {
+      _calculateStatusCounts();
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadBillingInfo();
       _calculateStatusCounts();
@@ -305,9 +312,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     // STEP 0.5: Check if device has no data
-    if (device.lat == null || device.lng == null ||
-        double.tryParse(device.lat.toString()) == 0.0 ||
-        double.tryParse(device.lng.toString()) == 0.0) {
+    final latVal = device.lat is double ? (device.lat as double) : double.tryParse(device.lat.toString());
+    final lngVal = device.lng is double ? (device.lng as double) : double.tryParse(device.lng.toString());
+    if (latVal == null || lngVal == null || latVal == 0.0 || lngVal == 0.0) {
       return VehicleStatus.noData;
     }
 
@@ -834,7 +841,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // ==================== BUILD METHODS ====================
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: _buildAppBar(),
@@ -848,7 +859,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // Remove Android overscroll glow â€” gives a clean fluid feel
           behavior: const _NoGlowScrollBehavior(),
           child: CustomScrollView(
-          physics: const ClampingScrollPhysics(),
 
           slivers: [
             SliverPadding(
@@ -1122,9 +1132,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildStatsRow() {
     return Obx(() {
-      // Recalculate counts when devices change
-      _calculateStatusCounts();
-
       final allCount = dataController.onlyDevices.length;
       final running = _runningCount.value;
       final idle = _idleCount.value;
@@ -1671,7 +1678,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 _buildLiveDivider(),
                 _buildLiveStat(
-                    Icons.timer, device.stopDuration ?? '-', 'Parking'),
+                    Icons.timer, Util.formatDurationString(device.stopDuration), 'Parking'),
               ],
             ),
           ],
@@ -2121,7 +2128,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       _buildSummaryItem(
                         Icons.pause,
                         'Stopped',
-                        report.stopDuration ?? '0h 0m',
+                        Util.formatDurationString(report.stopDuration),
                         dangerColor,
                       ),
                       _buildSummaryItem(
@@ -2809,7 +2816,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               _buildQuickLinkItem(
                 imagePath: 'assets/images/blogs.png',
                 label: 'Blogs',
-                onTap: () => _launchURL('https://orbitgps.com.bd'),
+                onTap: () => _launchURL('https://onfleetgps.com'),
               ),
             ],
           ),
@@ -2912,7 +2919,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               SizedBox(height: 8),
-              Text('1. Orbit Driving Training School\n   Phone: 01901388950\n'),
+              Text('1. Onfleet Driving Training School\n   Phone: 01912609087\n'),
               Text('2. BRAC Driving School\n   Dhaka Office\n'),
               Text('3. BRTA Safety Training Center\n   Mirpur, Dhaka\n'),
               Divider(),
@@ -2961,8 +2968,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   'â€¢ Overtaking: Do not overtake on bridges, curves, or narrow roads.'),
               Divider(),
               Text(
-                'Tip: Orbit GPS tracking sends dynamic notifications when you exceed speed limits.',
-                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+                'Tip: Onfleet GPS tracking sends dynamic notifications when you exceed speed limits.',
+                style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
               ),
             ],
           ),

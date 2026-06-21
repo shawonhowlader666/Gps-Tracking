@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- Battery Body -->
-  <rect x="12" y="18" width="36" height="28" rx="4" fill="none" stroke="#334155" stroke-width="4"/>
-  <!-- Battery Cap -->
-  <rect x="48" y="26" width="4" height="12" rx="1" fill="#334155"/>
-  <!-- Green charge blocks (3 bars) -->
-  <rect x="18" y="23" width="7" height="18" rx="1.5" fill="#22C55E"/>
-  <rect x="28" y="23" width="7" height="18" rx="1.5" fill="#22C55E"/>
-  <rect x="38" y="23" width="7" height="18" rx="1.5" fill="#22C55E"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="#10B981" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Sleek Modern Battery Status Icon -->
+  <rect x="8" y="16" width="42" height="32" rx="6" />
+  <!-- Positive terminal node -->
+  <path d="M50 26 C53 26 55 28 55 32 C55 36 53 38 50 38" stroke-width="5" />
+  <!-- Inside level bars -->
+  <rect x="14" y="22" width="8" height="20" rx="2" fill="#10B981" stroke="none" />
+  <rect x="25" y="22" width="8" height="20" rx="2" fill="#10B981" stroke="none" />
+  <rect x="36" y="22" width="8" height="20" rx="2" fill="#10B981" stroke="none" />
 </svg>

@@ -16,6 +16,7 @@ import 'package:gpspro/screens/payment_block_screen.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gpspro/screens/payment_list.dart';
+import 'package:gpspro/theme/custom_color.dart';
 
 class MainBottomNav extends StatefulWidget {
   const MainBottomNav({super.key});
@@ -25,7 +26,7 @@ class MainBottomNav extends StatefulWidget {
 }
 
 class _MainBottomNavState extends State<MainBottomNav> {
-  int _selectedIndex = 0;
+  int _selectedIndex = 2;
   late final PageController _pageController = PageController(initialPage: _selectedIndex);
   double _dueAmount = 0.0;
   bool _isLoadingDue = true;
@@ -187,7 +188,7 @@ class _MainBottomNavState extends State<MainBottomNav> {
   @override
   Widget build(BuildContext context) {
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Color(0xFFFF0000),
+      statusBarColor: CustomColor.primary,
       statusBarBrightness: Brightness.dark,
       statusBarIconBrightness: Brightness.light,
     ));
@@ -224,16 +225,13 @@ class _MainBottomNavState extends State<MainBottomNav> {
             physics: const NeverScrollableScrollPhysics(),
             children: _screens,
           ),
-          Obx(() {
-            if (controller.isLoading.value) {
-              return Container(
-                color: const Color(0xFFF5F6FA),
-                alignment: Alignment.center,
-                child: const CircularProgressIndicator(),
-              );
-            }
-            return const SizedBox.shrink();
-          }),
+          Obx(() => controller.isLoading.value
+              ? Container(
+                  color: const Color(0xFFF5F6FA),
+                  alignment: Alignment.center,
+                  child: const CircularProgressIndicator(),
+                )
+              : const SizedBox.shrink()),
         ],
       ),
       bottomNavigationBar: _buildGNav(),
@@ -261,7 +259,7 @@ class _MainBottomNavState extends State<MainBottomNav> {
             iconSize: 22,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             duration: const Duration(milliseconds: 300),
-            tabBackgroundColor: const Color(0xFFFF0000),
+            tabBackgroundColor: CustomColor.primary,
             color: const Color(0xFF9E9E9E),
             tabs: [
               GButton(

@@ -13,16 +13,19 @@ class TracksolidClient {
   static const String _appKey =
       '8FB345B8693CCD00C6CEB12895C150CF339A22A4105B6558';
   static const String _appSecret = '3928b55300604564b98344c92f5d6a2b';
-  static const String _version = '0.9';
+  static const String _version = '1.0';
 
   /// Helper to build the mandatory base parameters for every request.
   Map<String, String> _baseParams(String method) {
-    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final now = DateTime.now().toUtc();
+    final timestamp =
+        '${now.year}-${_pad(now.month)}-${_pad(now.day)} '
+        '${_pad(now.hour)}:${_pad(now.minute)}:${_pad(now.second)}';
     return {
       'method': method,
       'app_key': _appKey,
       'timestamp': timestamp,
-      'sign_method': 'hmac',
+      'sign_method': 'md5',
       'v': _version,
       'format': 'json',
     };
@@ -71,9 +74,12 @@ class TracksolidClient {
   // ---------------------------------------------------------------------
 
   Future<String?> login({required String account, required String password}) async {
-    final params = _baseParams('jimi.user.login');
-    params['account'] = account;
-    params['password'] = password;
+    // API requires: user_id (account name) and user_pwd_md5 (lowercase MD5 of password)
+    final pwdMd5 = md5.convert(utf8.encode(password)).toString(); // lowercase MD5
+    final params = _baseParams('jimi.oauth.token.get');
+    params['user_id'] = account;
+    params['user_pwd_md5'] = pwdMd5;
+    params['expires_in'] = '7200';
     final resp = await _post(params);
     if (resp == null) return null;
     if (resp['code'] == 0 || resp['code'] == '0') {
@@ -150,9 +156,9 @@ class TracksolidClient {
     final params = _baseParams('jimi.alarm.list');
     params['access_token'] = token;
     params['begintime'] =
-        '\${from.year}-\${_pad(from.month)}-\${_pad(from.day)} 00:00:00';
+        '${from.year}-${_pad(from.month)}-${_pad(from.day)} 00:00:00';
     params['endtime'] =
-        '\${to.year}-\${_pad(to.month)}-\${_pad(to.day)} 23:59:59';
+        '${to.year}-${_pad(to.month)}-${_pad(to.day)} 23:59:59';
     params['page'] = page.toString();
     params['limit'] = limit.toString();
     if (imei != null && imei.isNotEmpty) params['imei'] = imei;

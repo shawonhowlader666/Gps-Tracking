@@ -99,11 +99,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
   }
 
   void _loadMapStyle() async {
-    try {
-      _mapStyle = await rootBundle.loadString('assets/map_style.txt');
-    } catch (e) {
-      debugPrint('Map style not found');
-    }
+    _mapStyle = null; // Default to colorful Google Maps
   }
 
   void _getCurrentLocation() async {
@@ -138,7 +134,11 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
               device.lng != null) {
             try {
               BitmapDescriptor markerIcon =
-              await Util.getMarkerIcon(device.icon?.path ?? '', statusColor: device.iconColor);
+              await Util.getMarkerIcon(device.icon?.path ?? '',
+                  statusColor: device.iconColor,
+                  iconType: device.icon?.type ?? device.iconType,
+                  deviceName: device.name,
+                  deviceId: device.id);
 
               _markers.add(Marker(
                 markerId: MarkerId(device.id.toString()),
@@ -682,8 +682,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: _buildAppBar(),
-      body: GetX<DataController>(
-        init: DataController(),
+      body: GetBuilder<DataController>(
+        init: Get.find<DataController>(),
         builder: (controller) {
           _devicesList = controller.onlyDevices;
 

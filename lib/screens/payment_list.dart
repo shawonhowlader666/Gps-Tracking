@@ -332,8 +332,10 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       return 'Connection timed out. Please check your internet connection.';
     } else if (errorString.contains('socket') || errorString.contains('connection')) {
       return 'Network error. Please check your internet connection.';
+    } else if (error.toString().startsWith('Exception:')) {
+      return error.toString().replaceFirst('Exception: ', '').replaceFirst('Exception:', '');
     } else {
-      return 'Something went wrong. Please try again.';
+      return error.toString();
     }
   }
 

@@ -148,6 +148,22 @@ flutter:
     - assets/icons/map-end-point.png
     - assets/icons/text.png
     - assets/images/
+    - assets/images/ambulance_toprunning.png
+    - assets/images/bike_toprunning.png
+    - assets/images/bus_toprunning.png
+    - assets/images/car_green.png
+    - assets/images/car_toprunning.png
+    - assets/images/crane_toprunning.png
+    - assets/images/garbage_toprunning.png
+    - assets/images/mixer_toprunning.png
+    - assets/images/muv_toprunning.png
+    - assets/images/pickup_toprunning.png
+    - assets/images/school_toprunning.png
+    - assets/images/scotty_toprunning.png
+    - assets/images/suv_toprunning.png
+    - assets/images/tanker_toprunning.png
+    - assets/images/tempotvr_toprunning.png
+    - assets/images/truck_toprunning.png
     - assets/images/double-right-arrow.png
     - assets/images/error-inactive.png
     - assets/images/map-end-point.png

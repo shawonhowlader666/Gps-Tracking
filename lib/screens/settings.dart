@@ -18,7 +18,7 @@ class SettingsPage extends StatefulWidget {
   State<StatefulWidget> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends State<SettingsPage> with AutomaticKeepAliveClientMixin {
   SharedPreferences? prefs;
   File? _image;
   final ImagePicker _picker = ImagePicker();
@@ -110,7 +110,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -142,8 +146,6 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             _buildProfileCard(),
             const SizedBox(height: 24),
-            _buildSectionTitle('General'),
-            const SizedBox(height: 12),
             _buildSettingsCard([
               _buildSettingItem(
                 icon: Icons.notifications_outlined,
@@ -154,7 +156,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: 'Manage notifications',
                 onTap: () => Navigator.pushNamed(context, "/alertList"),
               ),
-              _buildDivider(),
+            ]),
+            const SizedBox(height: 10),
+            _buildSettingsCard([
               _buildSettingItem(
                 icon: Icons.fence_outlined,
                 iconColor: CustomColor.primary,
@@ -163,7 +167,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: 'Set location zones',
                 onTap: () => Navigator.pushNamed(context, "/geofenceList"),
               ),
-              _buildDivider(),
+            ]),
+            const SizedBox(height: 10),
+            _buildSettingsCard([
               _buildSettingItem(
                 icon: Icons.language_outlined,
                 iconColor: CustomColor.primary,
@@ -173,53 +179,43 @@ class _SettingsPageState extends State<SettingsPage> {
                 onTap: () => _showLanguageDialog(context),
               ),
             ]),
-            const SizedBox(height: 24),
-            _buildSectionTitle('Account & Support'),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildPremium3DCard(
-                    title: 'Payment',
-                    subtitle: 'View invoices',
-                    icon: Icons.payment_rounded,
-                    iconColor: CustomColor.primary,
-                    iconBgColor: Colors.transparent,
-                    shadowColor: CustomColor.primary,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PaymentListScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildPremium3DCard(
-                    title: 'Support',
-                    subtitle: '24/7 Helpline',
-                    icon: Icons.headset_mic_rounded,
-                    iconColor: CustomColor.primary,
-                    iconBgColor: Colors.transparent,
-                    shadowColor: CustomColor.primary,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const CustomerSupportScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            _buildSectionTitle('Support'),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
+            _buildSettingsCard([
+              _buildSettingItem(
+                icon: Icons.payment_rounded,
+                iconColor: CustomColor.primary,
+                iconBgColor: Colors.transparent,
+                title: 'Payment',
+                subtitle: 'View invoices',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PaymentListScreen(),
+                    ),
+                  );
+                },
+              ),
+            ]),
+            const SizedBox(height: 10),
+            _buildSettingsCard([
+              _buildSettingItem(
+                icon: Icons.headset_mic_rounded,
+                iconColor: CustomColor.primary,
+                iconBgColor: Colors.transparent,
+                title: 'Support',
+                subtitle: '24/7 Helpline',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CustomerSupportScreen(),
+                    ),
+                  );
+                },
+              ),
+            ]),
+            const SizedBox(height: 20),
             _buildSettingsCard([
               _buildSettingItem(
                 icon: Icons.description_outlined,
@@ -229,7 +225,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: 'Read terms',
                 onTap: () => _showTermsAndConditions(),
               ),
-              _buildDivider(),
+            ]),
+            const SizedBox(height: 10),
+            _buildSettingsCard([
               _buildSettingItem(
                 icon: Icons.privacy_tip_outlined,
                 iconColor: CustomColor.primary,
@@ -539,7 +537,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       subtitle,
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey[400],
+                        color: Colors.grey[600],
                       ),
                     ),
                   ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gpspro/arguments/report_args.dart';
 import 'package:gpspro/screens/report/multi_period_report_screen.dart';
+import 'package:gpspro/theme/custom_color.dart';
 
 class ReportListPage extends StatefulWidget {
   const ReportListPage({super.key});
@@ -14,7 +15,7 @@ class _ReportListPageState extends State<ReportListPage> {
   static ReportArguments? args;
 
   // Simple color palette
-  static const Color primaryColor = Color(0xFF1B851C);
+  static const Color primaryColor = CustomColor.primary;
   static const Color textPrimary = Color(0xFF1F2937);
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color cardBg = Colors.white;
@@ -87,7 +88,7 @@ class _ReportListPageState extends State<ReportListPage> {
             icon: Icons.summarize_outlined,
             title: 'generalInformation'.tr,
             subtitle: 'Complete route summary',
-            color: const Color(0xFF1B851C),
+            color: CustomColor.primary,
             onTap: () => _navigateToReport(1, "/reportRoute"),
           ),
 

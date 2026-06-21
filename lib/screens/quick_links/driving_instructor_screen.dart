@@ -16,8 +16,8 @@ class _DrivingInstructorScreenState extends State<DrivingInstructorScreen> {
 
   final List<Map<String, String>> _schools = [
     {
-      'name': 'Orbit Driving Training School',
-      'phone': '01901388950',
+      'name': 'Onfleet Driving Training School',
+      'phone': '01912609087',
       'location': 'Mirpur, Dhaka',
       'status': 'BRTA Approved',
       'rating': '4.8',

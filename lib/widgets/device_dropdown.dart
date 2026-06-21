@@ -24,29 +24,32 @@ class DeviceDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return CustomCard(
       title: 'selectVehicle'.tr,
-      child: Obx(() {
-        final devices = dataController.onlyDevices;
-        if (devices.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        // if (devices.isEmpty) {
-        //   return Center(child: Text("noVehicle".tr));
-        // }
-        return DropdownButtonFormField<String>(
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.zero,
-          ),
-          initialValue: selectedVehicle,
-          items: devices
-              .map((device) => DropdownMenuItem<String>(
-                    value: _formatVehicleName(device),
-                    child: Text(_formatVehicleName(device)),
-                  ))
-              .toList(),
-          onChanged: onChanged,
-        );
-      }),
+      child: GetBuilder<DataController>(
+        init: dataController,
+        builder: (controller) {
+          final devices = controller.onlyDevices;
+          if (devices.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          // if (devices.isEmpty) {
+          //   return Center(child: Text("noVehicle".tr));
+          // }
+          return DropdownButtonFormField<String>(
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+            initialValue: selectedVehicle,
+            items: devices
+                .map((device) => DropdownMenuItem<String>(
+                      value: _formatVehicleName(device),
+                      child: Text(_formatVehicleName(device)),
+                    ))
+                .toList(),
+            onChanged: onChanged,
+          );
+        },
+      ),
     );
   }
 }

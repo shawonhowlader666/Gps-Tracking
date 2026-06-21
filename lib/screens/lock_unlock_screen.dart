@@ -20,6 +20,10 @@ class LockUnlockScreen extends StatefulWidget {
 
 class _LockUnlockScreenState extends State<LockUnlockScreen>
     with SingleTickerProviderStateMixin {
+  static const Color _successColor = Color(0xFF00C853);
+  static const Color _dangerColor = CustomColor.primary;
+  static const Color _warningColor = Color(0xFFFF9100);
+
   final List<String> _commands = <String>[];
   final List<String> _commandsValue = <String>[];
   int _selectedCommand = 0;
@@ -321,16 +325,16 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                   boxShadow: [
                     BoxShadow(
                       color: !_isLocked
-                          ? const Color(0xFF10B981).withValues(alpha: 0.08 * (1 - value))
-                          : const Color(0xFFEF4444).withValues(alpha: 0.08 * (1 - value)),
+                          ? _successColor.withValues(alpha: 0.08 * (1 - value))
+                          : _dangerColor.withValues(alpha: 0.08 * (1 - value)),
                       blurRadius: 20,
                       spreadRadius: 8 * value,
                     ),
                   ],
                   border: Border.all(
                     color: !_isLocked
-                        ? const Color(0xFF10B981).withValues(alpha: 0.15 + (0.35 * (1 - value)))
-                        : const Color(0xFFEF4444).withValues(alpha: 0.15 + (0.35 * (1 - value))),
+                        ? _successColor.withValues(alpha: 0.15 + (0.35 * (1 - value)))
+                        : _dangerColor.withValues(alpha: 0.15 + (0.35 * (1 - value))),
                     width: 1.5,
                   ),
                 ),
@@ -345,8 +349,8 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               shape: BoxShape.circle,
               border: Border.all(
                 color: !_isLocked
-                    ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                    : const Color(0xFFEF4444).withValues(alpha: 0.1),
+                    ? _successColor.withValues(alpha: 0.1)
+                    : _dangerColor.withValues(alpha: 0.1),
                 width: 3,
               ),
             ),
@@ -372,8 +376,8 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               ],
               border: Border.all(
                 color: !_isLocked
-                    ? const Color(0xFF10B981).withValues(alpha: 0.8)
-                    : const Color(0xFFEF4444).withValues(alpha: 0.8),
+                    ? _successColor.withValues(alpha: 0.8)
+                    : _dangerColor.withValues(alpha: 0.8),
                 width: 2,
               ),
             ),
@@ -382,7 +386,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               children: [
                 m.Icon(
                   _isLocked ? Icons.lock_outline_rounded : Icons.lock_open_rounded,
-                  color: !_isLocked ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  color: !_isLocked ? _successColor : _dangerColor,
                   size: 34,
                 ),
                 const SizedBox(height: 2),
@@ -392,7 +396,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                     fontSize: 9.5,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 1.5,
-                    color: !_isLocked ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                    color: !_isLocked ? _successColor : _dangerColor,
                   ),
                 ),
               ],
@@ -477,9 +481,9 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildQuickStat('GPS SIGNAL', 'ONLINE', Icons.wifi_rounded, const Color(0xFF10B981)),
-              _buildQuickStat('IGNITION', _isEngineOn ? 'ON' : 'OFF', Icons.power_rounded, _isEngineOn ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
-              _buildQuickStat('SECURITY', _isLocked ? 'ARMED' : 'READY', Icons.shield_rounded, _isLocked ? const Color(0xFFF59E0B) : const Color(0xFF10B981)),
+              _buildQuickStat('GPS SIGNAL', 'ONLINE', Icons.wifi_rounded, _successColor),
+              _buildQuickStat('IGNITION', _isEngineOn ? 'ON' : 'OFF', Icons.power_rounded, _isEngineOn ? _successColor : _dangerColor),
+              _buildQuickStat('SECURITY', _isLocked ? 'ARMED' : 'READY', Icons.shield_rounded, _isLocked ? _warningColor : _successColor),
             ],
           ),
         ],
@@ -519,19 +523,19 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     final bool isActive = isUnlockButton ? !_isLocked : _isLocked;
     
     // Core color scheme definitions
-    final Color themeColor = isUnlockButton ? const Color(0xFF16A34A) : const Color(0xFFDC2626); // green / red
+    final Color themeColor = isUnlockButton ? _successColor : _dangerColor; // green / red
     
     // Base light background and border colors
-    final Color baseBgColor = isUnlockButton ? const Color(0xFF86EFAC) : const Color(0xFFFCA5A5); // light green / light red
-    final Color baseBorderColor = isUnlockButton ? const Color(0xFF86EFAC) : const Color(0xFFFCA5A5);
+    final Color baseBgColor = isUnlockButton ? _successColor.withValues(alpha: 0.35) : _dangerColor.withValues(alpha: 0.35); // light green / light red
+    final Color baseBorderColor = isUnlockButton ? _successColor.withValues(alpha: 0.35) : _dangerColor.withValues(alpha: 0.35);
 
     // Apply active/inactive colors
     final Color bgColor = isActive 
-        ? (isUnlockButton ? const Color(0xFF16A34A) : const Color(0xFFDC2626)) 
+        ? (isUnlockButton ? _successColor : _dangerColor) 
         : baseBgColor;
         
     final Color borderColor = isActive 
-        ? (isUnlockButton ? const Color(0xFF16A34A) : const Color(0xFFDC2626)) 
+        ? (isUnlockButton ? _successColor : _dangerColor) 
         : baseBorderColor;
 
     final Color textIconColor = isActive ? Colors.white : Colors.white.withValues(alpha: 0.65);
@@ -734,7 +738,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
             msg: responseJson['message'] ?? 'Failed to send command',
             toastLength: Toast.LENGTH_SHORT,
             gravity: ToastGravity.BOTTOM,
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: _dangerColor,
             textColor: Colors.white,
           );
           return;
@@ -751,7 +755,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               : 'Vehicle unlocked successfully',
           toastLength: Toast.LENGTH_SHORT,
           gravity: ToastGravity.BOTTOM,
-          backgroundColor: const Color(0xFF22C55E),
+          backgroundColor: _successColor,
           textColor: Colors.white,
         );
       } else {
@@ -759,7 +763,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           msg: 'Failed to send command',
           toastLength: Toast.LENGTH_SHORT,
           gravity: ToastGravity.BOTTOM,
-          backgroundColor: const Color(0xFFEF4444),
+          backgroundColor: _dangerColor,
           textColor: Colors.white,
         );
       }
@@ -768,7 +772,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         msg: 'Connection error',
         toastLength: Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: const Color(0xFFEF4444),
+        backgroundColor: _dangerColor,
         textColor: Colors.white,
       );
     } finally {
@@ -976,7 +980,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           msg: 'command_sent'.tr,
           toastLength: Toast.LENGTH_SHORT,
           gravity: ToastGravity.BOTTOM,
-          backgroundColor: const Color(0xFF22C55E),
+          backgroundColor: _successColor,
           textColor: Colors.white,
         );
         Navigator.of(context).pop();
@@ -986,7 +990,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           msg: 'errorMsg'.tr,
           toastLength: Toast.LENGTH_SHORT,
           gravity: ToastGravity.BOTTOM,
-          backgroundColor: const Color(0xFFEF4444),
+          backgroundColor: _dangerColor,
           textColor: Colors.white,
         );
       }
@@ -995,7 +999,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         msg: 'Connection error',
         toastLength: Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: const Color(0xFFEF4444),
+        backgroundColor: _dangerColor,
         textColor: Colors.white,
       );
     }

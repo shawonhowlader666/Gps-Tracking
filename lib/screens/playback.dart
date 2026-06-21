@@ -180,6 +180,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
   MapType _currentMapType = MapType.normal;
   double currentZoom = 14.0;
+  int _currentMarkerSize = 38;
   String? _mapStyle;
 
   // PLAYBACK VARIABLES
@@ -278,11 +279,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         DateTime.now().subtract(const Duration(hours: 12));
     _toDate = widget.initialToDate ?? DateTime.now();
 
-    rootBundle.loadString('assets/map_style.txt').then((string) {
-      _mapStyle = string;
-    }).catchError((error) {
-      debugPrint('Error loading map style: $error');
-    });
+    _mapStyle = null; // Default to colorful Google Maps
 
     // Load car icon first
     _loadCarIcon();
@@ -301,7 +298,12 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     try {
       if (widget.device?.icon?.path != null) {
         final path = widget.device!.icon!.path!;
-        _cachedCarIcon = await Util.getMarkerIcon(path);
+        _cachedCarIcon = await Util.getMarkerIcon(path,
+            size: _currentMarkerSize,
+            statusColor: widget.device?.iconColor,
+            iconType: widget.device?.icon?.type ?? widget.device?.iconType,
+            deviceName: widget.device?.name,
+            deviceId: widget.device?.id);
       }
 
       _cachedCarIcon ??=
@@ -1296,6 +1298,17 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                       }
                     },
                     onCameraMove: (pos) => currentZoom = pos.zoom,
+                    onCameraIdle: () {
+                      final int newSize = Util.getMarkerSizeForZoom(currentZoom);
+                      if (newSize != _currentMarkerSize) {
+                        _currentMarkerSize = newSize;
+                        _loadCarIcon().then((_) {
+                          if (playbackRoutePoints.isNotEmpty && _currentPointIndex < playbackRoutePoints.length) {
+                            _addCarMarker(playbackRoutePoints[_currentPointIndex], _carAnimator?.currentBearing ?? 0);
+                          }
+                        });
+                      }
+                    },
                     markers: markers,
                     polylines: polylines,
                     myLocationEnabled: true,

@@ -17,13 +17,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'translation/translation_service.dart';
 
-/// Ultra-liquid scroll: iOS-quality spring physics on all platforms
+/// Custom scroll behavior that removes Android overscroll glow and enforces clamping physics
 class _PremiumScrollBehavior extends ScrollBehavior {
   const _PremiumScrollBehavior();
 
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
-    return const _LiquidScrollPhysics();
+    return super.getScrollPhysics(context);
   }
 
   @override
@@ -31,23 +31,6 @@ class _PremiumScrollBehavior extends ScrollBehavior {
       BuildContext context, Widget child, ScrollableDetails details) {
     return child; // No glow — clean premium look
   }
-}
-
-/// Custom scroll physics with tight spring — feels like water
-class _LiquidScrollPhysics extends BouncingScrollPhysics {
-  const _LiquidScrollPhysics({super.parent});
-
-  @override
-  _LiquidScrollPhysics applyTo(ScrollPhysics? ancestor) {
-    return _LiquidScrollPhysics(parent: buildParent(ancestor));
-  }
-
-  @override
-  SpringDescription get spring => const SpringDescription(
-        mass: 0.04,       // lighter = snappier response
-        stiffness: 100,   // higher = tighter spring
-        damping: 0.8,     // <1 = slight elastic overshoot
-      );
 }
 
 /// Smooth page transition: fade + micro-slide, 280ms easeOutExpo
@@ -207,71 +190,22 @@ Future<void> _showUltraSimpleNotification(
   } catch (_) {}
 }
 
-// Get emoji for message type
+// Helper method to retrieve emoji based on message content
 String _getEmojiForMessage(String message) {
-  message = message.toLowerCase();
-  if (message.contains('sos')) return '🆘';
-  if (message.contains('alarm') || message.contains('alert')) return '🚨';
-  if (message.contains('speed')) return '⚡';
-  if (message.contains('geofence')) return '📍';
-  if (message.contains('ignition')) return '🔑';
-  if (message.contains('online')) return '✅';
-  if (message.contains('offline')) return '❌';
-  if (message.contains('fuel')) return '⛽';
-  if (message.contains('battery')) return '🔋';
+  final msg = message.toLowerCase();
+  if (msg.contains('sos')) return '🆘';
+  if (msg.contains('alarm') || msg.contains('alert')) return '🚨';
+  if (msg.contains('speed')) return '⚡';
+  if (msg.contains('geofence')) return '📍';
+  if (msg.contains('ignition')) return '🔑';
+  if (msg.contains('online')) return '✅';
+  if (msg.contains('offline')) return '❌';
+  if (msg.contains('fuel')) return '⛽';
+  if (msg.contains('battery')) return '🔋';
   return '🔔';
 }
 
-// Show notification for foreground messages
-Future<void> showForegroundNotification(RemoteMessage message) async {
-  String title = message.notification?.title ??
-      message.data['title'] ??
-      'New Notification';
-  String body = message.notification?.body ??
-      message.data['body'] ??
-      'You have a new message';
 
-  String emoji = _getEmojiForMessage(body);
-
-  bool isAlert = body.toLowerCase().contains('sos') ||
-      body.toLowerCase().contains('alert') ||
-      body.toLowerCase().contains('alarm');
-
-  AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-    isAlert ? 'alert_channel' : 'high_importance_channel',
-    isAlert ? 'Alert Notifications' : 'High Importance Notifications',
-    channelDescription: 'Important notifications',
-    importance: Importance.max,
-    priority: Priority.max,
-    playSound: true,
-    enableVibration: true,
-    icon: '@mipmap/ic_launcher',
-    styleInformation: BigTextStyleInformation(
-      body,
-      contentTitle: '$emoji $title',
-      summaryText: 'ONFLEET GPS',
-    ),
-  );
-
-  const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-    presentAlert: true,
-    presentBadge: true,
-    presentSound: true,
-  );
-
-  NotificationDetails notificationDetails = NotificationDetails(
-    android: androidDetails,
-    iOS: iosDetails,
-  );
-
-  await flutterLocalNotificationsPlugin.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    '$emoji $title',
-    body,
-    notificationDetails,
-    payload: message.data.toString(),
-  );
-}
 
 // Background notification response handler
 @pragma('vm:entry-point')
@@ -315,10 +249,7 @@ void main() async {
       sound: true,
     );
 
-    // Setup foreground message listener
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      showForegroundNotification(message);
-    });
+    // Setup foreground message listener (handled by NotificationService)
 
     // Handle notification tap when app opens from terminated state
     FirebaseMessaging.instance.getInitialMessage().then((message) {
@@ -512,6 +443,8 @@ class _MyAppPageState extends State<MyApp> with WidgetsBindingObserver {
             debugShowCheckedModeBanner: false,
             navigatorKey: navigatorKey,
             scrollBehavior: const _PremiumScrollBehavior(),
+            defaultTransition: Transition.rightToLeftWithFade,
+            transitionDuration: const Duration(milliseconds: 280),
             theme: ThemeData(
               useMaterial3: true,
               primaryColor: CustomColor.primary,

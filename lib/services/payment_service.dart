@@ -19,7 +19,10 @@ class PaymentService {
     // Prevent multiple simultaneous login attempts
     if (_isLoggingIn) {
       await Future.delayed(const Duration(milliseconds: 500));
-      return _token != null;
+      if (_token == null) {
+        throw Exception("Authentication in progress, please try again.");
+      }
+      return true;
     }
 
     _isLoggingIn = true;
@@ -29,8 +32,7 @@ class PaymentService {
       final password = UserRepository.getPassword();
 
       if (email == null || password == null) {
-        debugPrint("Payment Login Error: Email or password is null");
-        return false;
+        throw Exception("Your password is not saved in this session. Please log out and sign in again with 'Keep me signed in' checked.");
       }
 
       debugPrint("Payment Login: Trying with email=$email to $baseUrl/auth/login");
@@ -52,9 +54,10 @@ class PaymentService {
         _token = data['token'];
         debugPrint("Payment Login: Success, token=${_token?.substring(0, 20)}...");
         return true;
+      } else if (response.statusCode == 401 || response.statusCode == 404) {
+        throw Exception("This account is not registered on the billing server (Status ${response.statusCode}). Please contact support.");
       } else {
-        debugPrint("Payment Login Error: Status ${response.statusCode}");
-        return false;
+        throw Exception("Billing server login failed (Status ${response.statusCode}).");
       }
     } on TimeoutException {
       debugPrint("Payment Login Error: Connection timed out");
@@ -97,7 +100,7 @@ class PaymentService {
   static Future<PaymentStats?> getStats() async {
     try {
       if (!await _ensureLoggedIn()) {
-        return null;
+        throw Exception("Failed to authenticate with the billing server.");
       }
 
       final response = await http.get(
@@ -121,11 +124,15 @@ class PaymentService {
             return PaymentStats.fromJson(jsonDecode(retryResponse.body));
           }
         }
+        throw Exception("Session expired. Please reload.");
       } else {
         debugPrint("Get Stats Error: Status ${response.statusCode}");
       }
     } catch (e) {
       debugPrint("Get Stats Error: $e");
+      if (e.toString().contains("not registered") || e.toString().contains("not saved")) {
+        rethrow;
+      }
     }
 
     // Fallback: calculate stats from the bills list if stats endpoint fails
@@ -162,15 +169,16 @@ class PaymentService {
       }
     } catch (e) {
       debugPrint("Fallback Get Stats Error: $e");
+      rethrow;
     }
-    return null;
+    throw Exception("No data could be retrieved from the billing server.");
   }
 
   /// Get bills with pagination
   static Future<List<Bill>?> getBills({int page = 1}) async {
     try {
       if (!await _ensureLoggedIn()) {
-        return null;
+        throw Exception("Failed to authenticate with the billing server.");
       }
 
       final List<Bill> bills = [];
