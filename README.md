@@ -1,16 +1,10 @@
-# gpspro
+# GPS Tracking App Source Code Repository
 
-A new Flutter project.
+This repository contains the source code for the GPS Tracking applications, organized into separate development branches.
 
-## Getting Started
+## Branches Overview
 
-This project is a starting point for a Flutter application.
+To access the source code, please switch to the appropriate branch:
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **[onfleet](https://github.com/shawonhowlader666/Gps-Tracking/tree/onfleet)**: Onfleet GPS Pro version of the application. Contains the latest vehicle animations, dynamic course alignment, smooth camera tracking, safe API parsing, and layout updates.
+- **[orbit](https://github.com/shawonhowlader666/Gps-Tracking/tree/orbit)**: Orbit GPS version of the application with Orbit branding and assets.
