@@ -1,0 +1,218 @@
+name: gpspro
+description: Gennissi GPS
+
+publish_to: 'none'
+
+version: 1.0.10+12
+
+environment:
+  sdk: '>=3.5.1 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI & Icons
+  cupertino_icons: ^1.0.8
+  line_icons: ^2.0.3
+  google_fonts: ^6.2.1
+  lottie: ^3.3.1
+  open_file: ^3.3.2
+
+  pdf: ^3.10.8
+  printing: ^5.12.0
+
+
+  # HTTP & Network
+  http: ^1.2.2
+  crypto: ^3.0.3
+
+  # Firebase - STABLE VERSIONS
+  firebase_core: ^3.0.0
+  cloud_firestore: ^5.0.0
+  firebase_messaging: ^15.0.0
+
+  # Maps & Location
+  google_maps_flutter: ^2.12.3
+  geolocator: ^13.0.1
+  label_marker: ^1.0.1
+  google_maps_cluster_manager: ^3.1.0
+
+  # UI Components
+  flutter_progress_hud: ^2.0.2
+  flutter_staggered_grid_view: ^0.7.0
+  sliding_up_panel: ^2.0.0+1
+  curved_navigation_bar: ^1.0.6
+  google_nav_bar: ^5.0.6
+  badges: ^3.1.2
+  percent_indicator: ^4.2.5
+  flutter_spinkit: ^5.2.1
+  marquee_widget: ^1.2.0
+  carousel_slider: ^5.1.1
+  auto_size_text: ^3.0.0
+  gap: ^3.0.1
+  timelines: ^0.1.0  # Keep this line as is
+
+  # Utilities
+  intl: ^0.20.2
+  jiffy: ^6.3.1
+  timeago: ^3.7.1
+  equatable: ^2.0.5
+  xml: ^6.5.0
+  json_path: ^0.8.0
+  from_css_color: ^2.0.0
+
+  # Storage & Preferences
+  shared_preferences: ^2.3.2
+  get_storage: ^2.1.1
+  path_provider: ^2.1.5
+  flutter_cache_manager: ^3.4.1
+
+  # Toast & Notifications
+  fluttertoast: ^9.0.0
+  #  flutter_local_notifications: ^19.5.0
+  overlay_support: ^2.1.0
+  flutter_local_notifications: ^19.3.1
+
+  # WebView & URL
+  webview_flutter: ^4.13.0
+  url_launcher: ^6.3.1
+  flutter_svg: ^2.0.9
+
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # PDF
+  syncfusion_flutter_pdfviewer: ^31.2.15
+  #  read_pdf_text: ^0.3.1
+  syncfusion_flutter_pdf: ^31.2.15
+
+  # State Management & Navigation
+  flutter_bloc: ^9.1.1
+  get: ^4.7.3
+  flutter_phoenix: ^1.1.1
+
+  # Images & Media
+  cached_network_image: ^3.4.1
+  image_picker: ^1.1.2
+  file_picker: ^10.1.9
+
+  # Charts & Graphs
+  fl_chart: ^1.1.0
+  speedometer_chart: ^1.0.8
+
+  # Ads
+  google_mobile_ads: ^6.0.0
+
+  # Sharing
+  share_plus: ^12.0.1
+
+  # App Info
+  #  package_info_plus: ^8.3.1
+  package_info_plus: ^9.0.0
+
+  # Launcher Icons
+  flutter_launcher_icons: ^0.14.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  change_app_package_name: ^1.4.0
+
+dependency_overrides:
+  timelines:
+    git:
+      url: https://github.com/IamSZaidH/timelines
+      ref: main  # Use the branch containing the Dart 3 compatibility fixes
+
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "images/onfleet_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "images/onfleet_icon.png"
+  adaptive_icon_foreground_inset: 16
+
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icons/
+    - assets/icons/fence.png
+    - assets/icons/group.png
+    - assets/icons/map-end-point.png
+    - assets/icons/text.png
+    - assets/images/
+    - assets/images/ambulance_toprunning.png
+    - assets/images/bike_toprunning.png
+    - assets/images/bus_toprunning.png
+    - assets/images/car_green.png
+    - assets/images/car_toprunning.png
+    - assets/images/crane_toprunning.png
+    - assets/images/garbage_toprunning.png
+    - assets/images/mixer_toprunning.png
+    - assets/images/muv_toprunning.png
+    - assets/images/pickup_toprunning.png
+    - assets/images/school_toprunning.png
+    - assets/images/scotty_toprunning.png
+    - assets/images/suv_toprunning.png
+    - assets/images/tanker_toprunning.png
+    - assets/images/tempotvr_toprunning.png
+    - assets/images/truck_toprunning.png
+    - assets/images/double-right-arrow.png
+    - assets/images/error-inactive.png
+    - assets/images/map-end-point.png
+    - assets/images/map-start-point.png
+    - assets/images/point-inactive.png
+    - assets/images/sensors/
+    - assets/images/user.png
+    - icons/
+    - images/
+    - images/apple-store.png
+    - images/arrow_left.gif
+    - images/arrow_right.gif
+    - images/google-play.png
+    - images/google_logo.svg
+    - images/history2.png
+    - images/marker-icon-2x.png
+    - images/marker-icon.png
+    - images/marker-shadow.png
+    - images/no-data-o.png
+    - images/no-data.png
+    - images/no-image.jpg
+    - images/no-streetview-290x125.jpg
+    - images/no-streetview-598x313.jpg
+    - images/no-streetview.jpg
+    - images/report_bars.jpg
+    - images/report_curve.jpg
+    - images/route_drive.png
+    - images/route_end.png
+    - images/route_event.png
+    - images/route_start.png
+    - images/route_stop.png
+    - images/zoom_in.png
+    - images/zoom_out.png
+    - assets/
+    - google_fonts/
+
+  fonts:
+    - family: OpenSans-Regular
+      fonts:
+        - asset: fonts/OpenSans-Regular.ttf
+    - family: OpenSans-Semibold
+      fonts:
+        - asset: fonts/OpenSans-Semibold.ttf
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: google_fonts/PlusJakartaSans-Regular.ttf
+        - asset: google_fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: google_fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: google_fonts/PlusJakartaSans-Bold.ttf
+          weight: 700

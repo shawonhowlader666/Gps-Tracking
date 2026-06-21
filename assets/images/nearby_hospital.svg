@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Main building body -->
+  <rect x="8" y="16" width="48" height="44" rx="4" fill="#E0F2F1"/>
+  <rect x="20" y="4" width="24" height="12" rx="2" fill="#00BFA5"/>
+  <!-- Windows -->
+  <rect x="14" y="22" width="8" height="8" rx="1" fill="#80CBC4"/>
+  <rect x="42" y="22" width="8" height="8" rx="1" fill="#80CBC4"/>
+  <rect x="14" y="34" width="8" height="8" rx="1" fill="#80CBC4"/>
+  <rect x="42" y="34" width="8" height="8" rx="1" fill="#80CBC4"/>
+  <!-- Door -->
+  <rect x="26" y="44" width="12" height="16" rx="1" fill="#00796B"/>
+  <!-- Red Cross Logo on a white circular badge -->
+  <circle cx="32" cy="30" r="9" fill="#FFFFFF"/>
+  <path d="M32 25v10M27 30h10" stroke="#FF5252" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
