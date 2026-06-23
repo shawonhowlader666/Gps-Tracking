@@ -170,6 +170,37 @@ class _AlertListPageState extends State<AlertListPage> {
     APIService.activateAlert(requestBody).then((value) {
       if (mounted && value.statusCode == 200) {
         _showSnackBar('Alert activated');
+        
+        // SinoTrack overspeed hardware enable
+        if (alert.type == 'overspeed' && alert.devices != null) {
+          String speedVal = '80'; // Fallback speed limit
+          if (alert.overspeed != null && alert.overspeed.toString().trim().isNotEmpty) {
+            speedVal = alert.overspeed.toString().trim();
+          } else if (alert.name != null) {
+            final match = RegExp(r'\d+').firstMatch(alert.name!);
+            if (match != null) {
+              speedVal = match.group(0)!;
+            }
+          }
+          final formattedSpeed = speedVal.padLeft(3, '0');
+          for (var device in alert.devices!) {
+            String? devId;
+            if (device is Map) {
+              devId = device['id']?.toString();
+            } else {
+              devId = device.toString();
+            }
+            if (devId != null) {
+              final Map<String, String> commandBody = {
+                'device_id': devId,
+                'type': 'gprs',
+                'command': '1220000 $formattedSpeed',
+              };
+              APIService.sendCommands(commandBody).catchError((e) {});
+            }
+          }
+        }
+        
         getAlerts();
       } else {
         _showSnackBar('Failed to activate', isError: true);
@@ -188,6 +219,27 @@ class _AlertListPageState extends State<AlertListPage> {
     APIService.activateAlert(requestBody).then((value) {
       if (mounted && value.statusCode == 200) {
         _showSnackBar('Alert deactivated');
+        
+        // SinoTrack overspeed hardware disable
+        if (alert.type == 'overspeed' && alert.devices != null) {
+          for (var device in alert.devices!) {
+            String? devId;
+            if (device is Map) {
+              devId = device['id']?.toString();
+            } else {
+              devId = device.toString();
+            }
+            if (devId != null) {
+              final Map<String, String> commandBody = {
+                'device_id': devId,
+                'type': 'gprs',
+                'command': '1220000 0',
+              };
+              APIService.sendCommands(commandBody).catchError((e) {});
+            }
+          }
+        }
+        
         getAlerts();
       } else {
         _showSnackBar('Failed to deactivate', isError: true);
@@ -226,9 +278,31 @@ class _AlertListPageState extends State<AlertListPage> {
   }
 
   void _performDelete(int id) {
+    final Alert? alert = alertList.firstWhereOrNull((a) => a.id == id);
     APIService.destroyAlert(id).then((value) {
       if (mounted) {
         _showSnackBar('Alert deleted');
+        
+        // SinoTrack overspeed hardware disable
+        if (alert != null && alert.type == 'overspeed' && alert.devices != null) {
+          for (var device in alert.devices!) {
+            String? devId;
+            if (device is Map) {
+              devId = device['id']?.toString();
+            } else {
+              devId = device.toString();
+            }
+            if (devId != null) {
+              final Map<String, String> commandBody = {
+                'device_id': devId,
+                'type': 'gprs',
+                'command': '1220000 0',
+              };
+              APIService.sendCommands(commandBody).catchError((e) {});
+            }
+          }
+        }
+        
         getAlerts();
       }
     }).catchError((e) {
@@ -306,6 +380,24 @@ class _AlertListPageState extends State<AlertListPage> {
       if (mounted) {
         if (value.statusCode == 200) {
           _showSnackBar('Alert created successfully');
+          
+          // SinoTrack overspeed hardware enable
+          if (selectedType == 'overspeed') {
+            final speedVal = _typeCtl.text.trim();
+            final formattedSpeed = speedVal.padLeft(3, '0');
+            for (var deviceStr in selectedDevices) {
+              final idStr = deviceStr.replaceAll('devices[]=', '');
+              final Map<String, String> commandBody = {
+                'device_id': idStr,
+                'type': 'gprs',
+                'command': '1220000 $formattedSpeed',
+              };
+              APIService.sendCommands(commandBody).catchError((e) {
+                debugPrint("Overspeed GPRS command error: $e");
+              });
+            }
+          }
+          
           _resetForm();
           getAlerts();
         } else {
@@ -330,7 +422,8 @@ class _AlertListPageState extends State<AlertListPage> {
 
     if (_isGeofenceType()) {
       String geofences = selectedFenceList.join("&");
-      return "&name=$name&type=$type&zone=0&$geofences&$devices";
+      int zoneVal = (type == 'geofence_out') ? 2 : 1;
+      return "&name=$name&type=$type&zone=$zoneVal&$geofences&$devices";
     }
 
     String value = Uri.encodeComponent(_typeCtl.text.trim());
@@ -480,6 +573,36 @@ class _AlertListPageState extends State<AlertListPage> {
     );
   }
 
+  String? _getAlertParamDetail(Alert alert) {
+    if (alert.type == 'overspeed') {
+      final value = alert.overspeed ?? _parseValFromName(alert.name);
+      return value != null ? '$value km/h' : null;
+    }
+    if (alert.type == 'stop_duration') {
+      final value = alert.stop_duration ?? _parseValFromName(alert.name);
+      return value != null ? '$value min' : null;
+    }
+    if (alert.type == 'offline_duration') {
+      final value = alert.offline_duration ?? _parseValFromName(alert.name);
+      return value != null ? '$value min' : null;
+    }
+    if (alert.type == 'ignition_duration') {
+      final value = alert.ignition_duration ?? _parseValFromName(alert.name);
+      return value != null ? '$value min' : null;
+    }
+    if (alert.type == 'idle_duration') {
+      final value = alert.idle_duration ?? _parseValFromName(alert.name);
+      return value != null ? '$value min' : null;
+    }
+    return null;
+  }
+
+  String? _parseValFromName(String? name) {
+    if (name == null) return null;
+    final match = RegExp(r'\d+').firstMatch(name);
+    return match?.group(0);
+  }
+
   Widget _buildAlertCard(Alert alert) {
     final bool isActive = alert.active.toString() == "1";
 
@@ -548,7 +671,27 @@ class _AlertListPageState extends State<AlertListPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
+                      // Parameter detail tag
+                      if (_getAlertParamDetail(alert) != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Text(
+                            _getAlertParamDetail(alert)!,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: _greyText,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
                       Icon(Icons.directions_car, size: 12, color: _greyText),
                       const SizedBox(width: 4),
                       Text(
@@ -571,7 +714,7 @@ class _AlertListPageState extends State<AlertListPage> {
                     onChanged: (value) {
                       value ? activateAlert(alert) : removeAlert(alert);
                     },
-                    activeColor: _primaryRed,
+                    activeThumbColor: _primaryRed,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ),

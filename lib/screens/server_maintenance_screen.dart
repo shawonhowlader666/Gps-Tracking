@@ -5,8 +5,7 @@ import 'package:lottie/lottie.dart';
 class ServerMaintenanceScreen extends StatelessWidget {
   final String message;
 
-  const ServerMaintenanceScreen({Key? key, required this.message})
-      : super(key: key);
+  const ServerMaintenanceScreen({super.key, required this.message});
 
   @override
   Widget build(BuildContext context) {

@@ -165,17 +165,17 @@ class Util {
   static LatLngBounds boundsFromLatLngList(Set<Marker> list) {
     assert(list.isNotEmpty);
     double? x0, x1, y0, y1;
-    list.forEach((value) {
+    for (var value in list) {
       if (x0 == null) {
         x0 = x1 = value.position.latitude;
         y0 = y1 = value.position.longitude;
       } else {
         if (value.position.latitude > x1!) x1 = value.position.latitude;
-        if (value.position.latitude < x0!) x0 = value.position.latitude;
+        if (value.position.latitude < x0) x0 = value.position.latitude;
         if (value.position.longitude > y1!) y1 = value.position.longitude;
         if (value.position.longitude < y0!) y0 = value.position.longitude;
       }
-    });
+    }
     return LatLngBounds(
         northeast: LatLng(x1!, y1!), southwest: LatLng(x0!, y0!));
   }
@@ -225,14 +225,14 @@ class Util {
       String infoText,
       Color color,
       double rotateDegree,
-      bool _showTitle) async {
+      bool showTitle) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
 
     Size canvasSize = const Size(700.0, 200.0);
     Size markerSize = const Size(250.0, 120.0);
     TextPainter? textPainter;
-    if (_showTitle) {
+    if (showTitle) {
       textPainter = TextPainter(textDirection: m.TextDirection.ltr);
       textPainter.text = TextSpan(
         text: infoText,
@@ -265,7 +265,7 @@ class Util {
     paintImage(canvas: canvas, image: image, rect: oval, fit: BoxFit.fitHeight);
 
     canvas.restore();
-    if (_showTitle) {
+    if (showTitle) {
       canvas.drawPath(
           Path()
             ..addRRect(RRect.fromLTRBR(
@@ -359,14 +359,14 @@ class Util {
       String infoText,
       Color color,
       double rotateDegree,
-      bool _showTitle) async {
+      bool showTitle) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
 
     Size canvasSize = const Size(700.0, 200.0);
     Size markerSize = const Size(250.0, 120.0);
     TextPainter? textPainter;
-    if (_showTitle) {
+    if (showTitle) {
       textPainter = TextPainter(textDirection: m.TextDirection.ltr);
       textPainter.text = TextSpan(
         text: infoText,
@@ -404,7 +404,7 @@ class Util {
         canvas: canvas, image: image!, rect: oval, fit: BoxFit.fitHeight);
 
     canvas.restore();
-    if (_showTitle) {
+    if (showTitle) {
       canvas.drawPath(
           Path()
             ..addRRect(RRect.fromLTRBR(
@@ -485,7 +485,7 @@ class Util {
   }
 
   static Future<BitmapDescriptor> getMarkerIcon(String imagePath) async {
-    final String imageUrl = UserRepository.getServerUrl()! + "/" + imagePath;
+    final String imageUrl = "${UserRepository.getServerUrl()!}/$imagePath";
     final File imageFile = await DefaultCacheManager().getSingleFile(imageUrl);
     final Uint8List bytes = await imageFile.readAsBytes();
     return BitmapDescriptor.bytes(bytes);

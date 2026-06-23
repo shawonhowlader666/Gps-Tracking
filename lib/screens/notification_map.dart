@@ -13,36 +13,37 @@ import 'package:smart_lock/theme/custom_color.dart';
 import 'common_method.dart';
 
 class NotificationMapPage extends StatefulWidget {
+  const NotificationMapPage({super.key});
+
   @override
   _NotificationMapPageState createState() => _NotificationMapPageState();
 }
 
 class _NotificationMapPageState extends State<NotificationMapPage> {
-  Completer<GoogleMapController> _controller = Completer();
+  final Completer<GoogleMapController> _controller = Completer();
   GoogleMapController? mapController;
   StreamController<int>? _postsController;
-  MapType _currentMapType = MapType.normal;
+  final MapType _currentMapType = MapType.normal;
   static ReportEventArgument? args;
-  Set<Marker> _markers = Set<Marker>();
+  Set<Marker> _markers = <Marker>{};
   Timer? _timer;
   // PositionModel position;
   Event? event;
 
   @override
   void initState() {
-    _postsController = new StreamController();
+    _postsController = StreamController();
     getPosition();
     super.initState();
   }
 
   void getPosition() {
-    _timer = new Timer.periodic(Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (args != null) {
         _timer!.cancel();
         event = args!.event;
         addMarkers(args!.event);
       }
-      ;
     });
   }
 
@@ -55,14 +56,14 @@ class _NotificationMapPageState extends State<NotificationMapPage> {
     );
     final GoogleMapController controller = await _controller.future;
     controller.moveCamera(CameraUpdate.newCameraPosition(cPosition));
-    var iconPath;
+    String iconPath;
     // if (event.type == "alarm") {
     iconPath = "images/alarm_event.png";
     // } else {
     //   iconPath = "images/normal_event.png";
     // }
     final Uint8List? markerIcon = await getBytesFromAsset(iconPath, 70);
-    _markers = Set<Marker>();
+    _markers = <Marker>{};
     _markers.add(Marker(
       markerId: MarkerId(event!.id.toString()),
       position: LatLng(double.parse(e.latitude.toString()),
@@ -181,7 +182,7 @@ class _NotificationMapPageState extends State<NotificationMapPage> {
                       BoxShadow(
                           blurRadius: 20,
                           offset: Offset.zero,
-                          color: Colors.grey.withOpacity(0.5))
+                          color: Colors.grey.withValues(alpha: 0.5))
                     ]),
                 child: Column(
                   children: <Widget>[
@@ -239,12 +240,12 @@ class _NotificationMapPageState extends State<NotificationMapPage> {
                           getAddress(
                               args!.event.latitude, args!.event.longitude);
                         },
-                        child: new Row(children: <Widget>[
+                        child: Row(children: <Widget>[
                           Container(
                               padding: EdgeInsets.only(left: 5.0),
                               child: Icon(Icons.location_on_outlined,
                                   color: CustomColor.primaryColor, size: 22.0)),
-                          Padding(padding: new EdgeInsets.fromLTRB(5, 0, 0, 0)),
+                          Padding(padding: EdgeInsets.fromLTRB(5, 0, 0, 0)),
                           Expanded(
                               child: Text(address,
                                   style: TextStyle(
@@ -291,7 +292,7 @@ class _NotificationMapPageState extends State<NotificationMapPage> {
                         Container(
                             padding: EdgeInsets.only(
                                 top: 5.0, left: 5.0, right: 10.0),
-                            child: Text(event!.speed.toString() + " Km/h")),
+                            child: Text("${event!.speed} Km/h")),
                       ],
                     ),
                     Row(

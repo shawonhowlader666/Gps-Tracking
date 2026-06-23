@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -16,11 +15,13 @@ class ManualPaymentScreen extends StatefulWidget {
 
   // ✅ After 10th হলে back করলে popup আবার দেখাবে
   final bool isAfter10th;
+  final String? packageType; // '1_month' or '1_year'
 
   const ManualPaymentScreen({
     super.key,
     required this.dueAmount,
     this.isAfter10th = false,
+    this.packageType,
   });
 
   @override
@@ -53,7 +54,13 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
   @override
   void initState() {
     super.initState();
-    _amountController.text = widget.dueAmount.toStringAsFixed(0);
+    if (widget.packageType == '1_month') {
+      _amountController.text = '200';
+    } else if (widget.packageType == '1_year') {
+      _amountController.text = '1800'; // 25% discount applied (2400 -> 1800)
+    } else {
+      _amountController.text = widget.dueAmount.toStringAsFixed(0);
+    }
 
     _fadeCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 400));
@@ -150,10 +157,16 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
 
       final adminNumber = whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
       final userEmail   = UserRepository.getEmail() ?? 'N/A';
+      
+      final String packageStr = widget.packageType == '1_year' 
+          ? '1 Year (25% Discount BDT 1800)' 
+          : (widget.packageType == '1_month' ? '1 Month (BDT 200)' : 'N/A');
+
       final msg         = Uri.encodeComponent(
         '🧾 *Manual Payment Notification*\n\n'
             '👤 User: $userEmail\n'
             '💳 Method: ${_selected!.label}\n'
+            '📦 Package: $packageStr\n'
             '📱 Sender No: ${_senderController.text.trim()}\n'
             '💰 Amount: BDT ${_amountController.text.trim()}৳\n'
             '🔖 TxnID: ${_txnController.text.trim()}\n'

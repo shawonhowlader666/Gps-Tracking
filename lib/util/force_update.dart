@@ -27,8 +27,12 @@ class VersionUtils {
       List<int> c = current.split('.').map(int.parse).toList();
       List<int> s = server.split('.').map(int.parse).toList();
 
-      while (c.length < s.length) c.add(0);
-      while (s.length < c.length) s.add(0);
+      while (c.length < s.length) {
+        c.add(0);
+      }
+      while (s.length < c.length) {
+        s.add(0);
+      }
 
       for (int i = 0; i < c.length; i++) {
         if (s[i] > c[i]) return true;
@@ -42,7 +46,7 @@ class VersionUtils {
 }
 
 class UpdateScreen extends StatelessWidget {
-  const UpdateScreen({Key? key}) : super(key: key);
+  const UpdateScreen({super.key});
 
   void _launchStore() async {
     const url =

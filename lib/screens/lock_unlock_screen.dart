@@ -1,5 +1,4 @@
 // ignore_for_file: file_names
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/material.dart' as m;
 import 'package:fluttertoast/fluttertoast.dart';
@@ -10,7 +9,7 @@ import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 class LockUnlockScreen extends StatefulWidget {
   final DeviceItem device;
 
-  const LockUnlockScreen({Key? key, required this.device}) : super(key: key);
+  const LockUnlockScreen({super.key, required this.device});
 
   @override
   _LockUnlockScreenState createState() => _LockUnlockScreenState();
@@ -93,8 +92,9 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     final status = widget.device.engineStatus;
     if (status != null) {
       bool engineOn = false;
-      if (status is bool) engineOn = status;
-      else if (status is int) engineOn = status == 1;
+      if (status is bool) {
+        engineOn = status;
+      } else if (status is int) engineOn = status == 1;
       else if (status is String) {
         final s = status.toLowerCase().trim();
         engineOn = s == 'on' || s == '1' || s == 'true';
@@ -182,15 +182,45 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   Future<void> _sendCustomCommand(String commandType) async {
     setState(() => _isLoading = true);
     try {
-      final Map<String, String> requestBody = {
-        'id': '',
-        'device_id': widget.device.id.toString(),
-        'type': commandType,
-      };
+      Map<String, String> requestBody;
+      String friendlyName = commandType.toUpperCase();
+
+      if (commandType == 'accalm') {
+        // SinoTrack command to enable call alarm when ignition (ACC) is ON
+        requestBody = {
+          'device_id': widget.device.id.toString(),
+          'type': 'gprs',
+          'command': '8880000',
+        };
+        friendlyName = 'ACC Call Alarm Enable';
+      } else if (commandType == 'gmt') {
+        // SinoTrack command to set timezone to GMT+6 (Bangladesh time)
+        requestBody = {
+          'device_id': widget.device.id.toString(),
+          'type': 'gprs',
+          'command': 'zone0000 6',
+        };
+        friendlyName = 'GMT+6 Timezone';
+      } else if (commandType == 'reset') {
+        // SinoTrack command to reboot device
+        requestBody = {
+          'device_id': widget.device.id.toString(),
+          'type': 'gprs',
+          'command': 'RESET',
+        };
+        friendlyName = 'Device Restart';
+      } else {
+        requestBody = {
+          'id': '',
+          'device_id': widget.device.id.toString(),
+          'type': commandType,
+        };
+      }
+
       final res = await APIService.sendCommands(requestBody);
       Fluttertoast.showToast(
         msg: res.statusCode == 200
-            ? '✅ Command "$commandType" sent'
+            ? '✅ Command "$friendlyName" sent'
             : 'Command failed (${res.statusCode})',
         toastLength: Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
@@ -225,24 +255,47 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     }
     setState(() => _isLoading = true);
     try {
-      final Map<String, String> requestBody = {
-        'id': '',
+      // 1. Set authorized Admin/SOS number
+      final Map<String, String> setAdminBody = {
         'device_id': widget.device.id.toString(),
-        'type': 'sos',
-        'data': number,
+        'type': 'gprs',
+        'command': '${number}0000 1',
       };
-      final res = await APIService.sendCommands(requestBody);
-      Fluttertoast.showToast(
-        msg: res.statusCode == 200
-            ? '🆘 SOS number set successfully'
-            : 'Failed to set SOS number',
-        toastLength: Toast.LENGTH_SHORT,
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: res.statusCode == 200
-            ? const Color(0xFF22C55E)
-            : const Color(0xFFEF4444),
-        textColor: Colors.white,
-      );
+      final res = await APIService.sendCommands(setAdminBody);
+
+      if (res.statusCode == 200) {
+        // 2. Set general alerts to SMS mode (1510000) so it does NOT make calls for standard alarms
+        final Map<String, String> smsModeBody = {
+          'device_id': widget.device.id.toString(),
+          'type': 'gprs',
+          'command': '1510000',
+        };
+        await APIService.sendCommands(smsModeBody);
+
+        // 3. Disable ACC call alert initially (8890000) until the user explicitly turns it on
+        final Map<String, String> disableAccCallBody = {
+          'device_id': widget.device.id.toString(),
+          'type': 'gprs',
+          'command': '8890000',
+        };
+        await APIService.sendCommands(disableAccCallBody);
+
+        Fluttertoast.showToast(
+          msg: '🆘 SOS Set (Calls Disabled / SMS Mode)',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFF22C55E),
+          textColor: Colors.white,
+        );
+      } else {
+        Fluttertoast.showToast(
+          msg: 'Failed to set SOS number (${res.statusCode})',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFFEF4444),
+          textColor: Colors.white,
+        );
+      }
     } catch (e) {
       Fluttertoast.showToast(
         msg: 'Connection error.',
@@ -400,7 +453,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               border: Border.all(color: Colors.white),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   blurRadius: 4,
                   offset: const Offset(0, 4),
                 ),
@@ -444,7 +497,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               border: Border.all(color: Colors.white),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   blurRadius: 4,
                   offset: const Offset(0, 4),
                 ),
@@ -509,7 +562,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   // ──────────────────────────────────────────────────────────────
   Widget _buildLoadingOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.40),
+      color: Colors.black.withValues(alpha: 0.40),
       child: Center(
         child: Container(
           padding: const EdgeInsets.all(28),
@@ -553,7 +606,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       animation: _successController,
       builder: (context, child) {
         return Container(
-          color: Colors.black.withOpacity(0.35 * _successOpacity.value),
+          color: Colors.black.withValues(alpha: 0.35 * _successOpacity.value),
           child: Center(
             child: Transform.scale(
               scale: _successScale.value,
@@ -566,7 +619,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: color.withOpacity(0.3),
+                        color: color.withValues(alpha: 0.3),
                         blurRadius: 24,
                         spreadRadius: 4,
                       )
@@ -580,7 +633,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                         height: 72,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: color.withOpacity(0.12),
+                          color: color.withValues(alpha: 0.12),
                           border: Border.all(color: color, width: 2.5),
                         ),
                         child: m.Icon(icon, color: color, size: 38),

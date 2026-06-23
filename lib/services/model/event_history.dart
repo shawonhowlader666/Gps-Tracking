@@ -38,7 +38,7 @@ class EventHistory extends Object {
         this.position_id,
         this.alert_id,
         this.type,
-        this.message,
+        dynamic message,
         this.address,
         this.altitude,
         this.course,
@@ -56,7 +56,9 @@ class EventHistory extends Object {
         this.detail,
         this.geofence,
         this.device_name
-      });
+      }) {
+    this.message = _cleanMessage(message?.toString());
+  }
 
   EventHistory.fromJson(Map<String, dynamic> json) {
     id = json["id"];
@@ -67,7 +69,7 @@ class EventHistory extends Object {
     position_id = json["position_id"];
     alert_id = json["alert_id"];
     type = json["type"];
-    message = json["message"];
+    message = _cleanMessage(json["message"]?.toString());
     address = json["address"];
     altitude = json["altitude"];
     course = json["course"];
@@ -85,5 +87,26 @@ class EventHistory extends Object {
     detail = json["detail"];
     geofence = json["geofence"];
     device_name = json["device_name"];
+  }
+
+  static String? _cleanMessage(String? rawMessage) {
+    if (rawMessage == null) return null;
+    final msg = rawMessage.toLowerCase();
+    if (msg.contains('ignition') || msg.contains('engine')) {
+      if (msg.contains('off') || msg.contains('stop')) {
+        return 'Engine Off';
+      } else {
+        return 'Engine On';
+      }
+    }
+    if (msg.contains('power') &&
+        (msg.contains('cut') ||
+            msg.contains('disconnect') ||
+            msg.contains('fail') ||
+            msg.contains('off') ||
+            msg.contains('low'))) {
+      return 'Power Disconnect';
+    }
+    return rawMessage;
   }
 }

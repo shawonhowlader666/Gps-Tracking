@@ -5,12 +5,10 @@ import 'dart:math' show cos, sqrt, asin;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:gap/gap.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:smart_lock/arguments/device_args.dart';
-import 'package:smart_lock/flutter_flow/flutter_flow_theme.dart';
 import 'package:smart_lock/services/model/device_item.dart';
 import 'package:smart_lock/services/model/geofence_model.dart';
 import 'package:smart_lock/preference.dart';
@@ -22,6 +20,7 @@ import 'package:smart_lock/services/api_service.dart';
 import 'package:smart_lock/storage/user_repository.dart';
 import 'package:smart_lock/theme/custom_color.dart';
 import 'package:smart_lock/util/util.dart';
+import 'package:smart_lock/widgets/device_expired_dialog.dart';
 import 'package:label_marker/label_marker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart' as m;
@@ -127,7 +126,7 @@ class _MapPageState extends State<MapPage> {
                     Polygon polygon = Polygon(
                         strokeWidth: 2,
                         polygonId: id,
-                        fillColor: Colors.blueAccent.withOpacity(0.5),
+                        fillColor: Colors.blueAccent.withValues(alpha: 0.5),
                         geodesic: true,
                         points: polylineCoordinatesGeoFences);
                     polygons[id] = polygon;
@@ -167,7 +166,7 @@ class _MapPageState extends State<MapPage> {
         element.items!.forEach((element) async {
           if (element.deviceData!.active.toString() == "1") {
             Util.fetchAndCacheImages(
-                    UserRepository.getServerUrl()! + "/" + element.icon!.path!)
+                    "${UserRepository.getServerUrl()!}/${element.icon!.path!}")
                 .then((_) async {
               BitmapDescriptor markerIcon;
               bool rotation = true;
@@ -309,7 +308,7 @@ class _MapPageState extends State<MapPage> {
 
           if (element.deviceData!.active.toString() == "1") {
             Util.fetchAndCacheImages(
-                    UserRepository.getServerUrl()! + "/" + element.icon!.path!)
+                    "${UserRepository.getServerUrl()!}/${element.icon!.path!}")
                 .then((_) async {
               BitmapDescriptor markerIcon;
               if (element.iconType == "arrow") {
@@ -337,8 +336,15 @@ class _MapPageState extends State<MapPage> {
                 icon: markerIcon,
                 onTap: () {
                   device = element;
-                  Get.to(
-                      () => TrackDevicePage(device!.id, device!.name, device));
+                  if (_isExpired(device!)) {
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => DeviceExpiredBlockingDialog(device: device!),
+                    );
+                  } else {
+                    Get.to(() => TrackDevicePage(device!.id, device!.name, device));
+                  }
                   mapController!.getZoomLevel().then((value) => {
                         if (value < 14)
                           {
@@ -403,7 +409,7 @@ class _MapPageState extends State<MapPage> {
           element.items!.forEach((element) async {
             if (element.deviceData!.active.toString() == "1") {
               _markers.removeWhere(
-                  (m) => m.markerId.value == "t_" + element.id.toString());
+                  (m) => m.markerId.value == "t_${element.id}");
             }
           });
         }
@@ -526,7 +532,7 @@ class _MapPageState extends State<MapPage> {
     zoom: 4,
   );
 
-  onSearchTextChanged(String text) async {
+  Future<void> onSearchTextChanged(String text) async {
     _searchResult.clear();
 
     if (text.toLowerCase().isEmpty) {
@@ -635,10 +641,18 @@ class _MapPageState extends State<MapPage> {
     }
 
     return GestureDetector(
-      onTap: () => {
-        device = d,
-        moveToMarker(),
-        Get.to(() => TrackDevicePage(d.id, d.name, d))
+      onTap: () {
+        device = d;
+        if (_isExpired(d)) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => DeviceExpiredBlockingDialog(device: d),
+          );
+        } else {
+          moveToMarker();
+          Get.to(() => TrackDevicePage(d.id, d.name, d));
+        }
       },
       child: Card(
           elevation: 2.0,
@@ -746,6 +760,18 @@ class _MapPageState extends State<MapPage> {
         _currentMapType = MapType.normal;
       }
     });
+  }
+
+  bool _isExpired(DeviceItem device) {
+    try {
+      final expiry = device.deviceData?.expirationDate?.toString();
+      if (expiry == null || expiry.isEmpty) return false;
+      final date = DateTime.tryParse(expiry);
+      if (date == null) return false;
+      return date.isBefore(DateTime.now());
+    } catch (_) {
+      return false;
+    }
   }
 
   Widget buildMap() {

@@ -16,6 +16,13 @@ class Alert extends Object {
   List<dynamic>? geofences;
   List<dynamic>? events_custom;
 
+  // Custom parameters
+  dynamic overspeed;
+  dynamic stop_duration;
+  dynamic offline_duration;
+  dynamic ignition_duration;
+  dynamic idle_duration;
+
   Alert(
       {this.id,
       this.user_id,
@@ -32,7 +39,12 @@ class Alert extends Object {
       this.devices,
       this.drivers,
       this.geofences,
-      this.events_custom});
+      this.events_custom,
+      this.overspeed,
+      this.stop_duration,
+      this.offline_duration,
+      this.ignition_duration,
+      this.idle_duration});
 
   Alert.fromJson(Map<String, dynamic> json) {
     id = json["id"];
@@ -51,6 +63,11 @@ class Alert extends Object {
     drivers = json["drivers"];
     geofences = json["geofences"];
     events_custom = json["events_custom"];
+    overspeed = json["overspeed"];
+    stop_duration = json["stop_duration"];
+    offline_duration = json["offline_duration"];
+    ignition_duration = json["ignition_duration"];
+    idle_duration = json["idle_duration"];
   }
 
   Map<String, dynamic> toJson() => {
@@ -69,6 +86,11 @@ class Alert extends Object {
         'devices': devices,
         'drivers': drivers,
         'geofences': geofences,
-        'events_custom': events_custom
+        'events_custom': events_custom,
+        'overspeed': overspeed,
+        'stop_duration': stop_duration,
+        'offline_duration': offline_duration,
+        'ignition_duration': ignition_duration,
+        'idle_duration': idle_duration
       };
 }

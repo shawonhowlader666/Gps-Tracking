@@ -1,4 +1,3 @@
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 
@@ -48,14 +47,14 @@ class FFButtonOptions {
 
 class FFButtonWidget extends StatefulWidget {
   const FFButtonWidget({
-    Key? key,
+    super.key,
     required this.text,
     required this.onPressed,
     this.icon,
     this.iconData,
     required this.options,
     this.showLoadingIndicator = true,
-  }) : super(key: key);
+  });
 
   final String text;
   final Widget? icon;
@@ -181,14 +180,14 @@ class _FFButtonWidgetState extends State<FFButtonWidget> {
     );
 
     if ((widget.icon != null || widget.iconData != null) && !loading) {
-      return Container(
+      return SizedBox(
         height: widget.options.height,
         width: widget.options.width,
         child: ElevatedButton.icon(
           icon: Padding(
             padding: widget.options.iconPadding ?? EdgeInsets.zero,
             child: widget.icon ??
-                FaIcon(
+                Icon(
                   widget.iconData,
                   size: widget.options.iconSize,
                   color: widget.options.iconColor ??
@@ -202,7 +201,7 @@ class _FFButtonWidgetState extends State<FFButtonWidget> {
       );
     }
 
-    return Container(
+    return SizedBox(
       height: widget.options.height,
       width: widget.options.width,
       child: ElevatedButton(

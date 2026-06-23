@@ -206,7 +206,25 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       return;
     }
     final String cleanNumber = WHATS_APP.replaceAll(RegExp(r'[^0-9]'), '');
-    final Uri uri = Uri.parse('https://wa.me/$cleanNumber');
+
+    // Get the typed or saved SIM/IMEI
+    String deviceIdentifier = _emailController.text.trim();
+    if (deviceIdentifier.isEmpty) {
+      deviceIdentifier = _prefs.getString('email') ?? '';
+    }
+
+    // Clean any email domain suffix (e.g. from "01982822121@sl.com" to "01982822121")
+    String cleanIdentifier = deviceIdentifier;
+    if (deviceIdentifier.contains('@')) {
+      cleanIdentifier = deviceIdentifier.split('@').first;
+    }
+
+    String message = "Hello Smart Lock";
+    if (cleanIdentifier.isNotEmpty) {
+      message += " $cleanIdentifier";
+    }
+
+    final Uri uri = Uri.parse('https://wa.me/$cleanNumber?text=${Uri.encodeComponent(message)}');
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);

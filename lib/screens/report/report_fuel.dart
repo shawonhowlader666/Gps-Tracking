@@ -17,8 +17,10 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 class ReportFuelPage extends StatefulWidget {
+  const ReportFuelPage({super.key});
+
   @override
-  State<StatefulWidget> createState() => new _ReportFuelPageState();
+  State<StatefulWidget> createState() => _ReportFuelPageState();
 }
 
 class _ReportFuelPageState extends State<ReportFuelPage> {
@@ -27,16 +29,16 @@ class _ReportFuelPageState extends State<ReportFuelPage> {
   Timer? _timer;
   Timer? _timer2;
   bool isLoading = true;
-  static var httpClient = new HttpClient();
+  static var httpClient = HttpClient();
   File? file;
   late WebViewController _controller;
 
   var bytes;
-  Color _mapTypeBackgroundColor = CustomColor.primaryColor;
-  Color _mapTypeForegroundColor = CustomColor.secondaryColor;
+  final Color _mapTypeBackgroundColor = CustomColor.primaryColor;
+  final Color _mapTypeForegroundColor = CustomColor.secondaryColor;
   @override
   void initState() {
-    _postsController = new StreamController();
+    _postsController = StreamController();
 
     late final PlatformWebViewControllerCreationParams params;
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
@@ -106,13 +108,13 @@ Page resource error:
   }
 
   Future<File?> _downloadFile(String url, String filename) async {
-    Random random = new Random();
+    Random random = Random();
     int randomNumber = random.nextInt(100);
     var request = await httpClient.getUrl(Uri.parse(url));
     var response = await request.close();
     bytes = await consolidateHttpClientResponseBytes(response);
     String dir = (await getApplicationDocumentsDirectory()).path;
-    File pdffile = new File('$dir/$filename-$randomNumber.html');
+    File pdffile = File('$dir/$filename-$randomNumber.html');
     //Navigator.pop(context); // Load from assets
     file = pdffile;
     await file!.writeAsBytes(bytes);
@@ -120,8 +122,8 @@ Page resource error:
     return file;
   }
 
-  getReport() {
-    _timer = new Timer.periodic(Duration(seconds: 1), (timer) {
+  void getReport() {
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (args != null) {
         timer.cancel();
         APIService.getReportHtml(
@@ -138,7 +140,7 @@ Page resource error:
 
   Future<File?> writeFile() async {
     // storage permission ask
-    Random random = new Random();
+    Random random = Random();
     int randomNumber = random.nextInt(100);
     var status = await Permission.storage.status;
     if (!status.isGranted) {
@@ -147,7 +149,7 @@ Page resource error:
     // the downloads folder path
     Directory? tempDir = await getDownloadsDirectory();
     String tempPath = tempDir!.path;
-    File pdffile = new File('$tempPath/work-$randomNumber.pdf');
+    File pdffile = File('$tempPath/work-$randomNumber.pdf');
     file = pdffile;
     await file!.writeAsBytes(bytes);
 
@@ -157,7 +159,7 @@ Page resource error:
     return file;
   }
 
-  _loadHtmlFromAssets() async {
+  Future<void> _loadHtmlFromAssets() async {
     setState(() {
       isLoading = false;
       _postsController!.add(1);

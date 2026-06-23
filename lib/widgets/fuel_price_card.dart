@@ -4,7 +4,7 @@ import 'package:smart_lock/config.dart';
 import 'package:smart_lock/widgets/common.dart';
 
 class FuelPriceCard extends StatelessWidget {
-  FuelPriceCard({super.key});
+  const FuelPriceCard({super.key});
 
   @override
   Widget build(BuildContext context) {

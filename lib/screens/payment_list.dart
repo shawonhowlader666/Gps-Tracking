@@ -12,6 +12,8 @@ import 'dart:io';
 import '../services/pdf_generator.dart';
 
 class PaymentListScreen extends StatefulWidget {
+  const PaymentListScreen({super.key});
+
   @override
   _PaymentListScreenState createState() => _PaymentListScreenState();
 }

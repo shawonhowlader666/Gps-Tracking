@@ -578,7 +578,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
   }
 
   String _colorToHex(Color color) {
-    return '#${color.value.toRadixString(16).substring(2)}';
+    return '#${color.toARGB32().toRadixString(16).substring(2)}';
   }
 
   @override

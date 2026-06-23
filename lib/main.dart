@@ -252,8 +252,13 @@ void main() async {
     UserRepository.prefs = await SharedPreferences.getInstance();
 
     // Restore saved locale
-    final String languageCode =
-        UserRepository.prefs!.getString('language_code') ?? 'en_US';
+    String languageCode = UserRepository.prefs!.getString('language') ??
+        UserRepository.prefs!.getString('language_code') ?? 'en';
+    if (languageCode == 'en_US') {
+      languageCode = 'en';
+    } else if (languageCode == 'bn_BD') {
+      languageCode = 'bn';
+    }
     Get.updateLocale(Locale(languageCode));
   } catch (e) {
     debugPrint('Initialization error: $e');

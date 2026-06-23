@@ -6,7 +6,7 @@ class ListViewTopItem extends StatelessWidget {
   final bool? isSelected;
   final Function()? onTap;
 
-  ListViewTopItem({this.text, this.color, this.isSelected = false, this.onTap});
+  const ListViewTopItem({super.key, this.text, this.color, this.isSelected = false, this.onTap});
 
   @override
   Widget build(BuildContext context) {

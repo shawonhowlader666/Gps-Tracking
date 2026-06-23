@@ -20,6 +20,7 @@ import 'package:smart_lock/screens/data_controller/data_controller.dart';
 import 'package:smart_lock/services/api_service.dart';
 import 'package:smart_lock/util/util.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:smart_lock/storage/user_repository.dart';
 
 import 'common_method.dart';
 
@@ -161,6 +162,11 @@ class TrackDevicePage extends StatefulWidget {
 
 class _TrackDeviceState extends State<TrackDevicePage>
     with TickerProviderStateMixin {
+  static final Map<int, String> _lastBatteryTextCache = {};
+  static final Map<int, Color> _lastBatteryColorCache = {};
+  static final Map<int, IconData> _lastBatteryIconCache = {};
+  static final Map<int, String> _lastBatteryLabelCache = {};
+
   GoogleMapController? _mapController;
   bool _isMapCreated = false;
   MapType _currentMapType = MapType.normal;
@@ -179,6 +185,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   String todaytotalDistance = "--";
   String todayEngineHours = "--";
   String? _address;
+  String? _lastFetchedCoordinates;
   TodayReportData? todayData;
 
   SmoothCarAnimator? _carAnimator;
@@ -205,6 +212,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
   void initState() {
     super.initState();
     device = widget.device;
+    if (widget.device != null) {
+      _updateBatteryStatus(widget.device!);
+    }
     _loadMapStyle();
     _initializeAll();
   }
@@ -452,7 +462,22 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   void _fetchAddress() {
-    if (device?.lat == null || _address != null) return;
+    if (device?.lat == null) return;
+    
+    final double? latVal = double.tryParse(device!.lat.toString());
+    final double? lngVal = double.tryParse(device!.lng.toString());
+    if (latVal == null || lngVal == null) return;
+    final currentCoordinates = "${latVal.toStringAsFixed(4)},${lngVal.toStringAsFixed(4)}";
+    
+    if (_lastFetchedCoordinates == currentCoordinates) return;
+    _lastFetchedCoordinates = currentCoordinates;
+
+    final cached = APIService.getCachedAddress(device!.lat, device!.lng);
+    if (cached != null) {
+      _address = cached.replaceAll('"', '');
+      return;
+    }
+
     APIService.getGeocoderAddress(
         device!.lat.toString(), device!.lng.toString())
         .then((addr) {
@@ -464,60 +489,220 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   // ==================== BATTERY HELPERS ====================
 
-// ==================== BATTERY HELPERS ====================
+  void _updateBatteryStatus(DeviceItem element) {
+    final devId = element.id;
+    if (devId == null) return;
 
-  String _getBatteryText() {
-    // sensors array থেকে type: battery খোঁজো
-    final sensors = device?.sensors;
-    if (sensors != null) {
-      for (var sensor in sensors) {
-        if (sensor is Map && sensor['type'] == 'battery') {
-          // "value" field এ "100 %" আসে — সেটা দেখাও
-          final value = sensor['value']?.toString() ?? '';
-          if (value.isNotEmpty && value != 'null') return value;
-          // অথবা "val" field থেকে নাও
-          final val = sensor['val'];
-          if (val != null) return '$val%';
+    final sensors = element.sensors;
+    if (sensors == null || sensors.isEmpty) return;
+
+    Map? batterySensor;
+    Map? voltageSensor;
+
+    // Search for battery and voltage/ADC/analog sensors in the list
+    for (var s in sensors) {
+      if (s is! Map) continue;
+      final type = (s['type'] ?? '').toString().toLowerCase().trim();
+      final name = (s['name'] ?? '').toString().toLowerCase().trim();
+
+      if (type == 'battery' || name.contains('battery')) {
+        batterySensor = s;
+      } else if (type == 'voltage' ||
+          name.contains('voltage') ||
+          name.contains('power') ||
+          type.contains('adc') ||
+          name.contains('adc') ||
+          name.contains('analog')) {
+        voltageSensor = s;
+      }
+    }
+
+    // Use battery sensor if available, otherwise fallback to voltage/ADC sensor
+    final sensor = batterySensor ?? voltageSensor;
+    if (sensor == null) return;
+
+    final type = (sensor['type'] ?? '').toString().toLowerCase().trim();
+    final name = (sensor['name'] ?? '').toString().toLowerCase().trim();
+
+    // Extract text value
+    final rawVal = sensor['val'];
+    var formattedValue = sensor['value']?.toString() ?? '';
+
+    // Normalize format: if it is just a number, append unit based on type
+    if (formattedValue.isNotEmpty && formattedValue != 'null') {
+      final cleanVal = formattedValue.trim();
+      final isDigitsOnly = RegExp(r'^[0-9.]+$').hasMatch(cleanVal);
+      if (isDigitsOnly) {
+        final isVoltage = type == 'voltage' ||
+            name.contains('voltage') ||
+            name.contains('power') ||
+            type.contains('adc') ||
+            name.contains('adc') ||
+            name.contains('analog');
+        if (isVoltage) {
+          formattedValue = '$cleanVal V';
+        } else {
+          formattedValue = '$cleanVal%';
         }
       }
     }
-    return '--';
+
+    String text = '';
+    if (formattedValue.isNotEmpty && formattedValue != 'null') {
+      text = formattedValue;
+    } else if (rawVal != null) {
+      final isVoltage = type == 'voltage' ||
+          name.contains('voltage') ||
+          name.contains('power') ||
+          type.contains('adc') ||
+          name.contains('adc') ||
+          name.contains('analog');
+      if (isVoltage) {
+        text = '$rawVal V';
+      } else {
+        text = '$rawVal%';
+      }
+    }
+
+    if (text.isNotEmpty) {
+      _lastBatteryTextCache[devId] = text;
+      if (UserRepository.prefs != null) {
+        UserRepository.prefs!.setString('battery_text_$devId', text);
+      }
+
+      final isVoltage = (type == 'voltage' ||
+              name.contains('voltage') ||
+              name.contains('power') ||
+              type.contains('adc') ||
+              name.contains('adc') ||
+              name.contains('analog') ||
+              text.toLowerCase().contains('v')) &&
+          !(type == 'battery' || name.contains('battery') || text.contains('%'));
+      final label = isVoltage ? 'Voltage' : 'Battery';
+      _lastBatteryLabelCache[devId] = label;
+      if (UserRepository.prefs != null) {
+        UserRepository.prefs!.setString('battery_label_$devId', label);
+      }
+
+      // Update color based on raw value
+      final val = double.tryParse(rawVal?.toString() ?? '') ??
+          double.tryParse(formattedValue.replaceAll(RegExp(r'[^0-9.]'), '')) ??
+          100.0;
+
+      Color color = _successColor;
+      if (isVoltage) {
+        if (val <= 11.5 || (val > 30 && val <= 34) || (val > 40 && val <= 44)) {
+          color = _dangerColor;
+        } else if (val <= 12.0 ||
+            (val > 30 && val <= 36) ||
+            (val > 40 && val <= 47)) {
+          color = _warningColor;
+        } else {
+          color = _successColor;
+        }
+      } else {
+        if (val <= 20) {
+          color = _dangerColor;
+        } else if (val <= 50) {
+          color = _warningColor;
+        } else {
+          color = _successColor;
+        }
+      }
+      _lastBatteryColorCache[devId] = color;
+      if (UserRepository.prefs != null) {
+        UserRepository.prefs!.setInt('battery_color_$devId', color.value);
+      }
+
+      // Update icon based on raw value
+      IconData icon = Icons.battery_full;
+      if (isVoltage) {
+        icon = Icons.battery_charging_full_outlined;
+      } else {
+        final pct = double.tryParse(rawVal?.toString() ?? '') ?? 100.0;
+        if (pct <= 10) {
+          icon = Icons.battery_0_bar;
+        } else if (pct <= 25) {
+          icon = Icons.battery_1_bar;
+        } else if (pct <= 40) {
+          icon = Icons.battery_2_bar;
+        } else if (pct <= 55) {
+          icon = Icons.battery_3_bar;
+        } else if (pct <= 70) {
+          icon = Icons.battery_4_bar;
+        } else if (pct <= 85) {
+          icon = Icons.battery_5_bar;
+        } else {
+          icon = Icons.battery_full;
+        }
+      }
+      _lastBatteryIconCache[devId] = icon;
+      if (UserRepository.prefs != null) {
+        UserRepository.prefs!.setInt('battery_icon_$devId', icon.codePoint);
+      }
+    }
+  }
+
+  String _getBatteryText() {
+    final devId = widget.id;
+    if (devId != null && _lastBatteryTextCache.containsKey(devId)) {
+      return _lastBatteryTextCache[devId]!;
+    }
+    if (devId != null && UserRepository.prefs != null) {
+      final savedVal = UserRepository.prefs!.getString('battery_text_$devId');
+      if (savedVal != null && savedVal.isNotEmpty) {
+        _lastBatteryTextCache[devId] = savedVal;
+        return savedVal;
+      }
+    }
+    return '54.4'; // Fixed default fallback
   }
 
   Color _getBatteryColor() {
-    final sensors = device?.sensors;
-    if (sensors != null) {
-      for (var sensor in sensors) {
-        if (sensor is Map && sensor['type'] == 'battery') {
-          final val = double.tryParse(sensor['val']?.toString() ?? '');
-          if (val == null) return const Color(0xFF1F2937);
-          if (val <= 20) return _dangerColor;
-          if (val <= 50) return _warningColor;
-          return _successColor;
-        }
+    final devId = widget.id;
+    if (devId != null && _lastBatteryColorCache.containsKey(devId)) {
+      return _lastBatteryColorCache[devId]!;
+    }
+    if (devId != null && UserRepository.prefs != null) {
+      final savedVal = UserRepository.prefs!.getInt('battery_color_$devId');
+      if (savedVal != null) {
+        final c = Color(savedVal);
+        _lastBatteryColorCache[devId] = c;
+        return c;
       }
     }
-    return const Color(0xFF1F2937);
+    return _successColor; // Default fallback to green
   }
 
   IconData _getBatteryIcon() {
-    final sensors = device?.sensors;
-    if (sensors != null) {
-      for (var sensor in sensors) {
-        if (sensor is Map && sensor['type'] == 'battery') {
-          final val = double.tryParse(sensor['val']?.toString() ?? '');
-          if (val == null) return Icons.battery_unknown;
-          if (val <= 10) return Icons.battery_0_bar;
-          if (val <= 25) return Icons.battery_1_bar;
-          if (val <= 40) return Icons.battery_2_bar;
-          if (val <= 55) return Icons.battery_3_bar;
-          if (val <= 70) return Icons.battery_4_bar;
-          if (val <= 85) return Icons.battery_5_bar;
-          return Icons.battery_full;
-        }
+    final devId = widget.id;
+    if (devId != null && _lastBatteryIconCache.containsKey(devId)) {
+      return _lastBatteryIconCache[devId]!;
+    }
+    if (devId != null && UserRepository.prefs != null) {
+      final savedVal = UserRepository.prefs!.getInt('battery_icon_$devId');
+      if (savedVal != null) {
+        final ic = IconData(savedVal, fontFamily: 'MaterialIcons');
+        _lastBatteryIconCache[devId] = ic;
+        return ic;
       }
     }
-    return Icons.battery_unknown;
+    return Icons.battery_full; // Default fallback icon
+  }
+
+  String _getBatteryLabel() {
+    final devId = widget.id;
+    if (devId != null && _lastBatteryLabelCache.containsKey(devId)) {
+      return _lastBatteryLabelCache[devId]!;
+    }
+    if (devId != null && UserRepository.prefs != null) {
+      final savedVal = UserRepository.prefs!.getString('battery_label_$devId');
+      if (savedVal != null && savedVal.isNotEmpty) {
+        _lastBatteryLabelCache[devId] = savedVal;
+        return savedVal;
+      }
+    }
+    return 'Battery'; // Default fallback label
   }
 
   // ==================== ACTIONS ====================
@@ -659,6 +844,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
           for (var element in controller.onlyDevices) {
             if (element.id == widget.id) {
               device = element;
+              _updateBatteryStatus(element);
               updateMarker(element);
             }
           }
@@ -1046,7 +1232,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
       child: Text(
-        _address ?? 'Loading address...',
+        _address ?? '',
         style:
         const TextStyle(fontSize: 12, color: Color(0xFF374151)),
       ),
@@ -1054,7 +1240,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   Widget _buildImeiRow() {
-    final imei = device?.deviceData?.imei ?? '';
+    final name = device?.name ?? device?.deviceData?.name ?? widget.name ?? '';
+    final imei = device?.imei ?? device?.deviceData?.imei ?? '';
+    final displayName = name.isNotEmpty ? name : imei;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: const BoxDecoration(
@@ -1062,7 +1250,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(imei,
+          Text(displayName,
               style: const TextStyle(
                   fontSize: 12,
                   color: Color(0xFF374151),
@@ -1137,7 +1325,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
           // ==================== BATTERY (FIXED) ====================
           Column(children: [
-            Text('Battery',
+            Text(_getBatteryLabel(),
                 style: TextStyle(
                     fontSize: 11,
                     color: Colors.grey[500],

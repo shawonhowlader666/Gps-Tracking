@@ -57,9 +57,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Night';
+    if (hour < 12) return 'goodMorning'.tr;
+    if (hour < 17) return 'goodAfternoon'.tr;
+    return 'goodNight'.tr;
   }
 
   Future<void> logout() async {
@@ -116,7 +116,22 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     final String clean = number.replaceAll(RegExp(r'[^0-9]'), '');
-    final Uri uri = Uri.parse('https://wa.me/$clean');
+
+    // Get the saved email
+    String deviceIdentifier = UserRepository.getEmail() ?? '';
+
+    // Clean any email domain suffix (e.g. from "01982822121@sl.com" to "01982822121")
+    String cleanIdentifier = deviceIdentifier;
+    if (deviceIdentifier.contains('@')) {
+      cleanIdentifier = deviceIdentifier.split('@').first;
+    }
+
+    String message = "Hello Smart Lock";
+    if (cleanIdentifier.isNotEmpty) {
+      message += " $cleanIdentifier";
+    }
+
+    final Uri uri = Uri.parse('https://wa.me/$clean?text=${Uri.encodeComponent(message)}');
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -369,56 +384,56 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildSeparateListItem(
                     imagePath: 'assets/images/device_setting.png',
                     fallbackIcon: Icons.settings,
-                    label: 'Device Setting',
+                    label: 'deviceControl'.tr,
                     onTap: () => Get.to(() => DeviceSettingPage()),
                   ),
                   const SizedBox(height: 8),
                   _buildSeparateListItem(
                     imagePath: 'assets/images/payment.png',
                     fallbackIcon: Icons.monetization_on,
-                    label: 'Payment',
+                    label: 'payment'.tr,
                     onTap: () => Get.to(() => PaymentListScreen()),
                   ),
                   const SizedBox(height: 8),
                   _buildSeparateListItem(
                     imagePath: 'assets/images/notification.png',
                     fallbackIcon: Icons.notifications,
-                    label: 'Notification Setting',
+                    label: 'notificationSetting'.tr,
                     onTap: () => Navigator.pushNamed(context, '/alertList'),
                   ),
                   const SizedBox(height: 8),
                   _buildSeparateListItem(
                     imagePath: 'assets/images/language.png',
                     fallbackIcon: Icons.language,
-                    label: 'Change Language',
+                    label: 'changeLanguage'.tr,
                     onTap: () => _showLanguageDialog(context),
                   ),
                   const SizedBox(height: 8),
                   _buildSeparateListItem(
                     imagePath: 'assets/images/password.png',
                     fallbackIcon: Icons.lock,
-                    label: 'Change Password',
+                    label: 'changePassword'.tr,
                     onTap: () => _showChangePasswordDialog(),
                   ),
                   const SizedBox(height: 8),
                   _buildSeparateListItem(
                     imagePath: 'assets/images/privacy.png',
                     fallbackIcon: Icons.shield,
-                    label: 'Privacy Policy',
+                    label: 'privacyPolicy'.tr,
                     onTap: () => _showPrivacyPolicy(),
                   ),
                   const SizedBox(height: 8),
                   _buildSeparateListItem(
                     imagePath: 'assets/images/privacy.png',
                     fallbackIcon: Icons.shield_outlined,
-                    label: 'Terms of Use',
+                    label: 'termsAndCondition'.tr,
                     onTap: () => _showTermsAndConditions(),
                   ),
                   const SizedBox(height: 8),
                   _buildSeparateListItem(
                     imagePath: 'assets/images/logout.png',
                     fallbackIcon: Icons.logout,
-                    label: 'Logout',
+                    label: 'logout'.tr,
                     onTap: () => _showLogoutDialog(),
                   ),
                   const SizedBox(height: 20),
@@ -974,6 +989,7 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: () async {
                 Get.updateLocale(const Locale('en'));
                 await _prefs.setString('language_code', 'en');
+                await _prefs.setString('language', 'en');
                 if (context.mounted) Navigator.pop(context);
               },
             ),
@@ -985,6 +1001,7 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: () async {
                 Get.updateLocale(const Locale('bn'));
                 await _prefs.setString('language_code', 'bn');
+                await _prefs.setString('language', 'bn');
                 if (context.mounted) Navigator.pop(context);
               },
             ),

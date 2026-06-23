@@ -361,4 +361,10 @@ const Map<String, String> bn_BD = {
   "termsTermination": "অ্যাকাউন্ট বাতিল",
   "termsTerminationDetail": "শর্তাবলী লঙ্ঘনকারী অ্যাকাউন্ট আমরা স্থগিত করতে পারি।",
   "contactInfo": "যোগাযোগের তথ্য",
+  "payment": "পেমেন্ট",
+  "notificationSetting": "নোটিফিকেশন সেটিং",
+  "changeLanguage": "ভাষা পরিবর্তন করুন",
+  "goodMorning": "শুভ সকাল",
+  "goodAfternoon": "শুভ অপরাহ্ন",
+  "goodNight": "শুভ রাত্রি",
 };

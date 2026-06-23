@@ -1,7 +1,6 @@
 // lib/screens/playback/playback_screen.dart
 
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -101,7 +100,9 @@ class PlaybackCarAnimator {
       onPositionUpdate(_currentPosition, _currentBearing);
       _targetPosition = null;
       _stop();
-      onAnimationComplete?.call();
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        onAnimationComplete?.call();
+      });
       return;
     }
     final speed = _baseSpeed * _speedMultiplier;
@@ -132,6 +133,11 @@ class PlaybackCarAnimator {
   void updatePosition(LatLng position, double bearing) {
     _currentPosition = position;
     _currentBearing = bearing;
+  }
+
+  void stop() {
+    _targetPosition = null;
+    _stop();
   }
 
   void _stop() {
@@ -174,7 +180,11 @@ class _PlaybackDateSelectorState extends State<PlaybackDateSelector> {
     super.initState();
     _buildDateList();
     _scrollController = ScrollController();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected(animated: false));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) _scrollToSelected(animated: false);
+      });
+    });
   }
 
   @override
@@ -182,7 +192,11 @@ class _PlaybackDateSelectorState extends State<PlaybackDateSelector> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selectedDate != widget.selectedDate) {
       _buildDateList();
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected(animated: true));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) _scrollToSelected(animated: true);
+        });
+      });
     }
   }
 
@@ -372,7 +386,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   String playbackMoveDuration = "-";
   String playbackStopDuration = "-";
 
-  Map<MarkerId, Marker> _playbackMarkers = <MarkerId, Marker>{};
+  final Map<MarkerId, Marker> _playbackMarkers = <MarkerId, Marker>{};
   Map<MarkerId, Marker>? _eventMarkers;
   Map<MarkerId, Marker>? _parkingMarkers;
 
@@ -404,6 +418,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   bool _showParkingMarkers = true;
   bool _showEventMarkers = true;
 
+  bool _followVehicle = true;
+  bool _isProgrammaticMove = false;
+
   static const LatLng _defaultPosition = LatLng(23.8103, 90.4125);
 
   bool get _hasInitialDates =>
@@ -421,6 +438,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   @override
   void initState() {
     super.initState();
+    final lang = UserRepository.getLanguage();
+    PlaybackL10n.isBangla = (lang == 'bn' || lang == 'bn_BD');
+
     _fromDate = widget.initialFromDate ?? DateTime.now();
     _toDate = widget.initialToDate ?? DateTime.now();
     _selectedDate = DateTime(_toDate.year, _toDate.month, _toDate.day);
@@ -454,13 +474,23 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   void _initCarAnimator() {
     if (playbackRoutePoints.isEmpty) return;
     _carAnimator?.dispose();
+    double initialBearing = 0.0;
+    if (playbackRoutePoints.length > 1) {
+      initialBearing = Geolocator.bearingBetween(
+        playbackRoutePoints[0].latitude,
+        playbackRoutePoints[0].longitude,
+        playbackRoutePoints[1].latitude,
+        playbackRoutePoints[1].longitude,
+      );
+    }
     _carAnimator = PlaybackCarAnimator(
       vsync: this,
       onPositionUpdate: _onCarPositionUpdate,
       onAnimationComplete: _onCarReachedTarget,
       initialPosition: playbackRoutePoints.first,
+      initialBearing: initialBearing,
     );
-    _addCarMarker(playbackRoutePoints.first, 0);
+    _addCarMarker(playbackRoutePoints.first, initialBearing);
   }
 
   void _onCarPositionUpdate(LatLng position, double bearing) {

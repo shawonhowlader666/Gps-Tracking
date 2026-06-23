@@ -6,6 +6,8 @@ import 'package:smart_lock/services/model/notification_type.dart';
 import 'package:smart_lock/theme/custom_color.dart';
 
 class NotificationTypePage extends StatefulWidget {
+  const NotificationTypePage({super.key});
+
   @override
   State<StatefulWidget> createState() => _NotificationTypeState();
 }

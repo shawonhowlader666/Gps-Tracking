@@ -426,6 +426,8 @@ class NotificationService {
       return _EventNotificationStyle(emoji: '❌', isAlert: false, isSOS: false);
     } else if (message.contains('fuel')) {
       return _EventNotificationStyle(emoji: '⛽', isAlert: true, isSOS: false);
+    } else if (message.contains('power')) {
+      return _EventNotificationStyle(emoji: '🔌', isAlert: true, isSOS: false);
     } else if (message.contains('battery')) {
       return _EventNotificationStyle(emoji: '🔋', isAlert: true, isSOS: false);
     }

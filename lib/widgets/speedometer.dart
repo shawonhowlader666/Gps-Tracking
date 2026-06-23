@@ -14,7 +14,7 @@ class _SpeedometerScreenState extends State<SpeedometerScreen>
   late AnimationController _controller;
   late Animation<double> _animation;
   double _currentSpeed = 0;
-  double _targetSpeed = 57; // starting speed
+  final double _targetSpeed = 57; // starting speed
 
   @override
   void initState() {

@@ -8,11 +8,11 @@ class CustomReportTab extends StatefulWidget {
   final String? presetPeriod;
 
   const CustomReportTab({
-    Key? key,
+    super.key,
     required this.deviceId,
     required this.deviceName,
     this.presetPeriod,
-  }) : super(key: key);
+  });
 
   @override
   State<CustomReportTab> createState() => _CustomReportTabState();

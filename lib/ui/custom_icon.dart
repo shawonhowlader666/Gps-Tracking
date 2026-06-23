@@ -21,7 +21,7 @@ class CustomIcon extends CustomPainter {
 
     final textPainter = TextPainter(
         text: TextSpan(
-          text: this._label,
+          text: _label,
           style: TextStyle(fontSize: 30, color: Colors.white),
         ),
         textDirection: TextDirection.ltr);
@@ -30,38 +30,38 @@ class CustomIcon extends CustomPainter {
     textPainter.paint(
         canvas, Offset(15, size.height / 2 - textPainter.size.height / 2));
 
-    IconData _icon;
-    if (this._icon == 'man') {
-      _icon = Icons.directions_walk;
-    } else if (this._icon == 'woman') {
-      _icon = Icons.face;
-    } else if (this._icon == 'pregnant') {
-      _icon = Icons.pregnant_woman;
-    } else if (this._icon == 'child') {
-      _icon = Icons.child_care;
-    } else if (this._icon == 'disability') {
-      _icon = Icons.accessible;
-    } else if (this._icon == 'pet') {
-      _icon = Icons.pets;
-    } else if (this._icon == 'car') {
-      _icon = Icons.directions_car;
-    } else if (this._icon == 'bike') {
-      _icon = Icons.motorcycle;
-    } else if (this._icon == 'truck') {
-      _icon = Icons.local_shipping;
-    } else if (this._icon == 'boat') {
-      _icon = Icons.directions_boat;
-    } else if (this._icon == 'marker') {
-      _icon = Icons.pin_drop;
+    IconData icon;
+    if (_icon == 'man') {
+      icon = Icons.directions_walk;
+    } else if (_icon == 'woman') {
+      icon = Icons.face;
+    } else if (_icon == 'pregnant') {
+      icon = Icons.pregnant_woman;
+    } else if (_icon == 'child') {
+      icon = Icons.child_care;
+    } else if (_icon == 'disability') {
+      icon = Icons.accessible;
+    } else if (_icon == 'pet') {
+      icon = Icons.pets;
+    } else if (_icon == 'car') {
+      icon = Icons.directions_car;
+    } else if (_icon == 'bike') {
+      icon = Icons.motorcycle;
+    } else if (_icon == 'truck') {
+      icon = Icons.local_shipping;
+    } else if (_icon == 'boat') {
+      icon = Icons.directions_boat;
+    } else if (_icon == 'marker') {
+      icon = Icons.pin_drop;
     } else {
-      _icon = Icons.directions_walk;
+      icon = Icons.directions_walk;
     }
     TextPainter textPainter2 = TextPainter(textDirection: TextDirection.rtl);
     textPainter2.text = TextSpan(
-        text: String.fromCharCode(_icon.codePoint),
+        text: String.fromCharCode(icon.codePoint),
         style: TextStyle(
             fontSize: 50.0,
-            fontFamily: _icon.fontFamily,
+            fontFamily: icon.fontFamily,
             color: MAPS_IMAGES_COLOR));
     textPainter2.layout();
     textPainter2.paint(canvas,

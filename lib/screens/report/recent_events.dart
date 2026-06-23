@@ -5,6 +5,8 @@ import 'package:smart_lock/services/model/event.dart';
 import 'package:smart_lock/screens/data_controller/data_controller.dart';
 
 class EventsPage extends StatefulWidget {
+  const EventsPage({super.key});
+
   @override
   State<EventsPage> createState() => _EventsPageState();
 }

@@ -18,6 +18,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart' as m;
 
 class DeviceInfo extends StatefulWidget {
+  const DeviceInfo({super.key});
+
   @override
   _DeviceInfoState createState() => _DeviceInfoState();
 }
@@ -26,8 +28,8 @@ class _DeviceInfoState extends State<DeviceInfo> {
   static DeviceArguments? args;
 
   final TextEditingController _customCommand = TextEditingController();
-  List<String> _commands = <String>[];
-  List<String> _commandsValue = <String>[];
+  final List<String> _commands = <String>[];
+  final List<String> _commandsValue = <String>[];
   int _selectedCommand = 0;
   String _commandSelected = "";
   int _selectedperiod = 0;
@@ -71,7 +73,6 @@ class _DeviceInfoState extends State<DeviceInfo> {
 
   void checkPreference() async {
     prefs = await SharedPreferences.getInstance();
-    ;
     totalDistance = ("sharedLoading").tr;
     maxSpeed = ("sharedLoading").tr;
     drivingHours = ("sharedLoading").tr;
@@ -426,7 +427,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
                   )
                 ]),
               ),
-              Container(
+              SizedBox(
                   height: 50,
                   child:
                       const VerticalDivider(thickness: 1, color: Colors.white)),
@@ -447,7 +448,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
                   )
                 ]),
               ),
-              Container(
+              SizedBox(
                   height: 50,
                   child:
                       const VerticalDivider(thickness: 1, color: Colors.white)),
@@ -487,7 +488,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
                 if (value != null)
                   {
                     list = json.decode(value.body)["commands"],
-                    if (_commands.length == 0)
+                    if (_commands.isEmpty)
                       {
                         list.forEach((element) {
                           _commands.add(element["title"]);
@@ -498,7 +499,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
                   },
               });
 
-          return Container(
+          return SizedBox(
             height: _dialogCommandHeight,
             width: 300.0,
             child: Column(
@@ -513,18 +514,18 @@ class _DeviceInfoState extends State<DeviceInfo> {
                         mainAxisAlignment: MainAxisAlignment.start,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: <Widget>[
-                          new Row(
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: <Widget>[
-                              new Text(('commandTitle').tr),
+                              Text(('commandTitle').tr),
                             ],
                           ),
-                          new Row(
+                          Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: <Widget>[
-                                _commands.length > 0
-                                    ? new DropdownButton<String>(
-                                        hint: new Text(('select_command').tr),
+                                _commands.isNotEmpty
+                                    ? DropdownButton<String>(
+                                        hint: Text(('select_command').tr),
                                         value: _commands[_selectedCommand],
                                         items: _commands.map((String value) {
                                           return DropdownMenuItem<String>(
@@ -551,18 +552,18 @@ class _DeviceInfoState extends State<DeviceInfo> {
                                           });
                                         },
                                       )
-                                    : new CircularProgressIndicator(),
+                                    : CircularProgressIndicator(),
                               ]),
                           _commandSelected == ("customCommand").tr
-                              ? new Container(
-                                  child: new TextField(
+                              ? Container(
+                                  child: TextField(
                                     controller: _customCommand,
-                                    decoration: new InputDecoration(
+                                    decoration: InputDecoration(
                                         labelText: ('commandCustom').tr),
                                   ),
                                 )
-                              : new Container(),
-                          new Row(
+                              : Container(),
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: <Widget>[
                               ElevatedButton(
@@ -616,7 +617,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
 
     if (args!.device.sensors != []) {
       try {
-        args!.device.sensors!.forEach((sensor) {
+        for (var sensor in args!.device.sensors!) {
           if (sensor['value'] != null) {
             sensors.add(Card(
                 elevation: 1,
@@ -645,7 +646,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
           }
 
           if (sensor['type'] == "fuel_tank") {}
-        });
+        }
       } catch (e) {}
 
       return Container(
@@ -725,7 +726,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
                 if (value != null)
                   {
                     list = json.decode(value.body),
-                    if (_commands.length == 0)
+                    if (_commands.isEmpty)
                       {
                         list.forEach((element) {
                           _commands.add(element["title"]);
@@ -761,7 +762,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
                   }
               });
 
-          return Container(
+          return SizedBox(
             height: _dialogCommandHeight,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.start,
@@ -784,14 +785,14 @@ class _DeviceInfoState extends State<DeviceInfo> {
                           Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: <Widget>[
-                                _commands.length > 0
+                                _commands.isNotEmpty
                                     ? DropdownButton<String>(
                                         hint: Text(('select_command').tr),
                                         value: _commands[_selectedCommand],
                                         items: _commands.map((String value) {
                                           return DropdownMenuItem<String>(
                                             value: value,
-                                            child: Container(
+                                            child: SizedBox(
                                                 width: MediaQuery.of(context)
                                                         .size
                                                         .width /
@@ -978,7 +979,7 @@ class _DeviceInfoState extends State<DeviceInfo> {
       ),
       child: StatefulBuilder(
         builder: (BuildContext context, StateSetter setState) {
-          return Container(
+          return SizedBox(
             height: _dialogHeight,
             width: 300.0,
             child: Column(
@@ -1197,10 +1198,11 @@ class _DeviceInfoState extends State<DeviceInfo> {
         initialDate: _selectedFromDate,
         firstDate: DateTime(2015, 8),
         lastDate: DateTime(2101));
-    if (picked != null && picked != _selectedFromDate)
+    if (picked != null && picked != _selectedFromDate) {
       setState(() {
         _selectedFromDate = picked;
       });
+    }
   }
 
   Future<void> _selectToDate(BuildContext context, StateSetter setState) async {
@@ -1209,10 +1211,11 @@ class _DeviceInfoState extends State<DeviceInfo> {
         initialDate: _selectedToDate,
         firstDate: DateTime(2015, 8),
         lastDate: DateTime(2101));
-    if (picked != null && picked != _selectedToDate)
+    if (picked != null && picked != _selectedToDate) {
       setState(() {
         _selectedToDate = picked;
       });
+    }
   }
 
   Future<void> _selectFromTime(
@@ -1227,10 +1230,11 @@ class _DeviceInfoState extends State<DeviceInfo> {
         );
       },
     );
-    if (picked != null && picked != _selectedFromTime)
+    if (picked != null && picked != _selectedFromTime) {
       setState(() {
         _selectedFromTime = picked;
       });
+    }
   }
 
   Future<void> _selectToTime(BuildContext context, setState) async {
@@ -1244,10 +1248,11 @@ class _DeviceInfoState extends State<DeviceInfo> {
         );
       },
     );
-    if (picked != null && picked != _selectedToTime)
+    if (picked != null && picked != _selectedToTime) {
       setState(() {
         _selectedToTime = picked;
       });
+    }
   }
 
   void showReport(String heading) {

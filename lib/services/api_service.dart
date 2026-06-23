@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:get/get.dart';
 import 'package:smart_lock/services/model/alert.dart';
@@ -25,10 +26,16 @@ class APIService {
     headers['content-type'] = "application/json; charset=utf-8";
     try {
       serverURL = url;
+      final uri = Uri.parse("$serverURL/api/login").replace(
+        queryParameters: {
+          'email': email,
+          'password': password,
+        },
+      );
       final response = await http.post(
-          Uri.parse("${"${serverURL!}/api/login?email=" + email}&password=" +
-              password),
-          headers: headers);
+        uri,
+        headers: headers,
+      );
       updateCookie(response);
       return response;
     } catch (e) {
@@ -292,18 +299,59 @@ class APIService {
     return response;
   }
 
-  static Future<String> getGeocoderAddress(lat, lng) async {
-    headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
-    final response = await http.get(
-        Uri.parse(
-            "$serverURL/api/geo_address?lat=$lat&lon=$lng&user_api_hash=${UserRepository.getHash()}"),
-        headers: headers);
-    if (response.statusCode == 200) {
-      return response.body;
-    } else {
-      return "";
+  static final Map<String, String> _addressCache = {};
+  static final Map<String, Future<String>> _inFlightFutures = {};
+
+  static String _getCoordinateKey(dynamic lat, dynamic lng) {
+    if (lat == null || lng == null) return "";
+    final double? latVal = double.tryParse(lat.toString());
+    final double? lngVal = double.tryParse(lng.toString());
+    if (latVal == null || lngVal == null) {
+      return "${lat.toString().trim()},${lng.toString().trim()}";
     }
+    return "${latVal.toStringAsFixed(4)},${lngVal.toStringAsFixed(4)}";
+  }
+
+  static String? getCachedAddress(dynamic lat, dynamic lng) {
+    final key = _getCoordinateKey(lat, lng);
+    if (key.isEmpty) return null;
+    return _addressCache[key];
+  }
+
+  static Future<String> getGeocoderAddress(lat, lng) async {
+    final key = _getCoordinateKey(lat, lng);
+    if (key.isEmpty) return "";
+    
+    // 1. Synchronous Cache Check
+    if (_addressCache.containsKey(key)) {
+      return _addressCache[key]!;
+    }
+    
+    // 2. Request Coalescing - return the in-flight future if one exists
+    if (_inFlightFutures.containsKey(key)) {
+      return _inFlightFutures[key]!;
+    }
+
+    final Future<String> future = () async {
+      headers['content-type'] = "application/x-www-form-urlencoded; charset=UTF-8";
+      try {
+        final url = "$serverURL/api/geo_address?lat=$lat&lon=$lng&user_api_hash=${UserRepository.getHash()}";
+        final response = await http.get(Uri.parse(url), headers: headers);
+        if (response.statusCode == 200) {
+          final address = response.body;
+          _addressCache[key] = address;
+          return address;
+        }
+      } catch (e) {
+        debugPrint("Geocoding error: $e");
+      } finally {
+        _inFlightFutures.remove(key);
+      }
+      return "";
+    }();
+
+    _inFlightFutures[key] = future;
+    return future;
   }
 
   static Future<http.Response> activateAlert(val) async {

@@ -9,12 +9,26 @@ import 'package:smart_lock/services/payment_service.dart';
 Future<String?> showPaymentDuePopupIfNeeded(BuildContext context) async {
   try {
     final stats = await PaymentService.getStats();
-    if (stats == null) return null;
-    if (stats.due <= 0) return null;
-
     final expirationInfo = await _fetchExpirationInfo();
 
     if (!context.mounted) return null;
+
+    int daysRemaining = 999;
+    bool isExpired = false;
+    if (expirationInfo != null) {
+      daysRemaining = (expirationInfo['days_remaining'] as int?) ?? 999;
+      isExpired = expirationInfo['is_expired'] == true ||
+          expirationInfo['is_expired'] == 'true';
+    }
+
+    final double due = stats?.due ?? 0;
+    
+    // Alert triggers if there is a due balance OR if expiration is within 5 days OR is already expired
+    final bool shouldAlert = due > 0 || isExpired || (daysRemaining <= 5);
+    if (!shouldAlert) return null;
+
+    // Use stats fallback if stats was null
+    final resolvedStats = stats ?? PaymentStats(due: 0, totalBilled: 0, totalPaid: 0, unpaidBillsCount: 0);
 
     final todayDay = DateTime.now().day;
     final bool isAfter10th = todayDay > 10;
@@ -37,7 +51,7 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context) async {
             );
           },
           pageBuilder: (ctx, _, __) => PaymentDuePopup(
-            stats: stats,
+            stats: resolvedStats,
             expirationInfo: expirationInfo,
             isAfter10th: true,
           ),
@@ -45,10 +59,6 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context) async {
 
         // ✅ 'payment_done' = WhatsApp এ send হয়েছে → loop break
         if (result == 'payment_done') return 'payment_done';
-
-        // ✅ 'go_to_payment' = ManualPaymentScreen এ গেছে
-        // সেখান থেকে back আসলে loop আবার চলবে → popup দেখাবে
-        // অন্য যেকোনো result এও loop চলতে থাকে
       }
     }
 
@@ -66,7 +76,7 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context) async {
         );
       },
       pageBuilder: (ctx, _, __) => PaymentDuePopup(
-        stats: stats,
+        stats: resolvedStats,
         expirationInfo: expirationInfo,
         isAfter10th: false,
       ),
@@ -110,7 +120,7 @@ class PaymentDuePopup extends StatefulWidget {
 }
 
 class _PaymentDuePopupState extends State<PaymentDuePopup> {
-  bool _isPaymentLoading = false;
+  final bool _isPaymentLoading = false;
   String? _errorMessage;
 
   int get _daysRemaining =>
@@ -127,7 +137,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
     return overdue.clamp(0, 10);
   }
 
-  Future<void> _handlePay() async {
+  Future<void> _handlePay(String packageType) async {
     if (!mounted) return;
 
     final double due = widget.stats.due;
@@ -143,8 +153,9 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
       await nav.push<String>(
         MaterialPageRoute(
           builder: (_) => ManualPaymentScreen(
-            dueAmount: due,
+            dueAmount: packageType == '1_year' ? 1800.0 : (due > 0 ? due : 200.0),
             isAfter10th: isAfter10th,
+            packageType: packageType,
           ),
         ),
       );
@@ -325,42 +336,83 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
 
           const SizedBox(height: 20),
 
-          // ✅ Pay button
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton.icon(
-              onPressed: _isPaymentLoading ? null : _handlePay,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1B6B3A),
-                foregroundColor: Colors.white,
-                disabledBackgroundColor:
-                const Color(0xFF1B6B3A).withValues(alpha: 0.6),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+          // ✅ Package options row (1 Month & 1 Year)
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: _isPaymentLoading ? null : () => _handlePay('1_month'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1B6B3A),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor:
+                      const Color(0xFF1B6B3A).withValues(alpha: 0.6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    icon: _isPaymentLoading
+                        ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Icon(Icons.credit_card, size: 18),
+                    label: const Text(
+                      '১ মাসের বিল',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 ),
-                elevation: 0,
               ),
-              icon: _isPaymentLoading
-                  ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-                  : const Icon(Icons.credit_card, size: 20),
-              label: Text(
-                _isPaymentLoading
-                    ? 'অনুগ্রহ করে অপেক্ষা করুন...'
-                    : 'পরিশোধ সম্পন্ন করুন',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+              const SizedBox(width: 8),
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: _isPaymentLoading ? null : () => _handlePay('1_year'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE4B34E),
+                      foregroundColor: Colors.black,
+                      disabledBackgroundColor:
+                      const Color(0xFFE4B34E).withValues(alpha: 0.6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    icon: _isPaymentLoading
+                        ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black,
+                      ),
+                    )
+                        : const Icon(Icons.star, size: 18),
+                    label: const Text(
+                      '১ বছরের বিল',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
 
           const SizedBox(height: 10),

@@ -23,7 +23,7 @@ class CustomIconAssets extends CustomPainter {
 
     final textPainter = TextPainter(
         text: TextSpan(
-          text: this._label,
+          text: _label,
           style: TextStyle(fontSize: 30, color: Colors.white),
         ),
         textDirection: TextDirection.ltr);

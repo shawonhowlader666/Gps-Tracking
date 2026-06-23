@@ -369,4 +369,10 @@ const Map<String, String> en_US = {
   "termsTermination": "Termination",
   "termsTerminationDetail": "We may suspend accounts that violate these terms.",
   "contactInfo": "Contact Information",
+  "payment": "Payment",
+  "notificationSetting": "Notification Setting",
+  "changeLanguage": "Change Language",
+  "goodMorning": "Good Morning",
+  "goodAfternoon": "Good Afternoon",
+  "goodNight": "Good Night",
 };

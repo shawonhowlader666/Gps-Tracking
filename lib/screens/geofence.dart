@@ -151,7 +151,7 @@ class _GeofencePageState extends State<GeofencePage> {
       _circles.add(Circle(
           circleId: CircleId("circle"),
           fillColor: Color(0x40189ad3),
-          strokeColor: Color(0),
+          strokeColor: Color(0x00000000),
           strokeWidth: 2,
           center: _position!,
           radius: radius));

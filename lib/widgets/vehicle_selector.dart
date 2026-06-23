@@ -8,12 +8,12 @@ class VehicleSelector extends StatelessWidget {
   final bool isLoading;
 
   const VehicleSelector({
-    Key? key,
+    super.key,
     required this.vehicles,
     this.selectedVehicleId,
     required this.onVehicleChanged,
     this.isLoading = false,
-  }) : super(key: key);
+  });
 
   Color _getStatusColor(String? iconColor) {
     switch (iconColor?.toLowerCase()) {
@@ -40,7 +40,7 @@ class VehicleSelector extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -118,7 +118,7 @@ class VehicleSelector extends StatelessWidget {
                                     BoxShadow(
                                       color: _getStatusColor(
                                         vehicles.firstWhere((v) => v.id == selectedVehicleId).iconColor,
-                                      ).withOpacity(0.3),
+                                      ).withValues(alpha: 0.3),
                                       blurRadius: 4,
                                       spreadRadius: 1,
                                     ),
@@ -241,7 +241,7 @@ class VehicleSelector extends StatelessWidget {
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                        color: isSelected ? Colors.blue.shade50.withOpacity(0.5) : null,
+                        color: isSelected ? Colors.blue.shade50.withValues(alpha: 0.5) : null,
                         child: Row(
                           children: [
                             Container(

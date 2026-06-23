@@ -32,7 +32,7 @@ class AlertDialogCustom {
 //      },
 //    );
 //  }
-  showAlertDialog(BuildContext context, String message, String heading,
+  void showAlertDialog(BuildContext context, String message, String heading,
       String buttonAcceptTitle) {
     // set up the buttons
     Widget okButton = ElevatedButton(

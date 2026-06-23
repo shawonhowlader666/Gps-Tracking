@@ -1,6 +1,5 @@
 // lib/screens/report/models/report_models.dart
 
-import 'package:flutter/material.dart';
 
 /// Hourly Report Data
 class HourlyReportData {

@@ -10,6 +10,8 @@ import 'package:smart_lock/theme/custom_color.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class DeviceEventPage extends StatefulWidget {
+  const DeviceEventPage({super.key});
+
   @override
   State<StatefulWidget> createState() => _DeviceEventPageState();
 }
@@ -101,7 +103,7 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
     }
   }
 
-  getReport() {
+  void getReport() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (args != null) {
         _timer.cancel();

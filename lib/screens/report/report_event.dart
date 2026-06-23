@@ -14,8 +14,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 class ReportEventPage extends StatefulWidget {
+  const ReportEventPage({super.key});
+
   @override
-  State<StatefulWidget> createState() => new _ReportEventPageState();
+  State<StatefulWidget> createState() => _ReportEventPageState();
 }
 
 class _ReportEventPageState extends State<ReportEventPage> {
@@ -23,20 +25,20 @@ class _ReportEventPageState extends State<ReportEventPage> {
   static ReportArguments? args;
   StreamController<int>? _postsController;
   bool isLoading = true;
-  static var httpClient = new HttpClient();
+  static var httpClient = HttpClient();
   File? file;
   String? url;
   Timer? _timer;
 
   @override
   void initState() {
-    _postsController = new StreamController();
+    _postsController = StreamController();
     getReport();
     super.initState();
   }
 
-  getReport() {
-    _timer = new Timer.periodic(Duration(seconds: 1), (timer) {
+  void getReport() {
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (args != null) {
         timer.cancel();
         APIService.getReport(
@@ -59,14 +61,14 @@ class _ReportEventPageState extends State<ReportEventPage> {
   }
 
   Future<File?> _downloadFile(String url, String filename) async {
-    Random random = new Random();
+    Random random = Random();
     int randomNumber = random.nextInt(100);
     var request = await httpClient.getUrl(Uri.parse(url));
     var response = await request.close();
     var bytes = await consolidateHttpClientResponseBytes(response);
     String dir = (await getApplicationDocumentsDirectory()).path;
     print(dir);
-    File pdffile = new File('$dir/$filename-$randomNumber.pdf');
+    File pdffile = File('$dir/$filename-$randomNumber.pdf');
     //Navigator.pop(context); // Load from assets
     file = pdffile;
     _postsController!.add(1);
@@ -74,8 +76,8 @@ class _ReportEventPageState extends State<ReportEventPage> {
     return file;
   }
 
-  downloadReport(String url, String filename) async {
-    Random random = new Random();
+  Future<File?>? downloadReport(String url, String filename) async {
+    Random random = Random();
     random.nextInt(100);
     print(url);
     var request = await httpClient.getUrl(Uri.parse(url));
@@ -85,7 +87,7 @@ class _ReportEventPageState extends State<ReportEventPage> {
     // File pdffile = new File('$dir/$filename-$randomNumber.pdf');
     // //Navigator.pop(context); // Load from assets
     // file = pdffile;
-    writeFile(bytes, filename + DateTime.now().millisecond.toString() + ".pdf");
+    writeFile(bytes, "$filename${DateTime.now().millisecond}.pdf");
     _postsController!.add(1);
     await file!.writeAsBytes(bytes);
     ScaffoldMessenger.of(context)
@@ -97,7 +99,7 @@ class _ReportEventPageState extends State<ReportEventPage> {
 
   Future<void> writeToFile(Uint8List data, String path) {
     final buffer = data.buffer;
-    return new File(path).writeAsBytes(
+    return File(path).writeAsBytes(
         buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
   }
 
@@ -110,7 +112,7 @@ class _ReportEventPageState extends State<ReportEventPage> {
     // the downloads folder path
     Directory? tempDir = await getDownloadsDirectory();
     String tempPath = tempDir!.path;
-    var filePath = tempPath + '/$name';
+    var filePath = '$tempPath/$name';
     //
 
     // the data
@@ -142,12 +144,12 @@ class _ReportEventPageState extends State<ReportEventPage> {
           centerTitle: false,
           elevation: 0,
         ),
-        floatingActionButton: new FloatingActionButton(
-          child: const Icon(Icons.download_rounded),
+        floatingActionButton: FloatingActionButton(
           elevation: 0,
           onPressed: () {
             downloadReport(url!, "event");
           },
+          child: const Icon(Icons.download_rounded),
         ),
         body: StreamBuilder<int>(
             stream: _postsController!.stream,
