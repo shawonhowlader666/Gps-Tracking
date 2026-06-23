@@ -85,7 +85,9 @@ class PlaybackCarAnimator {
       onPositionUpdate(_currentPosition, _currentBearing);
       _targetPosition = null;
       _stop();
-      onAnimationComplete?.call();
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        onAnimationComplete?.call();
+      });
       return;
     }
 
@@ -1316,7 +1318,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                     zoomControlsEnabled: false,
                     mapToolbarEnabled: false,
                     buildingsEnabled: false,
-                    padding: const EdgeInsets.only(bottom: 120),
+                    padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.24 + 10),
                   );
                 },
               );
@@ -1393,7 +1395,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
           // Marker Toggle Buttons
           if (playbackRoutePoints.isNotEmpty && !_isPlaybackLoading)
             Positioned(
-              bottom: 130,
+              bottom: MediaQuery.of(context).size.height * 0.24 + 10,
               left: 10,
               child: _buildMarkerToggles(),
             ),
@@ -1470,8 +1472,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
   Widget _buildBottomSheet() {
     return DraggableScrollableSheet(
-      initialChildSize: 0.14,
-      minChildSize: 0.08,
+      initialChildSize: 0.24,
+      minChildSize: 0.24,
       maxChildSize: 0.55,
       controller: _sheetController,
       builder: (context, scrollController) {
@@ -1481,7 +1483,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
             boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8)],
           ),
-          child: ListView(
+          child: SafeArea(
+            top: false,
+            child: ListView(
             controller: scrollController,
             padding: EdgeInsets.zero,
             children: [
@@ -1523,7 +1527,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                 ),
             ],
           ),
-        );
+        ),
+      );
       },
     );
   }
