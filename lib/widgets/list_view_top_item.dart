@@ -6,7 +6,8 @@ class ListViewTopItem extends StatelessWidget {
   final bool? isSelected;
   final Function()? onTap;
 
-  const ListViewTopItem({super.key, this.text, this.color, this.isSelected = false, this.onTap});
+  const ListViewTopItem(
+      {super.key, this.text, this.color, this.isSelected = false, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -23,12 +24,14 @@ class ListViewTopItem extends StatelessWidget {
           borderRadius: BorderRadius.circular(5.0),
           //boxShadow: [BoxShadow(color: isSelected? color.withOpacity(.4):Colors.transparent,blurRadius: 3.0,offset: Offset(0,3))]
         ),
-        child: Center(child: Text(text!, style: TextStyle(
-            decoration: TextDecoration.none,
-            color: isSelected! ? Colors.white : color,
-            fontFamily: 'Poppins',
-            fontSize: 13,
-            fontWeight: FontWeight.w500))),
+        child: Center(
+            child: Text(text!,
+                style: TextStyle(
+                    decoration: TextDecoration.none,
+                    color: isSelected! ? Colors.white : color,
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500))),
       ),
     );
   }

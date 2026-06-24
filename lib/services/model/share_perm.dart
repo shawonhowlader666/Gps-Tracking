@@ -12,8 +12,7 @@ class SharePerm {
     statusCode = json['statusCode'];
     message = json['message'];
     status = json['status'];
-    errors =
-    json['errors'] != null ? Errors.fromJson(json['errors']) : null;
+    errors = json['errors'] != null ? Errors.fromJson(json['errors']) : null;
     perm = json['perm'];
   }
 

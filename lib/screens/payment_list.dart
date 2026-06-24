@@ -42,7 +42,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
   }
 
   void _scrollListener() {
-    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
+    if (_scrollController.position.pixels ==
+        _scrollController.position.maxScrollExtent) {
       _loadMoreBills();
     }
   }
@@ -163,7 +164,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
   //   }
   // }
 
-
   Future<void> _initiatePayment() async {
     if (_stats == null || _stats!.due <= 0) {
       _showErrorSnackBar('No due available to pay');
@@ -186,7 +186,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
             // Handle
             Center(
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
                   color: Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(2),
@@ -224,7 +225,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => WebViewScreen(title: 'Payment', url: url),
+                        builder: (_) =>
+                            WebViewScreen(title: 'Payment', url: url),
                       ),
                     );
                     if (mounted) _loadData();
@@ -299,8 +301,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
                           fontSize: 15, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 4),
                   Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.grey.shade600)),
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                 ],
               ),
             ),
@@ -311,7 +313,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       ),
     );
   }
-
 
   Future<void> _downloadBillPDF(Bill bill) async {
     try {
@@ -359,7 +360,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         );
       } else {
         if (!mounted) return;
-        _showErrorSnackBar('Storage permission denied. Please enable it in settings.');
+        _showErrorSnackBar(
+            'Storage permission denied. Please enable it in settings.');
       }
     } catch (e) {
       debugPrint('Error generating PDF: $e');
@@ -401,7 +403,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         );
       } else {
         if (!mounted) return;
-        _showErrorSnackBar('Storage permission denied. Please enable it in settings.');
+        _showErrorSnackBar(
+            'Storage permission denied. Please enable it in settings.');
       }
     } catch (e) {
       debugPrint('Error generating PDF: $e');
@@ -410,8 +413,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       _showErrorSnackBar('Failed to generate PDF: ${e.toString()}');
     }
   }
-
-
 
   Future<bool> _requestStoragePermission() async {
     if (Platform.isAndroid) {
@@ -439,7 +440,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
 
       // If permanently denied, show settings dialog
       if (statuses[Permission.storage]?.isPermanentlyDenied == true ||
-          statuses[Permission.manageExternalStorage]?.isPermanentlyDenied == true) {
+          statuses[Permission.manageExternalStorage]?.isPermanentlyDenied ==
+              true) {
         return await _showPermissionDialog();
       }
 
@@ -452,35 +454,37 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
 
   Future<bool> _showPermissionDialog() async {
     return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Storage Permission Required'),
-        content: const Text(
-          'This app needs storage permission to save PDF files. '
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Storage Permission Required'),
+            content: const Text(
+              'This app needs storage permission to save PDF files. '
               'Please enable it in app settings.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context, false);
+                  await openAppSettings();
+                },
+                child: const Text('Open Settings'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context, false);
-              await openAppSettings();
-            },
-            child: const Text('Open Settings'),
-          ),
-        ],
-      ),
-    ) ?? false;
+        ) ??
+        false;
   }
 
   String _getErrorMessage(dynamic error) {
     String errorString = error.toString().toLowerCase();
     if (errorString.contains('timeout') || errorString.contains('timed out')) {
       return 'Connection timed out. Please check your internet connection.';
-    } else if (errorString.contains('socket') || errorString.contains('connection')) {
+    } else if (errorString.contains('socket') ||
+        errorString.contains('connection')) {
       return 'Network error. Please check your internet connection.';
     } else {
       return 'Something went wrong. Please try again.';
@@ -543,6 +547,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       return dateString.split(' ').first;
     }
   }
+
   String _formatFullDate(String dateString) {
     try {
       DateTime date;
@@ -562,8 +567,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       return dateString;
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -656,7 +659,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3E6FB8),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
             ),
           ],
@@ -739,17 +743,19 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
             child: ElevatedButton(
               onPressed: (hasStats && hasDue)
                   ? () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ManualPaymentScreen(dueAmount: _stats!.due),
-                ),
-              )
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ManualPaymentScreen(dueAmount: _stats!.due),
+                        ),
+                      )
                   : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: const Color(0xFF3E6FB8),
                 disabledBackgroundColor: Colors.white.withValues(alpha: 0.5),
-                disabledForegroundColor: const Color(0xFF3E6FB8).withValues(alpha: 0.5),
+                disabledForegroundColor:
+                    const Color(0xFF3E6FB8).withValues(alpha: 0.5),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -935,7 +941,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    ...bill.payments.map((payment) => _buildPaymentRow(payment)),
+                    ...bill.payments
+                        .map((payment) => _buildPaymentRow(payment)),
                   ] else
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),

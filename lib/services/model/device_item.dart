@@ -47,7 +47,7 @@ class DeviceItem extends Object {
       this.name,
       this.online,
       this.time,
-        this.imei,
+      this.imei,
       this.timestamp,
       this.acktimestamp,
       this.lat,
@@ -527,7 +527,7 @@ class DeviceData {
     pivot = json['pivot'] != null ? Pivot.fromJson(json['pivot']) : null;
     icon = json['icon'] != null ? Icon.fromJson(json['icon']) : null;
     traccar =
-    json['traccar'] != null ? Traccar.fromJson(json['traccar']) : null;
+        json['traccar'] != null ? Traccar.fromJson(json['traccar']) : null;
     sensors = json['sensors'];
     services = json['services'];
     driver = json['driver'];

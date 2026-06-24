@@ -50,7 +50,9 @@ class VehicleSelector extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: vehicles.isEmpty || isLoading ? null : () => _showVehicleSheet(context),
+          onTap: vehicles.isEmpty || isLoading
+              ? null
+              : () => _showVehicleSheet(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
@@ -111,13 +113,19 @@ class VehicleSelector extends StatelessWidget {
                                 height: 8,
                                 decoration: BoxDecoration(
                                   color: _getStatusColor(
-                                    vehicles.firstWhere((v) => v.id == selectedVehicleId).iconColor,
+                                    vehicles
+                                        .firstWhere(
+                                            (v) => v.id == selectedVehicleId)
+                                        .iconColor,
                                   ),
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
                                       color: _getStatusColor(
-                                        vehicles.firstWhere((v) => v.id == selectedVehicleId).iconColor,
+                                        vehicles
+                                            .firstWhere((v) =>
+                                                v.id == selectedVehicleId)
+                                            .iconColor,
                                       ).withValues(alpha: 0.3),
                                       blurRadius: 4,
                                       spreadRadius: 1,
@@ -130,11 +138,17 @@ class VehicleSelector extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 selectedVehicleId != null
-                                    ? vehicles.firstWhere((v) => v.id == selectedVehicleId).name ?? 'Unnamed Vehicle'
+                                    ? vehicles
+                                            .firstWhere((v) =>
+                                                v.id == selectedVehicleId)
+                                            .name ??
+                                        'Unnamed Vehicle'
                                     : 'Select a vehicle',
                                 style: TextStyle(
                                   fontSize: 15,
-                                  color: selectedVehicleId != null ? Colors.grey.shade900 : Colors.grey.shade500,
+                                  color: selectedVehicleId != null
+                                      ? Colors.grey.shade900
+                                      : Colors.grey.shade500,
                                   fontWeight: FontWeight.w600,
                                 ),
                                 overflow: TextOverflow.ellipsis,
@@ -200,7 +214,8 @@ class VehicleSelector extends StatelessWidget {
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.blue.shade50,
                       borderRadius: BorderRadius.circular(20),
@@ -240,19 +255,26 @@ class VehicleSelector extends StatelessWidget {
                         Navigator.pop(context);
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                        color: isSelected ? Colors.blue.shade50.withValues(alpha: 0.5) : null,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 16),
+                        color: isSelected
+                            ? Colors.blue.shade50.withValues(alpha: 0.5)
+                            : null,
                         child: Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: isSelected ? Colors.blue.shade100 : Colors.grey.shade100,
+                                color: isSelected
+                                    ? Colors.blue.shade100
+                                    : Colors.grey.shade100,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(
                                 Icons.directions_car_rounded,
-                                color: isSelected ? Colors.blue.shade700 : Colors.grey.shade600,
+                                color: isSelected
+                                    ? Colors.blue.shade700
+                                    : Colors.grey.shade600,
                                 size: 24,
                               ),
                             ),
@@ -265,7 +287,9 @@ class VehicleSelector extends StatelessWidget {
                                     vehicle.name ?? 'Unnamed Vehicle',
                                     style: TextStyle(
                                       fontSize: 15,
-                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.w500,
                                       color: Colors.grey.shade900,
                                     ),
                                   ),
@@ -276,7 +300,8 @@ class VehicleSelector extends StatelessWidget {
                                         width: 8,
                                         height: 8,
                                         decoration: BoxDecoration(
-                                          color: _getStatusColor(vehicle.iconColor),
+                                          color: _getStatusColor(
+                                              vehicle.iconColor),
                                           shape: BoxShape.circle,
                                         ),
                                       ),

@@ -3,10 +3,7 @@ class ServerList extends Object {
   String? name;
   String? url;
 
-  ServerList(
-      {id,
-        name,
-        type});
+  ServerList({id, name, type});
 
   ServerList.fromJson(Map<String, dynamic> json) {
     id = json["id"];

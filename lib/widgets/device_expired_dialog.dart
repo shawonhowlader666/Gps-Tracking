@@ -25,7 +25,8 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
       } else {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Calling not supported on this device')),
+            const SnackBar(
+                content: Text('Calling not supported on this device')),
           );
         }
       }
@@ -42,14 +43,21 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
       return;
     }
     final String clean = number.replaceAll(RegExp(r'[^0-9]'), '');
-    String deviceIdentifier = UserRepository.getEmail() ?? '';
-    String cleanIdentifier = deviceIdentifier;
-    if (deviceIdentifier.contains('@')) {
-      cleanIdentifier = deviceIdentifier.split('@').first;
+    final String rawIdentifier = UserRepository.getEmail() ?? '';
+    // Sanitize: strip any corrupted suffix like ") - Bike (IMEI: ...)" from stored email
+    String cleanIdentifier = rawIdentifier;
+    if (rawIdentifier.contains(')')) {
+      cleanIdentifier = rawIdentifier.substring(0, rawIdentifier.indexOf(')')).trim();
+    } else if (rawIdentifier.contains(' - ')) {
+      cleanIdentifier = rawIdentifier.substring(0, rawIdentifier.indexOf(' - ')).trim();
+    } else if (rawIdentifier.contains('@')) {
+      cleanIdentifier = rawIdentifier.split('@').first.trim();
     }
 
-    String message = "Hello, I need help renewing my expired device: ${device.name ?? ''} ($cleanIdentifier)";
-    final Uri uri = Uri.parse('https://wa.me/$clean?text=${Uri.encodeComponent(message)}');
+    String message =
+        "Hello, I need help renewing my expired device: ${device.name ?? ''} ($cleanIdentifier)";
+    final Uri uri =
+        Uri.parse('https://wa.me/$clean?text=${Uri.encodeComponent(message)}');
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -80,7 +88,8 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String expiry = device.deviceData?.expirationDate?.toString() ?? 'N/A';
+    final String expiry =
+        device.deviceData?.expirationDate?.toString() ?? 'N/A';
 
     return PopScope(
       canPop: true,
@@ -161,7 +170,8 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFEEEE),
                             borderRadius: BorderRadius.circular(6),
@@ -193,11 +203,13 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                           children: [
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () => _navigateToPayment(context, '1_month'),
+                                onPressed: () =>
+                                    _navigateToPayment(context, '1_month'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF1B6B3A),
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -205,7 +217,9 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                 ),
                                 child: const Text(
                                   '১ মাসের বিল',
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold),
                                   textAlign: TextAlign.center,
                                 ),
                               ),
@@ -213,11 +227,13 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () => _navigateToPayment(context, '1_year'),
+                                onPressed: () =>
+                                    _navigateToPayment(context, '1_year'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFFE4B34E),
                                   foregroundColor: Colors.black,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -225,7 +241,9 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                 ),
                                 child: const Text(
                                   '১ বছরের বিল',
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold),
                                   textAlign: TextAlign.center,
                                 ),
                               ),
@@ -239,11 +257,14 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: () => _launchPhone(context, PHONE_NO),
+                                onPressed: () =>
+                                    _launchPhone(context, PHONE_NO),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: const Color(0xFF1D4888),
-                                  side: const BorderSide(color: Color(0xFF1D4888)),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  side: const BorderSide(
+                                      color: Color(0xFF1D4888)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -251,18 +272,23 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                 icon: const m.Icon(Icons.phone, size: 16),
                                 label: const Text(
                                   'হেল্পলাইন',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: () => _launchWhatsApp(context, WHATS_APP),
+                                onPressed: () =>
+                                    _launchWhatsApp(context, WHATS_APP),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: const Color(0xFF25D366),
-                                  side: const BorderSide(color: Color(0xFF25D366)),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  side: const BorderSide(
+                                      color: Color(0xFF25D366)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -270,7 +296,9 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                 icon: const m.Icon(Icons.chat, size: 16),
                                 label: const Text(
                                   'হোয়াটসঅ্যাপ',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ),

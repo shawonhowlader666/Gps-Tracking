@@ -12,7 +12,8 @@ class AssetsRes {
   static const String GROUP = 'assets/icons/group.png';
   static const String MAP_END_POINT = 'assets/icons/map-end-point.png';
   static const String TEXT = 'assets/icons/text.png';
-  static const String DOUBLE_RIGHT_ARROW = 'assets/images/double-right-arrow.png';
+  static const String DOUBLE_RIGHT_ARROW =
+      'assets/images/double-right-arrow.png';
   static const String ERROR_INACTIVE = 'assets/images/error-inactive.png';
   static const String MAP_START_POINT = 'assets/images/map-start-point.png';
   static const String POINT_INACTIVE = 'assets/images/point-inactive.png';

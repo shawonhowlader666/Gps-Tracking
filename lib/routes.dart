@@ -19,7 +19,6 @@ import 'package:smart_lock/screens/splash_screen.dart';
 import 'package:smart_lock/screens/stop_map.dart';
 import 'screens/report/report_event.dart';
 
-
 final Map<String, WidgetBuilder> routes = {
   '/': (context) => SplashScreenPage(),
   '/login': (context) => LoginPage(),
@@ -29,7 +28,6 @@ final Map<String, WidgetBuilder> routes = {
   '/reportRoute': (context) => ReportRoutePage(),
   '/reportEvent': (context) => ReportEventPage(),
   '/reportFuel': (context) => ReportFuelPage(),
-
   '/notificationType': (context) => NotificationTypePage(),
   '/eventMap': (context) => EventMapPage(),
   '/notificationMap': (context) => NotificationMapPage(),

@@ -8,7 +8,13 @@ class ShareModel extends Object {
   String? delete_after_expiration;
 
   ShareModel(
-      {this.id, this.user_id, this.name, this.hash, this.expiration_date, this.active, this.delete_after_expiration});
+      {this.id,
+      this.user_id,
+      this.name,
+      this.hash,
+      this.expiration_date,
+      this.active,
+      this.delete_after_expiration});
 
   ShareModel.fromJson(Map<String, dynamic> json) {
     id = json["id"];
@@ -20,8 +26,7 @@ class ShareModel extends Object {
     delete_after_expiration = json["delete_after_expiration"];
   }
 
-  Map<String, dynamic> toJson() =>
-      {
+  Map<String, dynamic> toJson() => {
         'id': id,
         'user_id': user_id,
         'name': name,

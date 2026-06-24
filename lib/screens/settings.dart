@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import '../translation/lang/bn_BD.dart';
 import '../translation/lang/en_US.dart';
+import 'package:smart_lock/screens/data_controller/data_controller.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -71,6 +72,7 @@ class _SettingsPageState extends State<SettingsPage> {
       );
       await _prefs.remove('profile_image_path');
       await _prefs.clear();
+      DataController.clearAllOverridesInMemory();
 
       if (_image != null && await _image!.exists()) {
         try {
@@ -110,28 +112,80 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  /// Sanitizes a raw stored identifier, extracting only the leading phone
+  /// number or email address.  Guards against corrupted SharedPreferences
+  /// values that may contain a trailing device-list suffix such as
+  /// `01805469656) - Bike (IMEI: N/A, SIM: ...)` caused by stale cached data.
+  String _sanitizeIdentifier(String raw) {
+    if (raw.isEmpty) return raw;
+
+    // Step 1 – strip everything after a stray closing parenthesis
+    // e.g. "01805469656) - Bike …"  →  "01805469656"
+    final parenIdx = raw.indexOf(')');
+    if (parenIdx != -1) {
+      final candidate = raw.substring(0, parenIdx).trim();
+      if (candidate.isNotEmpty) return candidate;
+    }
+
+    // Step 2 – strip everything after " - " separator
+    // e.g. "user - Bike (IMEI: N/A)"  →  "user"
+    final dashIdx = raw.indexOf(' - ');
+    if (dashIdx != -1) {
+      final candidate = raw.substring(0, dashIdx).trim();
+      if (candidate.isNotEmpty) return candidate;
+    }
+
+    // Step 3 – if it looks like an email, keep only the local part
+    if (raw.contains('@')) {
+      return raw.split('@').first.trim();
+    }
+
+    return raw.trim();
+  }
+
+  String _getSupportMessage() {
+    final String raw = UserRepository.getEmail() ?? '';
+    final String cleanIdentifier =
+        raw.isNotEmpty ? _sanitizeIdentifier(raw) : 'Unknown Account';
+
+    final StringBuffer buffer = StringBuffer();
+    buffer.writeln("Hello Smart Lock Support,");
+    buffer.writeln("");
+    buffer.writeln("I need assistance with my account:");
+    buffer.writeln("User Account: $cleanIdentifier");
+
+    // Add device info if available
+    try {
+      if (Get.isRegistered<DataController>()) {
+        final controller = Get.find<DataController>();
+        if (controller.onlyDevices.isNotEmpty) {
+          buffer.writeln("");
+          buffer.writeln("My Registered Devices:");
+          for (var device in controller.onlyDevices) {
+            final name = device.name ?? 'Unknown Device';
+            final imei = device.imei ?? 'N/A';
+            final simNo = device.deviceData?.simNumber ?? 'N/A';
+            buffer.writeln("- $name (IMEI: $imei, SIM: $simNo)");
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching device info for helpline: $e");
+    }
+
+    return buffer.toString().trim();
+  }
+
   Future<void> _launchWhatsApp(String number) async {
     if (number.isEmpty) {
       _showNoDataSnack('WhatsApp number not available');
       return;
     }
     final String clean = number.replaceAll(RegExp(r'[^0-9]'), '');
+    final String message = _getSupportMessage();
 
-    // Get the saved email
-    String deviceIdentifier = UserRepository.getEmail() ?? '';
-
-    // Clean any email domain suffix (e.g. from "01982822121@sl.com" to "01982822121")
-    String cleanIdentifier = deviceIdentifier;
-    if (deviceIdentifier.contains('@')) {
-      cleanIdentifier = deviceIdentifier.split('@').first;
-    }
-
-    String message = "Hello Smart Lock";
-    if (cleanIdentifier.isNotEmpty) {
-      message += " $cleanIdentifier";
-    }
-
-    final Uri uri = Uri.parse('https://wa.me/$clean?text=${Uri.encodeComponent(message)}');
+    final Uri uri =
+        Uri.parse('https://wa.me/$clean?text=${Uri.encodeComponent(message)}');
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -148,7 +202,11 @@ class _SettingsPageState extends State<SettingsPage> {
       _showNoDataSnack('Email address not available');
       return;
     }
-    final Uri uri = Uri.parse('mailto:$email');
+    final String message = _getSupportMessage();
+    final String subject = Uri.encodeComponent("Support Request: Smart Lock");
+    final String body = Uri.encodeComponent(message);
+
+    final Uri uri = Uri.parse('mailto:$email?subject=$subject&body=$body');
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri);
@@ -1062,11 +1120,16 @@ class _SettingsPageState extends State<SettingsPage> {
       title: t['termsTitle']!,
       icon: Icons.description_outlined,
       sections: [
-        _PolicySection(t['termsAcceptance']!, t['termsAcceptanceDetail']!, Icons.check_circle_outline),
-        _PolicySection(t['termsService']!, t['termsServiceDetail']!, Icons.gps_fixed),
-        _PolicySection(t['termsUser']!, t['termsUserDetail']!, Icons.person_outline),
-        _PolicySection(t['termsPayment']!, t['termsPaymentDetail']!, Icons.payment_outlined),
-        _PolicySection(t['termsTermination']!, t['termsTerminationDetail']!, Icons.block_outlined),
+        _PolicySection(t['termsAcceptance']!, t['termsAcceptanceDetail']!,
+            Icons.check_circle_outline),
+        _PolicySection(
+            t['termsService']!, t['termsServiceDetail']!, Icons.gps_fixed),
+        _PolicySection(
+            t['termsUser']!, t['termsUserDetail']!, Icons.person_outline),
+        _PolicySection(t['termsPayment']!, t['termsPaymentDetail']!,
+            Icons.payment_outlined),
+        _PolicySection(t['termsTermination']!, t['termsTerminationDetail']!,
+            Icons.block_outlined),
         _PolicySection(
           t['contactInfo']!,
           'Email: $EMAIL\nPhone: $PHONE_NO',
@@ -1082,10 +1145,14 @@ class _SettingsPageState extends State<SettingsPage> {
       title: t['privacyPolicyTitle']!,
       icon: Icons.privacy_tip_outlined,
       sections: [
-        _PolicySection(t['policyInfoWeCollect']!, t['policyInfoCollectDetail']!, Icons.info_outline),
-        _PolicySection(t['policyHowWeUse']!, t['policyHowWeUseDetail']!, Icons.settings_outlined),
-        _PolicySection(t['policyDataSecurity']!, t['policyDataSecurityDetail']!, Icons.lock_outline),
-        _PolicySection(t['policyYourRights']!, t['policyYourRightsDetail']!, Icons.verified_user_outlined),
+        _PolicySection(t['policyInfoWeCollect']!, t['policyInfoCollectDetail']!,
+            Icons.info_outline),
+        _PolicySection(t['policyHowWeUse']!, t['policyHowWeUseDetail']!,
+            Icons.settings_outlined),
+        _PolicySection(t['policyDataSecurity']!, t['policyDataSecurityDetail']!,
+            Icons.lock_outline),
+        _PolicySection(t['policyYourRights']!, t['policyYourRightsDetail']!,
+            Icons.verified_user_outlined),
         _PolicySection(
           t['contactInfo']!,
           'Email: $EMAIL\nPhone: $PHONE_NO',
@@ -1094,6 +1161,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ],
     );
   }
+
   void _showPolicyBottomSheet({
     required String title,
     required IconData icon,
@@ -1142,7 +1210,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             color: const Color(0xFFE8F0FB),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(icon, color: const Color(0xFF1D4888), size: 24),
+                          child: Icon(icon,
+                              color: const Color(0xFF1D4888), size: 24),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -1160,7 +1229,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               const SizedBox(height: 2),
                               Text(
                                 t['lastUpdated']!,
-                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey),
                               ),
                             ],
                           ),
@@ -1203,7 +1273,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               color: const Color(0xFFE8F0FB),
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Icon(s.icon, color: const Color(0xFF1D4888), size: 18),
+                            child: Icon(s.icon,
+                                color: const Color(0xFF1D4888), size: 18),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -1242,8 +1313,6 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-
-
 }
 
 // ── Add this class above SettingsPage ────────────────────────────────────
@@ -1256,9 +1325,6 @@ class _PolicySection {
 }
 
 // ── Add this method inside _SettingsPageState ─────────────────────────────
-
-
-
 
 class AboutPageArguments {
   final String title;

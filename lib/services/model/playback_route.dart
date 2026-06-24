@@ -20,26 +20,25 @@ class PlayBackRoute extends Object {
   int? status;
   dynamic all_data;
 
-  PlayBackRoute({
-    this.id,
-    this.device_id,
-    this.latitude,
-    this.longitude,
-    this.course,
-    this.raw_time,
-    this.speed,
-    this.show,
-    this.left,
-    this.time,
-    this.distance,
-    this.fuel_consumption,
-    this.top_speed,
-    this.average_speed,
-    this.engine_hours,
-    this.speedType,
-    this.status,
-    this.all_data
-  });
+  PlayBackRoute(
+      {this.id,
+      this.device_id,
+      this.latitude,
+      this.longitude,
+      this.course,
+      this.raw_time,
+      this.speed,
+      this.show,
+      this.left,
+      this.time,
+      this.distance,
+      this.fuel_consumption,
+      this.top_speed,
+      this.average_speed,
+      this.engine_hours,
+      this.speedType,
+      this.status,
+      this.all_data});
 
   PlayBackRoute.fromJson(Map<String, dynamic> json) {
     id = json["id"];
@@ -63,23 +62,23 @@ class PlayBackRoute extends Object {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'device_id': device_id,
-    'latitude': latitude,
-    'longitude': longitude,
-    'course': course,
-    'raw_time': raw_time,
-    'speed': speed,
-    'show': show,
-    'left': left,
-    'time': time,
-    'distance': distance,
-    'fuel_consumption': fuel_consumption,
-    'top_speed': top_speed,
-    'average_speed': average_speed,
-    'engine_hours': engine_hours,
-    'speedType': speedType,
-    'status': status,
-    'all_data': all_data
-  };
+        'id': id,
+        'device_id': device_id,
+        'latitude': latitude,
+        'longitude': longitude,
+        'course': course,
+        'raw_time': raw_time,
+        'speed': speed,
+        'show': show,
+        'left': left,
+        'time': time,
+        'distance': distance,
+        'fuel_consumption': fuel_consumption,
+        'top_speed': top_speed,
+        'average_speed': average_speed,
+        'engine_hours': engine_hours,
+        'speedType': speedType,
+        'status': status,
+        'all_data': all_data
+      };
 }

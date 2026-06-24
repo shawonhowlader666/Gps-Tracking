@@ -45,13 +45,13 @@ class _EventsPageState extends State<EventsPage> {
             ),
           ),
           Obx(() => Text(
-            '${controller.events.length} ${'notifications'.tr}',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              color: Colors.grey[500],
-            ),
-          )),
+                '${controller.events.length} ${'notifications'.tr}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.grey[500],
+                ),
+              )),
         ],
       ),
       actions: [
@@ -79,7 +79,6 @@ class _EventsPageState extends State<EventsPage> {
         // )
       ],
     );
-
   }
 
   Widget _buildEventsList() {
@@ -176,7 +175,8 @@ class _EventsPageState extends State<EventsPage> {
               ),
               elevation: 0,
             ),
-            child: const Text('Clear All', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('Clear All', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -419,7 +419,9 @@ class _SwipeableEventCard extends StatelessWidget {
   _EventStyle _getEventStyle(String message) {
     message = message.toLowerCase();
 
-    if (message.contains('alarm') || message.contains('sos') || message.contains('alert')) {
+    if (message.contains('alarm') ||
+        message.contains('sos') ||
+        message.contains('alert')) {
       return _EventStyle(
         icon: Icons.warning_amber_rounded,
         color: const Color(0xFFF64A46),

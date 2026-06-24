@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,12 +6,15 @@ import 'package:get/get.dart';
 import 'package:smart_lock/screens/lock_unlock_screen.dart';
 import 'package:smart_lock/screens/playback.dart';
 import 'package:smart_lock/screens/track_device.dart';
+import 'package:smart_lock/screens/DeviceSettingPage.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 import 'package:smart_lock/widgets/address.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:smart_lock/storage/user_repository.dart';
 import 'package:smart_lock/widgets/device_expired_dialog.dart';
+import 'package:smart_lock/util/util.dart';
+import 'package:smart_lock/screens/data_controller/data_controller.dart';
 
 class DeviceDetailsScreen extends StatefulWidget {
   final DeviceItem device;
@@ -30,10 +34,36 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
 
   late Rx<DeviceItem> _device;
 
+  StreamSubscription? _onlyDevicesSubscription;
+
   @override
   void initState() {
     super.initState();
     _device = widget.device.obs;
+
+    try {
+      if (Get.isRegistered<DataController>()) {
+        final DataController controller = Get.find<DataController>();
+        _onlyDevicesSubscription = controller.onlyDevices.listen((devices) {
+          if (mounted) {
+            for (var element in devices) {
+              if (element.id == widget.device.id) {
+                _device.value = element;
+                break;
+              }
+            }
+          }
+        });
+      }
+    } catch (e) {
+      print('Error subscribing to onlyDevices in details screen: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _onlyDevicesSubscription?.cancel();
+    super.dispose();
   }
 
   // ── Status helpers ──────────────────────────────────────────────────────
@@ -47,7 +77,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
     if (d.timestamp != null && d.timestamp! > 0) {
       try {
         final lastUpdate =
-        DateTime.fromMillisecondsSinceEpoch(d.timestamp! * 1000);
+            DateTime.fromMillisecondsSinceEpoch(d.timestamp! * 1000);
         return DateTime.now().difference(lastUpdate).inMinutes < 5;
       } catch (_) {
         return false;
@@ -57,6 +87,16 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
   }
 
   bool _isEngineOn(DeviceItem d) {
+    // Check local override first
+    final devId = d.id;
+    if (devId != null) {
+      final engineOverride = DataController.getLocalEngineOverride(devId);
+      if (engineOverride != null) {
+        return ['on', '1', 'true', 'ign on', 'engine on', 'acc on']
+            .contains(engineOverride.toLowerCase().trim());
+      }
+    }
+
     final speed = double.tryParse(d.speed.toString()) ?? 0;
     if (speed > 0) return true;
     if (d.engineStatus != null) {
@@ -134,8 +174,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
     return false;
   }
 
-  String _getLockStatus(DeviceItem d) =>
-      _isUnlocked(d) ? 'Unlocked' : 'Locked';
+  String _getLockStatus(DeviceItem d) => _isUnlocked(d) ? 'Unlocked' : 'Locked';
 
   Color _getLockColor(DeviceItem d) => _isUnlocked(d) ? _green : _red;
 
@@ -148,7 +187,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
     if (date == null) return 'N/A';
     if (date is String && date.isNotEmpty) {
       try {
-        return DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.parse(date));
+        return Util.formatTime(date);
       } catch (_) {
         return date;
       }
@@ -258,7 +297,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
   // ── FIX: LockUnlockScreen এখন DeviceItem return করে, LockUnlockResult নয় ──
   void _openLockUnlock(DeviceItem d) async {
     final result = await Get.to<DeviceItem>(
-          () => LockUnlockScreen(device: d),
+      () => LockUnlockScreen(device: d),
     );
     if (result != null && mounted) {
       _device.value = result;
@@ -328,20 +367,18 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                 label: 'Device Icons',
                 value: '',
                 hasChevron: true,
-                customTrailing: d.icon?.path != null
-                    ? Padding(
+                customTrailing: Padding(
                   padding: const EdgeInsets.only(right: 4),
-                  child: CachedNetworkImage(
-                    imageUrl:
-                    "${UserRepository.getServerUrl()}/${d.icon!.path!}",
-                    width: 28,
-                    height: 28,
-                    errorWidget: (_, __, ___) =>
-                    const SizedBox.shrink(),
+                  child: Util.getVehicleIconWidget(
+                    d.icon?.path,
+                    Colors.grey,
+                    size: 28,
+                    iconType: d.icon?.type ?? d.iconType,
+                    deviceName: d.name,
+                    deviceId: d.id,
                   ),
-                )
-                    : null,
-                onTap: () {},
+                ),
+                onTap: () => Get.to(() => DeviceSettingPage(device: d)),
               ),
             ]),
 
@@ -386,8 +423,8 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                 value: d.deviceData?.updatedAt != null
                     ? _formatDate(d.deviceData!.updatedAt!)
                     : (d.timestamp != null
-                    ? _formatTimestamp(d.timestamp!)
-                    : 'N/A'),
+                        ? _formatTimestamp(d.timestamp!)
+                        : 'N/A'),
               ),
               _Row(
                 icon: Icons.storage_outlined,
@@ -501,7 +538,10 @@ class _SensorsSection extends StatelessWidget {
   bool _isValidSensorValue(String? val) {
     if (val == null) return false;
     final clean = val.trim();
-    if (clean.isEmpty || clean == '-' || clean.toLowerCase() == 'n/a' || clean.toLowerCase() == 'null') {
+    if (clean.isEmpty ||
+        clean == '-' ||
+        clean.toLowerCase() == 'n/a' ||
+        clean.toLowerCase() == 'null') {
       return false;
     }
     return true;
@@ -516,7 +556,33 @@ class _SensorsSection extends StatelessWidget {
       displayName = 'Engine Status';
     }
 
-    final cacheKey = 'sensor_${devId ?? 'unknown'}_${displayName.toLowerCase().replaceAll(' ', '_')}';
+    // Check if there's an active override in DataController for this device and sensor type
+    if (devId != null) {
+      final int? devIdInt = int.tryParse(devId.toString());
+      if (devIdInt != null) {
+        final cleanLower = displayName.toLowerCase();
+        if (cleanLower.contains('engine') ||
+            cleanLower.contains('ignition') ||
+            cleanLower.contains('acc')) {
+          final String? engineOverride =
+              DataController.getLocalEngineOverride(devIdInt);
+          if (engineOverride != null) {
+            return engineOverride.toLowerCase() == 'off' ? 'Off' : 'On';
+          }
+        } else if (cleanLower.contains('lock')) {
+          final String? lockOverride =
+              DataController.getLocalLockOverride(devIdInt);
+          if (lockOverride != null) {
+            return lockOverride.toLowerCase() == 'locked'
+                ? 'Locked'
+                : 'Unlocked';
+          }
+        }
+      }
+    }
+
+    final cacheKey =
+        'sensor_${devId ?? 'unknown'}_${displayName.toLowerCase().replaceAll(' ', '_')}';
 
     if (_isValidSensorValue(currentValue)) {
       final valStr = currentValue!.trim();
@@ -686,8 +752,7 @@ class _SensorsSection extends StatelessWidget {
             final sensorMap = sensors[i];
 
             final type = (sensorMap['type'] ?? '').toString();
-            final rawName =
-            (sensorMap['name'] ?? 'Sensor ${i + 1}').toString();
+            final rawName = (sensorMap['name'] ?? 'Sensor ${i + 1}').toString();
 
             // Correct the Engine Statust typo
             String displayName = rawName;
@@ -695,15 +760,15 @@ class _SensorsSection extends StatelessWidget {
               displayName = 'Engine Status';
             }
 
-            final rawValue = sensorMap['value'] != null ? sensorMap['value'].toString() : '';
+            final rawValue =
+                sensorMap['value'] != null ? sensorMap['value'].toString() : '';
             final value = _getSensorValue(deviceId, displayName, rawValue);
 
             final formatted = _formatSensorValue(value, type, displayName);
-            final unit = (formatted == 'ON' ||
-                formatted == 'OFF' ||
-                formatted == 'N/A')
-                ? ''
-                : _getUnit(type, displayName);
+            final unit =
+                (formatted == 'ON' || formatted == 'OFF' || formatted == 'N/A')
+                    ? ''
+                    : _getUnit(type, displayName);
 
             return Column(
               children: [
@@ -794,7 +859,7 @@ class _Row extends StatelessWidget {
             Expanded(
               child: Text(label,
                   style:
-                  const TextStyle(fontSize: 14, color: Color(0xFF222222))),
+                      const TextStyle(fontSize: 14, color: Color(0xFF222222))),
             ),
             if (customTrailing != null) customTrailing!,
             if (value.isNotEmpty)
@@ -873,12 +938,10 @@ class _ActionButton extends StatelessWidget {
           foregroundColor: color,
           side: BorderSide(color: color, width: 1.5),
           padding: const EdgeInsets.symmetric(vertical: 13),
-          shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: Text(label,
-            style:
-            const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
       );
     }
     return ElevatedButton(
@@ -888,8 +951,7 @@ class _ActionButton extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 13),
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       child: Text(label,
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),

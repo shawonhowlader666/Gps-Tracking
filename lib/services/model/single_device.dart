@@ -1,4 +1,3 @@
-
 class SingleDevice extends Object {
   dynamic device_id;
   Map<String, dynamic>? engine_hours;
@@ -7,7 +6,7 @@ class SingleDevice extends Object {
   Map<String, dynamic>? sensor_groups;
   Map<String, dynamic>? item;
   Map<String, dynamic>? device_fuel_measurements;
-  List<Map<String, dynamic>>? device_icons; 
+  List<Map<String, dynamic>>? device_icons;
   Map<String, dynamic>? sensors;
   Map<String, dynamic>? services;
   Map<String, dynamic>? expiration_date_select;

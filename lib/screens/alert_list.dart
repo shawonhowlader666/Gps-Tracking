@@ -45,17 +45,33 @@ class _AlertListPageState extends State<AlertListPage> {
   // Alert Types Configuration
   final List<Map<String, dynamic>> alertTypes = [
     {"name": "Over Speed", "icon": Icons.speed, "value": "overspeed"},
-    {"name": "Stop Duration", "icon": Icons.stop_circle_outlined, "value": "stop_duration"},
+    {
+      "name": "Stop Duration",
+      "icon": Icons.stop_circle_outlined,
+      "value": "stop_duration"
+    },
     {"name": "Offline", "icon": Icons.wifi_off, "value": "offline_duration"},
     {"name": "Ignition", "icon": Icons.key, "value": "ignition_duration"},
     {"name": "Idle", "icon": Icons.timer_outlined, "value": "idle_duration"},
     {"name": "Geofence In", "icon": Icons.login, "value": "geofence_in"},
     {"name": "Geofence Out", "icon": Icons.logout, "value": "geofence_out"},
     {"name": "In/Out", "icon": Icons.swap_horiz, "value": "geofence_inout"},
-    {"name": "Movement", "icon": Icons.play_arrow, "value": "start_of_movement"},
+    {
+      "name": "Movement",
+      "icon": Icons.play_arrow,
+      "value": "start_of_movement"
+    },
     {"name": "SOS", "icon": Icons.sos, "value": "sos"},
-    {"name": "Fuel", "icon": Icons.local_gas_station, "value": "fuel_fill_theft"},
-    {"name": "Driver", "icon": Icons.person_off, "value": "driver_change_unauthorized"},
+    {
+      "name": "Fuel",
+      "icon": Icons.local_gas_station,
+      "value": "fuel_fill_theft"
+    },
+    {
+      "name": "Driver",
+      "icon": Icons.person_off,
+      "value": "driver_change_unauthorized"
+    },
   ];
 
   @override
@@ -170,11 +186,12 @@ class _AlertListPageState extends State<AlertListPage> {
     APIService.activateAlert(requestBody).then((value) {
       if (mounted && value.statusCode == 200) {
         _showSnackBar('Alert activated');
-        
+
         // SinoTrack overspeed hardware enable
         if (alert.type == 'overspeed' && alert.devices != null) {
           String speedVal = '80'; // Fallback speed limit
-          if (alert.overspeed != null && alert.overspeed.toString().trim().isNotEmpty) {
+          if (alert.overspeed != null &&
+              alert.overspeed.toString().trim().isNotEmpty) {
             speedVal = alert.overspeed.toString().trim();
           } else if (alert.name != null) {
             final match = RegExp(r'\d+').firstMatch(alert.name!);
@@ -200,7 +217,7 @@ class _AlertListPageState extends State<AlertListPage> {
             }
           }
         }
-        
+
         getAlerts();
       } else {
         _showSnackBar('Failed to activate', isError: true);
@@ -219,7 +236,7 @@ class _AlertListPageState extends State<AlertListPage> {
     APIService.activateAlert(requestBody).then((value) {
       if (mounted && value.statusCode == 200) {
         _showSnackBar('Alert deactivated');
-        
+
         // SinoTrack overspeed hardware disable
         if (alert.type == 'overspeed' && alert.devices != null) {
           for (var device in alert.devices!) {
@@ -239,7 +256,7 @@ class _AlertListPageState extends State<AlertListPage> {
             }
           }
         }
-        
+
         getAlerts();
       } else {
         _showSnackBar('Failed to deactivate', isError: true);
@@ -268,7 +285,8 @@ class _AlertListPageState extends State<AlertListPage> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: _primaryRed,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
@@ -282,9 +300,11 @@ class _AlertListPageState extends State<AlertListPage> {
     APIService.destroyAlert(id).then((value) {
       if (mounted) {
         _showSnackBar('Alert deleted');
-        
+
         // SinoTrack overspeed hardware disable
-        if (alert != null && alert.type == 'overspeed' && alert.devices != null) {
+        if (alert != null &&
+            alert.type == 'overspeed' &&
+            alert.devices != null) {
           for (var device in alert.devices!) {
             String? devId;
             if (device is Map) {
@@ -302,7 +322,7 @@ class _AlertListPageState extends State<AlertListPage> {
             }
           }
         }
-        
+
         getAlerts();
       }
     }).catchError((e) {
@@ -319,7 +339,8 @@ class _AlertListPageState extends State<AlertListPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade600, size: 24),
+            Icon(Icons.warning_amber_rounded,
+                color: Colors.orange.shade600, size: 24),
             const SizedBox(width: 12),
             const Text('Required Fields', style: TextStyle(fontSize: 16)),
           ],
@@ -329,15 +350,17 @@ class _AlertListPageState extends State<AlertListPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ...errors.map((error) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                children: [
-                  Icon(Icons.circle, size: 6, color: _primaryRed),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(error, style: const TextStyle(fontSize: 13))),
-                ],
-              ),
-            )),
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(Icons.circle, size: 6, color: _primaryRed),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: Text(error,
+                              style: const TextStyle(fontSize: 13))),
+                    ],
+                  ),
+                )),
           ],
         ),
         actions: [
@@ -345,7 +368,8 @@ class _AlertListPageState extends State<AlertListPage> {
             onPressed: () => Navigator.pop(context),
             style: ElevatedButton.styleFrom(
               backgroundColor: _primaryRed,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text('OK', style: TextStyle(color: Colors.white)),
           ),
@@ -359,7 +383,8 @@ class _AlertListPageState extends State<AlertListPage> {
 
     if (_nameCtl.text.trim().isEmpty) errors.add('Alert Name is required');
     if (selectedType.isEmpty) errors.add('Alert Type must be selected');
-    if (selectedDevices.isEmpty) errors.add('At least one Device must be selected');
+    if (selectedDevices.isEmpty)
+      errors.add('At least one Device must be selected');
     if (_needsValueInput() && _typeCtl.text.trim().isEmpty) {
       errors.add('${_getValueLabel()} is required');
     }
@@ -380,7 +405,7 @@ class _AlertListPageState extends State<AlertListPage> {
       if (mounted) {
         if (value.statusCode == 200) {
           _showSnackBar('Alert created successfully');
-          
+
           // SinoTrack overspeed hardware enable
           if (selectedType == 'overspeed') {
             final speedVal = _typeCtl.text.trim();
@@ -397,7 +422,7 @@ class _AlertListPageState extends State<AlertListPage> {
               });
             }
           }
-          
+
           _resetForm();
           getAlerts();
         } else {
@@ -440,12 +465,18 @@ class _AlertListPageState extends State<AlertListPage> {
 
   String _getParameterName() {
     switch (selectedType) {
-      case 'overspeed': return 'overspeed';
-      case 'stop_duration': return 'stop_duration';
-      case 'offline_duration': return 'offline_duration';
-      case 'ignition_duration': return 'ignition_duration';
-      case 'idle_duration': return 'idle_duration';
-      default: return selectedType;
+      case 'overspeed':
+        return 'overspeed';
+      case 'stop_duration':
+        return 'stop_duration';
+      case 'offline_duration':
+        return 'offline_duration';
+      case 'ignition_duration':
+        return 'ignition_duration';
+      case 'idle_duration':
+        return 'idle_duration';
+      default:
+        return selectedType;
     }
   }
 
@@ -628,7 +659,9 @@ class _AlertListPageState extends State<AlertListPage> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: isActive ? _primaryRed.withValues(alpha: 0.1) : Colors.grey.shade100,
+                color: isActive
+                    ? _primaryRed.withValues(alpha: 0.1)
+                    : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
@@ -657,7 +690,8 @@ class _AlertListPageState extends State<AlertListPage> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: _primaryRed.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
@@ -675,7 +709,8 @@ class _AlertListPageState extends State<AlertListPage> {
                       // Parameter detail tag
                       if (_getAlertParamDetail(alert) != null) ...[
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: Colors.grey.shade100,
                             borderRadius: BorderRadius.circular(4),
@@ -720,9 +755,11 @@ class _AlertListPageState extends State<AlertListPage> {
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: () => deleteAlert(alert.id!),
-                  icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 20),
+                  icon: Icon(Icons.delete_outline,
+                      color: Colors.red.shade400, size: 20),
                 ),
               ],
             ),
@@ -736,19 +773,34 @@ class _AlertListPageState extends State<AlertListPage> {
     String normalizedType = type.toLowerCase().replaceAll(' ', '_');
 
     switch (normalizedType) {
-      case 'overspeed': case 'over_speed': return Icons.speed;
-      case 'stop_duration': return Icons.stop_circle_outlined;
-      case 'offline_duration': return Icons.wifi_off;
-      case 'ignition_duration': return Icons.key;
-      case 'idle_duration': return Icons.timer_outlined;
-      case 'geofence_in': return Icons.login;
-      case 'geofence_out': return Icons.logout;
-      case 'geofence_inout': return Icons.swap_horiz;
-      case 'start_of_movement': return Icons.play_arrow;
-      case 'sos': return Icons.sos;
-      case 'fuel_fill_theft': case 'fuel(fill/theft)': return Icons.local_gas_station;
-      case 'driver_change_unauthorized': return Icons.person_off;
-      default: return Icons.notifications;
+      case 'overspeed':
+      case 'over_speed':
+        return Icons.speed;
+      case 'stop_duration':
+        return Icons.stop_circle_outlined;
+      case 'offline_duration':
+        return Icons.wifi_off;
+      case 'ignition_duration':
+        return Icons.key;
+      case 'idle_duration':
+        return Icons.timer_outlined;
+      case 'geofence_in':
+        return Icons.login;
+      case 'geofence_out':
+        return Icons.logout;
+      case 'geofence_inout':
+        return Icons.swap_horiz;
+      case 'start_of_movement':
+        return Icons.play_arrow;
+      case 'sos':
+        return Icons.sos;
+      case 'fuel_fill_theft':
+      case 'fuel(fill/theft)':
+        return Icons.local_gas_station;
+      case 'driver_change_unauthorized':
+        return Icons.person_off;
+      default:
+        return Icons.notifications;
     }
   }
 
@@ -764,7 +816,8 @@ class _AlertListPageState extends State<AlertListPage> {
       onPressed: () => _showAddAlertBottomSheet(),
       backgroundColor: _primaryRed,
       icon: const Icon(Icons.add, color: Colors.white),
-      label: const Text('Add Alert', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      label: const Text('Add Alert',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
     );
   }
 
@@ -824,7 +877,8 @@ class _AlertListPageState extends State<AlertListPage> {
                         const Expanded(
                           child: Text(
                             'Create Alert',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w600),
                           ),
                         ),
                         IconButton(
@@ -844,7 +898,9 @@ class _AlertListPageState extends State<AlertListPage> {
                       padding: const EdgeInsets.all(20),
                       children: [
                         // Alert Name
-                        const Text('Alert Name *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        const Text('Alert Name *',
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 8),
                         _buildTextField(
                           controller: _nameCtl,
@@ -855,14 +911,18 @@ class _AlertListPageState extends State<AlertListPage> {
                         const SizedBox(height: 20),
 
                         // Alert Type
-                        const Text('Alert Type *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        const Text('Alert Type *',
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 12),
                         _buildAlertTypeGrid(setSheetState),
 
                         // Value Input
                         if (_needsValueInput()) ...[
                           const SizedBox(height: 20),
-                          Text('${_getValueLabel()} *', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          Text('${_getValueLabel()} *',
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
                           _buildTextField(
                             controller: _typeCtl,
@@ -875,7 +935,9 @@ class _AlertListPageState extends State<AlertListPage> {
                         // Geofence Selection
                         if (_isGeofenceType()) ...[
                           const SizedBox(height: 20),
-                          Text('Geofences * (${selectedFenceList.length})', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          Text('Geofences * (${selectedFenceList.length})',
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 12),
                           _buildGeofenceSelector(setSheetState),
                         ],
@@ -883,7 +945,9 @@ class _AlertListPageState extends State<AlertListPage> {
                         const SizedBox(height: 20),
 
                         // Device Selection
-                        Text('Devices * (${selectedDevices.length})', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        Text('Devices * (${selectedDevices.length})',
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 12),
                         _buildDeviceList(setSheetState),
 
@@ -914,10 +978,13 @@ class _AlertListPageState extends State<AlertListPage> {
                             backgroundColor: _primaryRed,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                             elevation: 0,
                           ),
-                          child: const Text('Save Alert', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                          child: const Text('Save Alert',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w600)),
                         ),
                       ),
                     ),
@@ -1032,7 +1099,8 @@ class _AlertListPageState extends State<AlertListPage> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Center(
-          child: Text('No geofences available', style: TextStyle(color: _greyText)),
+          child: Text('No geofences available',
+              style: TextStyle(color: _greyText)),
         ),
       );
     }
@@ -1044,11 +1112,14 @@ class _AlertListPageState extends State<AlertListPage> {
       ),
       child: Column(
         children: fenceList.map((fence) {
-          final isSelected = selectedFenceList.contains("geofences[]=${fence.id}");
+          final isSelected =
+              selectedFenceList.contains("geofences[]=${fence.id}");
 
           return ListTile(
-            leading: Icon(Icons.fence, color: isSelected ? _primaryRed : _greyText, size: 20),
-            title: Text(fence.name ?? 'Unnamed Geofence', style: const TextStyle(fontSize: 14)),
+            leading: Icon(Icons.fence,
+                color: isSelected ? _primaryRed : _greyText, size: 20),
+            title: Text(fence.name ?? 'Unnamed Geofence',
+                style: const TextStyle(fontSize: 14)),
             trailing: Checkbox(
               value: isSelected,
               onChanged: (val) {
@@ -1086,7 +1157,8 @@ class _AlertListPageState extends State<AlertListPage> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Center(
-          child: Text('No devices available', style: TextStyle(color: _greyText)),
+          child:
+              Text('No devices available', style: TextStyle(color: _greyText)),
         ),
       );
     }
@@ -1101,9 +1173,11 @@ class _AlertListPageState extends State<AlertListPage> {
           // Select All
           ListTile(
             leading: const Icon(Icons.select_all, size: 20),
-            title: const Text('Select All', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            title: const Text('Select All',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
             trailing: Checkbox(
-              value: selectedDevices.length == devicesList.length && devicesList.isNotEmpty,
+              value: selectedDevices.length == devicesList.length &&
+                  devicesList.isNotEmpty,
               onChanged: (val) {
                 setSheetState(() {
                   if (val!) {
@@ -1133,11 +1207,14 @@ class _AlertListPageState extends State<AlertListPage> {
           ),
           const Divider(height: 1),
           ...devicesList.map((device) {
-            final isSelected = selectedDevices.contains("devices[]=${device.id}");
+            final isSelected =
+                selectedDevices.contains("devices[]=${device.id}");
 
             return ListTile(
-              leading: Icon(Icons.directions_car, color: isSelected ? _primaryRed : _greyText, size: 20),
-              title: Text(device.name ?? 'Unknown', style: const TextStyle(fontSize: 14)),
+              leading: Icon(Icons.directions_car,
+                  color: isSelected ? _primaryRed : _greyText, size: 20),
+              title: Text(device.name ?? 'Unknown',
+                  style: const TextStyle(fontSize: 14)),
               trailing: Checkbox(
                 value: isSelected,
                 onChanged: (val) {
@@ -1179,23 +1256,35 @@ class _AlertListPageState extends State<AlertListPage> {
 
   String _getValueLabel() {
     switch (selectedType) {
-      case 'overspeed': return 'Speed (km/h)';
-      case 'stop_duration': return 'Duration (min)';
-      case 'offline_duration': return 'Duration (min)';
-      case 'ignition_duration': return 'Duration (min)';
-      case 'idle_duration': return 'Duration (min)';
-      default: return 'Value';
+      case 'overspeed':
+        return 'Speed (km/h)';
+      case 'stop_duration':
+        return 'Duration (min)';
+      case 'offline_duration':
+        return 'Duration (min)';
+      case 'ignition_duration':
+        return 'Duration (min)';
+      case 'idle_duration':
+        return 'Duration (min)';
+      default:
+        return 'Value';
     }
   }
 
   String _getValueHint() {
     switch (selectedType) {
-      case 'overspeed': return 'e.g., 80';
-      case 'stop_duration': return 'e.g., 15';
-      case 'offline_duration': return 'e.g., 30';
-      case 'ignition_duration': return 'e.g., 10';
-      case 'idle_duration': return 'e.g., 20';
-      default: return 'Enter value';
+      case 'overspeed':
+        return 'e.g., 80';
+      case 'stop_duration':
+        return 'e.g., 15';
+      case 'offline_duration':
+        return 'e.g., 30';
+      case 'ignition_duration':
+        return 'e.g., 10';
+      case 'idle_duration':
+        return 'e.g., 20';
+      default:
+        return 'Enter value';
     }
   }
 }

@@ -78,11 +78,9 @@ class _DeviceInfoState extends State<DeviceInfo> {
     drivingHours = ("sharedLoading").tr;
     fuel = ("sharedLoading").tr;
     if (prefs!.get("totalDistance-${args!.id}") != null) {
-      totalDistance =
-          prefs!.getString("totalDistance-${args!.id}")!;
+      totalDistance = prefs!.getString("totalDistance-${args!.id}")!;
       maxSpeed = prefs!.getString("maxSpeed-${args!.id}")!;
-      drivingHours =
-          prefs!.getString("drivingHours-${args!.id}")!;
+      drivingHours = prefs!.getString("drivingHours-${args!.id}")!;
       if (prefs!.getString("fuel-${args!.id}") != null) {
         fuel = prefs!.getString("fuel-${args!.id}")!;
       } else {
@@ -138,12 +136,9 @@ class _DeviceInfoState extends State<DeviceInfo> {
               else
                 {fuel = "0"},
               print("------------------$totalDistance"),
-              prefs!.setString(
-                  "totalDistance-${args!.id}", totalDistance),
-              prefs!
-                  .setString("maxSpeed-${args!.id}", maxSpeed),
-              prefs!.setString(
-                  "drivingHours-${args!.id}", drivingHours),
+              prefs!.setString("totalDistance-${args!.id}", totalDistance),
+              prefs!.setString("maxSpeed-${args!.id}", maxSpeed),
+              prefs!.setString("drivingHours-${args!.id}", drivingHours),
               setState(() {})
             });
 

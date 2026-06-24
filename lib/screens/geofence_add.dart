@@ -105,8 +105,13 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
               device.lat != null &&
               device.lng != null) {
             try {
-              BitmapDescriptor markerIcon =
-              await Util.getMarkerIcon(device.icon?.path ?? '');
+              BitmapDescriptor markerIcon = await Util.getMarkerIcon(
+                device.icon?.path ?? '',
+                statusColor: device.iconColor,
+                iconType: device.icon?.type ?? device.iconType,
+                deviceName: device.name,
+                deviceId: device.id,
+              );
 
               _markers.add(Marker(
                 markerId: MarkerId(device.id.toString()),
@@ -116,6 +121,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                 ),
                 icon: markerIcon,
                 rotation: double.tryParse(device.course.toString()) ?? 0,
+                anchor: const Offset(0.5, 0.5),
+                flat: true,
                 onTap: () => _toggleDeviceSelection(device),
               ));
             } catch (e) {
@@ -215,7 +222,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
       _polygons.clear();
       _showControlPanel = false;
       _selectedDevices.clear();
-      _markers.removeWhere((m) => m.markerId.value.startsWith('polygon_point_'));
+      _markers
+          .removeWhere((m) => m.markerId.value.startsWith('polygon_point_'));
     });
   }
 
@@ -244,9 +252,10 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
-          final list = _searchResult.isNotEmpty || _searchController.text.isNotEmpty
-              ? _searchResult
-              : _devicesList;
+          final list =
+              _searchResult.isNotEmpty || _searchController.text.isNotEmpty
+                  ? _searchResult
+                  : _devicesList;
 
           return Container(
             height: MediaQuery.of(context).size.height * 0.6,
@@ -272,7 +281,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Row(
                     children: [
-                      Icon(Icons.directions_car, color: CustomColor.primary, size: 22),
+                      Icon(Icons.directions_car,
+                          color: CustomColor.primary, size: 22),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -308,7 +318,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                           ),
                           child: Text(
                             'Clear',
-                            style: TextStyle(color: Colors.red[400], fontSize: 13),
+                            style:
+                                TextStyle(color: Colors.red[400], fontSize: 13),
                           ),
                         ),
                       const SizedBox(width: 8),
@@ -320,7 +331,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                             color: Colors.grey[100],
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(Icons.close, size: 18, color: Colors.grey[600]),
+                          child: Icon(Icons.close,
+                              size: 18, color: Colors.grey[600]),
                         ),
                       ),
                     ],
@@ -329,7 +341,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
 
                 // Search bar
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: TextField(
                     controller: _searchController,
                     onChanged: (text) {
@@ -339,21 +352,25 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                     style: const TextStyle(fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Search vehicle...',
-                      hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
-                      prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 20),
+                      hintStyle:
+                          TextStyle(fontSize: 13, color: Colors.grey[400]),
+                      prefixIcon:
+                          Icon(Icons.search, color: Colors.grey[400], size: 20),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? GestureDetector(
-                        onTap: () {
-                          _searchController.clear();
-                          _onSearchChanged('');
-                          setModalState(() {});
-                        },
-                        child: Icon(Icons.clear, size: 18, color: Colors.grey[400]),
-                      )
+                              onTap: () {
+                                _searchController.clear();
+                                _onSearchChanged('');
+                                setModalState(() {});
+                              },
+                              child: Icon(Icons.clear,
+                                  size: 18, color: Colors.grey[400]),
+                            )
                           : null,
                       filled: true,
                       fillColor: Colors.grey[100],
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 0, horizontal: 16),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
@@ -368,99 +385,119 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                 Expanded(
                   child: list.isEmpty
                       ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.search_off, size: 40, color: Colors.grey[300]),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No vehicles found',
-                          style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  )
-                      : ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: list.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1, indent: 60),
-                    itemBuilder: (context, index) {
-                      final device = list[index];
-                      final isActive = device.deviceData?.active.toString() == "1";
-                      final isSelected = _selectedDevices.any((d) => d.id == device.id);
-
-                      Color statusColor = device.iconColor == "green"
-                          ? Colors.green
-                          : device.iconColor == "yellow"
-                          ? Colors.orange
-                          : Colors.red;
-
-                      return ListTile(
-                        dense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                        onTap: isActive
-                            ? () {
-                          _toggleDeviceSelection(device);
-                          setModalState(() {});
-                        }
-                            : null,
-                        leading: Stack(
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? CustomColor.primary.withValues(alpha: 0.15)
-                                    : Colors.grey[100],
-                                borderRadius: BorderRadius.circular(8),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.search_off,
+                                  size: 40, color: Colors.grey[300]),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No vehicles found',
+                                style: TextStyle(
+                                    color: Colors.grey[500], fontSize: 14),
                               ),
-                              child: Icon(
-                                Icons.directions_car,
-                                size: 20,
-                                color: isActive ? statusColor : Colors.grey[400],
-                              ),
-                            ),
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: isActive ? statusColor : Colors.grey,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 1.5),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        title: Text(
-                          device.name ?? 'Unknown',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                            color: isActive ? Colors.grey[800] : Colors.grey[400],
+                            ],
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: list.length,
+                          separatorBuilder: (_, __) =>
+                              const Divider(height: 1, indent: 60),
+                          itemBuilder: (context, index) {
+                            final device = list[index];
+                            final isActive =
+                                device.deviceData?.active.toString() == "1";
+                            final isSelected =
+                                _selectedDevices.any((d) => d.id == device.id);
+
+                            Color statusColor = device.iconColor == "green"
+                                ? Colors.green
+                                : device.iconColor == "yellow"
+                                    ? Colors.orange
+                                    : Colors.red;
+
+                            return ListTile(
+                              dense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 2),
+                              onTap: isActive
+                                  ? () {
+                                      _toggleDeviceSelection(device);
+                                      setModalState(() {});
+                                    }
+                                  : null,
+                              leading: Stack(
+                                children: [
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? CustomColor.primary
+                                              .withValues(alpha: 0.15)
+                                          : Colors.grey[100],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.directions_car,
+                                      size: 20,
+                                      color: isActive
+                                          ? statusColor
+                                          : Colors.grey[400],
+                                    ),
+                                  ),
+                                  Positioned(
+                                    right: 0,
+                                    bottom: 0,
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: isActive
+                                            ? statusColor
+                                            : Colors.grey,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: Colors.white, width: 1.5),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              title: Text(
+                                device.name ?? 'Unknown',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                                  color: isActive
+                                      ? Colors.grey[800]
+                                      : Colors.grey[400],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: isSelected
+                                  ? Icon(Icons.check_circle,
+                                      color: CustomColor.primary, size: 22)
+                                  : Icon(
+                                      Icons.circle_outlined,
+                                      size: 22,
+                                      color: isActive
+                                          ? Colors.grey[300]
+                                          : Colors.grey[200],
+                                    ),
+                            );
+                          },
                         ),
-                        trailing: isSelected
-                            ? Icon(Icons.check_circle, color: CustomColor.primary, size: 22)
-                            : Icon(
-                          Icons.circle_outlined,
-                          size: 22,
-                          color: isActive ? Colors.grey[300] : Colors.grey[200],
-                        ),
-                      );
-                    },
-                  ),
                 ),
 
                 // Done button
                 Container(
-                  padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+                  padding: EdgeInsets.fromLTRB(
+                      16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     boxShadow: [
@@ -533,8 +570,9 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
           'coordinates': '',
         };
       } else if (_geofenceType == 'polygon' && _polygonPoints.length >= 3) {
-        final coordinates =
-        _polygonPoints.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList();
+        final coordinates = _polygonPoints
+            .map((p) => {'lat': p.latitude, 'lng': p.longitude})
+            .toList();
         requestBody = {
           'name': _nameController.text,
           'polygon_color': _colorToHex(_fenceColor),
@@ -679,14 +717,19 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8),
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1), blurRadius: 8),
           ],
         ),
         child: Row(
           children: [
-            Expanded(child: _buildTypeButton('Circle', Icons.radio_button_unchecked, 'circle')),
+            Expanded(
+                child: _buildTypeButton(
+                    'Circle', Icons.radio_button_unchecked, 'circle')),
             Container(width: 1, height: 20, color: Colors.grey[200]),
-            Expanded(child: _buildTypeButton('Polygon', Icons.pentagon_outlined, 'polygon')),
+            Expanded(
+                child: _buildTypeButton(
+                    'Polygon', Icons.pentagon_outlined, 'polygon')),
           ],
         ),
       ),
@@ -705,7 +748,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
             _circles.clear();
             _polygons.clear();
             _showControlPanel = false;
-            _markers.removeWhere((m) => m.markerId.value.startsWith('polygon_point_'));
+            _markers.removeWhere(
+                (m) => m.markerId.value.startsWith('polygon_point_'));
           });
         }
       },
@@ -718,7 +762,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 16, color: isSelected ? Colors.white : Colors.grey[600]),
+            Icon(icon,
+                size: 16, color: isSelected ? Colors.white : Colors.grey[600]),
             const SizedBox(width: 5),
             Text(
               label,
@@ -742,8 +787,9 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
         children: [
           _buildControlButton(Icons.layers_outlined, () {
             setState(() {
-              _currentMapType =
-              _currentMapType == MapType.normal ? MapType.satellite : MapType.normal;
+              _currentMapType = _currentMapType == MapType.normal
+                  ? MapType.satellite
+                  : MapType.normal;
             });
           }),
           const SizedBox(height: 6),
@@ -793,7 +839,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
       right: 0,
       bottom: 0,
       child: Container(
-        padding: EdgeInsets.fromLTRB(16, 14, 16, MediaQuery.of(context).padding.bottom + 14),
+        padding: EdgeInsets.fromLTRB(
+            16, 14, 16, MediaQuery.of(context).padding.bottom + 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -830,11 +877,14 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                     style: const TextStyle(fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Fence name',
-                      hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
-                      prefixIcon: Icon(Icons.label_outline, size: 20, color: Colors.grey[500]),
+                      hintStyle:
+                          TextStyle(fontSize: 13, color: Colors.grey[400]),
+                      prefixIcon: Icon(Icons.label_outline,
+                          size: 20, color: Colors.grey[500]),
                       filled: true,
                       fillColor: Colors.grey[50],
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 0, horizontal: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(color: Colors.grey[300]!),
@@ -918,7 +968,10 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                 children: [
                   Text(
                     'Radius',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey[700]),
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[700]),
                   ),
                   Expanded(
                     child: SliderTheme(
@@ -927,7 +980,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                         inactiveTrackColor: Colors.grey[200],
                         thumbColor: CustomColor.primary,
                         trackHeight: 3,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                        thumbShape:
+                            const RoundSliderThumbShape(enabledThumbRadius: 7),
                       ),
                       child: Slider(
                         value: _radius,
@@ -943,7 +997,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: CustomColor.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
@@ -975,8 +1030,9 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                         setState(() {
                           if (_polygonPoints.isNotEmpty) {
                             _polygonPoints.removeLast();
-                            _markers.removeWhere(
-                                    (m) => m.markerId.value == 'polygon_point_${_polygonPoints.length + 1}');
+                            _markers.removeWhere((m) =>
+                                m.markerId.value ==
+                                'polygon_point_${_polygonPoints.length + 1}');
                             _updateGeofenceShape();
                           }
                         });
@@ -999,8 +1055,14 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
             Row(
               children: [
                 // Color options
-                ...[Colors.blue, Colors.green, Colors.orange, Colors.red, Colors.purple].map(
-                      (color) => GestureDetector(
+                ...[
+                  Colors.blue,
+                  Colors.green,
+                  Colors.orange,
+                  Colors.red,
+                  Colors.purple
+                ].map(
+                  (color) => GestureDetector(
                     onTap: () {
                       setState(() {
                         _fenceColor = color;
@@ -1015,12 +1077,15 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                         color: color,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: _fenceColor == color ? Colors.grey[800]! : Colors.transparent,
+                          color: _fenceColor == color
+                              ? Colors.grey[800]!
+                              : Colors.transparent,
                           width: 2.5,
                         ),
                       ),
                       child: _fenceColor == color
-                          ? const Icon(Icons.check, color: Colors.white, size: 14)
+                          ? const Icon(Icons.check,
+                              color: Colors.white, size: 14)
                           : null,
                     ),
                   ),
@@ -1044,21 +1109,23 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                     ),
                     child: _isSubmitting
                         ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
                         : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.check, size: 18),
-                        SizedBox(width: 6),
-                        Text(
-                          'Create',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.check, size: 18),
+                              SizedBox(width: 6),
+                              Text(
+                                'Create',
+                                style: TextStyle(
+                                    fontSize: 14, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
               ],

@@ -40,6 +40,8 @@ class _MapPageState extends State<MapPage> {
 
   GoogleMapController? mapController;
   Set<Marker> _markers = <Marker>{};
+  final Map<int, String> _lastDeviceStates = {};
+  int _currentMarkerSize = 38;
   MapType _currentMapType = MapType.normal;
   final bool _trafficEnabled = false;
   int _selectedDeviceId = 0;
@@ -74,6 +76,7 @@ class _MapPageState extends State<MapPage> {
 
   DataController dataController = Get.put(DataController());
   String? _mapStyle;
+  StreamSubscription? _devicesSubscription;
 
   @override
   initState() {
@@ -81,7 +84,28 @@ class _MapPageState extends State<MapPage> {
     rootBundle.loadString('assets/map_style.txt').then((string) {
       _mapStyle = string;
     });
+
+    _devicesSubscription = dataController.devices.listen((devices) {
+      if (mounted && devices.isNotEmpty && mapController != null) {
+        if (first) {
+          addMarker(dataController);
+          first = false;
+        } else {
+          updateMarker(dataController);
+        }
+      }
+    });
+
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _devicesSubscription?.cancel();
+    if (_timer != null && _timer!.isActive) {
+      _timer!.cancel();
+    }
+    super.dispose();
   }
 
   void checkPreference() async {
@@ -160,49 +184,40 @@ class _MapPageState extends State<MapPage> {
 
   void addMarker(DataController controller) {
     _markers = <Marker>{};
-    LatLngBounds? bound;
+    List<Future> futures = [];
+    _lastDeviceStates.clear();
+
     for (var element in controller.devices) {
       if (element.items!.isNotEmpty) {
-        element.items!.forEach((element) async {
-          if (element.deviceData!.active.toString() == "1") {
-            Util.fetchAndCacheImages(
-                    "${UserRepository.getServerUrl()!}/${element.icon!.path!}")
-                .then((_) async {
-              BitmapDescriptor markerIcon;
-              bool rotation = true;
-              if (element.iconType == "arrow") {
-                rotation = true;
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
-              } else if (element.icon!.path!.contains("v2")) {
-                if (element.iconType == "rotating") {
-                  rotation = true;
-                } else {
-                  rotation = false;
-                }
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
-              } else {
-                if (element.iconType == "rotating") {
-                  rotation = true;
-                } else {
-                  rotation = false;
-                }
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
-              }
+        for (var subElement in element.items!) {
+          if (subElement.deviceData!.active.toString() == "1") {
+            final String path = subElement.icon!.path!;
+            final String statusColor = Util.getDeviceStatusColorStr(subElement);
+            final cachedIcon = Util.getCachedMarkerIcon(
+                path, _currentMarkerSize,
+                statusColor: statusColor,
+                iconType: subElement.icon?.type ?? subElement.iconType,
+                deviceName: subElement.name,
+                deviceId: subElement.id);
+
+            final double course =
+                double.tryParse(subElement.course?.toString() ?? '0.0') ?? 0.0;
+
+            final markerId = MarkerId(subElement.id.toString());
+            final labelId = MarkerId("t_${subElement.id}");
+
+            void buildAndAddMarker(BitmapDescriptor icon) {
               _markers.add(
                 Marker(
-                    markerId: MarkerId(element.id.toString()),
-                    position: LatLng(double.parse(element.lat.toString()),
-                        double.parse(element.lng.toString())),
-                    // updated position
-                    rotation:
-                        rotation ? double.parse(element.course.toString()) : 0,
-                    icon: markerIcon,
+                    markerId: markerId,
+                    position: LatLng(double.parse(subElement.lat.toString()),
+                        double.parse(subElement.lng.toString())),
+                    rotation: course,
+                    icon: icon,
+                    anchor: const Offset(0.5, 0.5),
+                    flat: true,
                     onTap: () {
-                      device = element;
-                      // Navigator.pushNamed(context, "/trackDevice",
-                      //     arguments:
-                      //     DeviceArguments(device!.id!, device!.name!, device!));
-
+                      device = subElement;
                       Get.to('/home',
                           arguments: DeviceArguments(
                               device!.id!, device!.name!, device!));
@@ -214,65 +229,98 @@ class _MapPageState extends State<MapPage> {
                               }
                           });
                       CameraPosition cPosition = CameraPosition(
-                        target: LatLng(element.lat, element.lng),
+                        target: LatLng(subElement.lat, subElement.lng),
                         zoom: currentZoom,
                       );
                       mapController!.moveCamera(
                           CameraUpdate.newCameraPosition(cPosition));
-                      _selectedDeviceId = element.id!;
+                      _selectedDeviceId = subElement.id!;
                       setState(() {
-                        //.open();
-                        //slidingPanelHeight = 130;
                         streetView = true;
                         polylines.clear();
                         polylineCoordinates.clear();
 
-                        for (var tail in element.tail!) {
+                        for (var tail in subElement.tail!) {
                           polylineCoordinates.add(LatLng(
                               double.parse(tail.lat.toString()),
                               double.parse(tail.lng.toString())));
                         }
                         drawPolyline();
-                        device = element;
+                        device = subElement;
                         polylineCoordinates.add(LatLng(
-                            double.parse(element.lat.toString()),
-                            double.parse(element.lng.toString())));
+                            double.parse(subElement.lat.toString()),
+                            double.parse(subElement.lng.toString())));
                       });
                     },
-                    infoWindow: const InfoWindow(
-                        // title: widget.model.devices[value.deviceId].name,
-                        )),
+                    infoWindow: const InfoWindow()),
               );
 
               if (isTextEnabled) {
                 _markers.addLabelMarker(LabelMarker(
-                  label: element.name!,
-                  markerId: MarkerId("t_${element.id}"),
-                  position: LatLng(double.parse(element.lat.toString()),
-                      double.parse(element.lng.toString())),
+                  label: subElement.name!,
+                  markerId: labelId,
+                  position: LatLng(double.parse(subElement.lat.toString()),
+                      double.parse(subElement.lng.toString())),
                 ));
               }
-              bound = boundsFromLatLngList(_markers);
-              // Perform additional actions if necessary.
-            }).catchError((error) {
-              print('Error fetching and caching images: $error');
-            });
+            }
+
+            if (cachedIcon != null) {
+              buildAndAddMarker(cachedIcon);
+            } else {
+              final f = Util.getMarkerIcon(path,
+                      size: _currentMarkerSize,
+                      statusColor: statusColor,
+                      iconType: subElement.icon?.type ?? subElement.iconType,
+                      deviceName: subElement.name,
+                      deviceId: subElement.id)
+                  .then((markerIcon) {
+                if (mounted) {
+                  setState(() {
+                    buildAndAddMarker(markerIcon);
+                  });
+                }
+              }).catchError((error) {
+                print('Error fetching marker: $error');
+              });
+              futures.add(f);
+            }
           }
-        });
-      }
-    }
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (bound != null) {
-        CameraUpdate u2 = CameraUpdate.newLatLngBounds(bound!, 50);
-        if (mapController != null) {
-          mapController!.animateCamera(u2).then((void v) {
-            check(u2, mapController!);
-          });
-          _timer!.cancel();
-          setState(() {});
         }
       }
-    });
+    }
+
+    if (futures.isNotEmpty) {
+      Future.wait(futures).then((_) {
+        _fitBounds();
+      });
+    } else {
+      _fitBounds();
+    }
+  }
+
+  void _fitBounds() {
+    if (mounted && _markers.isNotEmpty && mapController != null) {
+      try {
+        LatLngBounds bound = boundsFromLatLngList(_markers);
+        if (bound.southwest.latitude == bound.northeast.latitude &&
+            bound.southwest.longitude == bound.northeast.longitude) {
+          CameraPosition cPosition = CameraPosition(
+            target: bound.southwest,
+            zoom: 15,
+          );
+          mapController!
+              .animateCamera(CameraUpdate.newCameraPosition(cPosition));
+        } else {
+          CameraUpdate u = CameraUpdate.newLatLngBounds(bound, 80);
+          mapController!.animateCamera(u).then((void v) {
+            check(u, mapController!);
+          });
+        }
+      } catch (e) {
+        print("Error fitting camera bounds: $e");
+      }
+    }
   }
 
   void drawPolyline() async {
@@ -297,53 +345,77 @@ class _MapPageState extends State<MapPage> {
   }
 
   void updateMarker(DataController controller) async {
+    List<Future> futures = [];
+    bool hasChanges = false;
+
     for (var value in controller.devices) {
       if (value.items!.isNotEmpty) {
-        value.items!.forEach((element) async {
+        for (var element in value.items!) {
           if (element.deviceData!.active.toString() == "0") {
             _markers
                 .removeWhere((m) => m.markerId.value == element.id.toString());
             _markers.removeWhere((m) => m.markerId.value == "t_${element.id}");
+            _lastDeviceStates.remove(element.id);
+            hasChanges = true;
           }
 
           if (element.deviceData!.active.toString() == "1") {
-            Util.fetchAndCacheImages(
-                    "${UserRepository.getServerUrl()!}/${element.icon!.path!}")
-                .then((_) async {
-              BitmapDescriptor markerIcon;
-              if (element.iconType == "arrow") {
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
-              } else if (element.icon!.path!.contains("v2")) {
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
-              } else {
-                markerIcon = await Util.getMarkerIcon(element.icon!.path!);
-              }
+            final String path = element.icon!.path!;
+            final String? localAssetPath = Util.getLocalMappedAsset(path,
+                iconType: element.icon?.type ?? element.iconType,
+                deviceName: element.name,
+                deviceId: element.id);
+            final String statusColor = Util.getDeviceStatusColorStr(element);
+            final cachedIcon = Util.getCachedMarkerIcon(
+                path, _currentMarkerSize,
+                statusColor: statusColor,
+                iconType: element.icon?.type ?? element.iconType,
+                deviceName: element.name,
+                deviceId: element.id);
 
-              var pinPosition = LatLng(double.parse(element.lat.toString()),
-                  double.parse(element.lng.toString()));
+            final double course =
+                double.tryParse(element.course?.toString() ?? '0.0') ?? 0.0;
 
+            final double lat = double.parse(element.lat.toString());
+            final double lng = double.parse(element.lng.toString());
+            final String currentState =
+                "$lat,$lng,$course,${element.name},$statusColor,$_currentMarkerSize,$path,$localAssetPath";
+            if (_lastDeviceStates[element.id] == currentState) {
+              continue;
+            }
+            _lastDeviceStates[element.id!] = currentState;
+            hasChanges = true;
+
+            final markerId = MarkerId(element.id.toString());
+            final labelId = MarkerId("t_${element.id}");
+
+            void buildAndAddMarker(BitmapDescriptor icon) {
               _markers.removeWhere(
                   (m) => m.markerId.value == element.id.toString());
-
               _markers
                   .removeWhere((m) => m.markerId.value == "t_${element.id}");
 
+              var pinPosition = LatLng(lat, lng);
+
               _markers.add(Marker(
-                markerId: MarkerId(element.id.toString()),
+                markerId: markerId,
                 position: pinPosition,
-                // updated position
-                rotation: double.parse(element.course.toString()),
-                icon: markerIcon,
+                rotation: course,
+                icon: icon,
+                anchor: const Offset(0.5, 0.5),
+                flat: true,
                 onTap: () {
                   device = element;
                   if (_isExpired(device!)) {
                     showDialog(
                       context: context,
                       barrierDismissible: false,
-                      builder: (context) => DeviceExpiredBlockingDialog(device: device!),
+                      builder: (context) =>
+                          DeviceExpiredBlockingDialog(device: device!),
                     );
                   } else {
-                    Get.to(() => TrackDevicePage(device!.id, device!.name, device));
+                    Get.to(() =>
+                        TrackDevicePage(device!.id, device!.name, device));
                   }
                   mapController!.getZoomLevel().then((value) => {
                         if (value < 14)
@@ -359,7 +431,6 @@ class _MapPageState extends State<MapPage> {
                   );
                   mapController!
                       .moveCamera(CameraUpdate.newCameraPosition(cPosition));
-                  //slidingPanelHeight = 130;
                   setState(() {
                     _selectedDeviceId = element.id!;
                     streetView = true;
@@ -383,21 +454,68 @@ class _MapPageState extends State<MapPage> {
               if (isTextEnabled) {
                 _markers.addLabelMarker(LabelMarker(
                   label: element.name!,
-                  markerId: MarkerId("t_${element.id}"),
+                  markerId: labelId,
                   position: LatLng(double.parse(element.lat.toString()),
                       double.parse(element.lng.toString())),
                 ));
-
-                if (_selectedDeviceId == element.id) {
-                  device = element;
-                  polylineCoordinates.add(LatLng(
-                      double.parse(element.lat.toString()),
-                      double.parse(element.lng.toString())));
-                }
               }
-            });
+
+              if (_selectedDeviceId == element.id) {
+                device = element;
+                polylineCoordinates.clear();
+                for (var tail in element.tail!) {
+                  polylineCoordinates.add(LatLng(
+                      double.parse(tail.lat.toString()),
+                      double.parse(tail.lng.toString())));
+                }
+                polylineCoordinates.add(LatLng(
+                    double.parse(element.lat.toString()),
+                    double.parse(element.lng.toString())));
+
+                // Re-draw the polyline
+                PolylineId id = const PolylineId("poly");
+                Polyline polyline = Polyline(
+                    width: 3,
+                    polylineId: id,
+                    color: Colors.blue,
+                    points: polylineCoordinates);
+                polylines[id] = polyline;
+              }
+            }
+
+            if (cachedIcon != null) {
+              buildAndAddMarker(cachedIcon);
+              hasChanges = true;
+            } else {
+              final f = Util.getMarkerIcon(path,
+                      size: _currentMarkerSize,
+                      statusColor: statusColor,
+                      iconType: element.icon?.type ?? element.iconType,
+                      deviceName: element.name,
+                      deviceId: element.id)
+                  .then((markerIcon) {
+                if (mounted) {
+                  setState(() {
+                    buildAndAddMarker(markerIcon);
+                  });
+                }
+              });
+              futures.add(f);
+            }
           }
-        });
+        }
+      }
+    }
+
+    if (futures.isNotEmpty) {
+      Future.wait(futures).then((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+    } else if (hasChanges) {
+      if (mounted) {
+        setState(() {});
       }
     }
   }
@@ -408,8 +526,8 @@ class _MapPageState extends State<MapPage> {
         if (element.items!.isNotEmpty) {
           element.items!.forEach((element) async {
             if (element.deviceData!.active.toString() == "1") {
-              _markers.removeWhere(
-                  (m) => m.markerId.value == "t_${element.id}");
+              _markers
+                  .removeWhere((m) => m.markerId.value == "t_${element.id}");
             }
           });
         }
@@ -551,21 +669,10 @@ class _MapPageState extends State<MapPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        body: GetX<DataController>(
-            init: DataController(),
+        body: GetBuilder<DataController>(
+            init: dataController,
             builder: (controller) {
               devicesList = controller.onlyDevices;
-
-              if (controller.devices.isNotEmpty) {
-                if (first) {
-                  addMarker(controller);
-                  first = false;
-                } else {
-                  if (controller.devices.isNotEmpty) {
-                    updateMarker(controller);
-                  }
-                }
-              }
 
               if (!controller.isLoading.value) {
                 return buildMap();
@@ -682,7 +789,6 @@ class _MapPageState extends State<MapPage> {
                           padding: const EdgeInsets.only(right: 10),
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
-
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -704,18 +810,22 @@ class _MapPageState extends State<MapPage> {
                                     child: d.speed > 0
                                         ? Text(
                                             convertSpeed(
-                                                double.parse(d.speed!.toString()),
+                                                double.parse(
+                                                    d.speed!.toString()),
                                                 d.distanceUnitHour!),
                                             style: TextStyle(
-                                                color: CustomColor.secondaryColor,
+                                                color:
+                                                    CustomColor.secondaryColor,
                                                 fontSize: 13),
                                           )
                                         : Text(
                                             convertSpeed(
-                                                double.parse(d.speed!.toString()),
+                                                double.parse(
+                                                    d.speed!.toString()),
                                                 d.distanceUnitHour!),
                                             style: TextStyle(
-                                                color: CustomColor.secondaryColor,
+                                                color:
+                                                    CustomColor.secondaryColor,
                                                 fontSize: 13),
                                           ))
                               ],
@@ -790,7 +900,10 @@ class _MapPageState extends State<MapPage> {
             _controller.complete(controller);
             mapController = controller;
             _onMapCreated();
-            // mapController!.setMapStyle(_mapStyle);
+            if (first && dataController.devices.isNotEmpty) {
+              addMarker(dataController);
+              first = false;
+            }
           },
           mapToolbarEnabled: false,
           zoomControlsEnabled: false,

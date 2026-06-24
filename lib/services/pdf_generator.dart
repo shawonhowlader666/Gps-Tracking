@@ -88,7 +88,8 @@ class PDFGenerator {
 
   // ==================== GENERATE BILL PDF ====================
 
-  static Future<File> generateBillPDF(Bill bill, {Uint8List? signatureImage}) async {
+  static Future<File> generateBillPDF(Bill bill,
+      {Uint8List? signatureImage}) async {
     final pdf = pw.Document();
     final logoBytes = await _loadLogo();
     final userDetails = _getUserDetails();
@@ -135,9 +136,9 @@ class PDFGenerator {
   // ==================== GENERATE ALL TRANSACTIONS PDF ====================
 
   static Future<File> generateAllTransactionsPDF(
-      List<Bill> bills, {
-        Uint8List? signatureImage,
-      }) async {
+    List<Bill> bills, {
+    Uint8List? signatureImage,
+  }) async {
     final pdf = pw.Document();
     final logoBytes = await _loadLogo();
     final userDetails = _getUserDetails();
@@ -346,8 +347,7 @@ class PDFGenerator {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      if (hasName)
-                        _buildInfoRow('Name', userDetails['name']!),
+                      if (hasName) _buildInfoRow('Name', userDetails['name']!),
                       if (hasEmail)
                         _buildInfoRow('Email', userDetails['email']!),
                     ],
@@ -421,9 +421,11 @@ class PDFGenerator {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    _buildDetailItem('Billing Month', _formatDate(bill.billingMonth)),
+                    _buildDetailItem(
+                        'Billing Month', _formatDate(bill.billingMonth)),
                     pw.SizedBox(height: 4),
-                    _buildDetailItem('Bill Amount', 'BDT ${bill.amount.toStringAsFixed(2)}'),
+                    _buildDetailItem(
+                        'Bill Amount', 'BDT ${bill.amount.toStringAsFixed(2)}'),
                   ],
                 ),
               ),
@@ -539,7 +541,8 @@ class PDFGenerator {
   // ==================== TOTAL PAID BAR ====================
 
   static pw.Widget _buildTotalPaidBar(Bill bill) {
-    final totalPaid = bill.payments.fold<double>(0.0, (sum, p) => sum + p.amount);
+    final totalPaid =
+        bill.payments.fold<double>(0.0, (sum, p) => sum + p.amount);
     return pw.Container(
       alignment: pw.Alignment.centerRight,
       padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
@@ -586,8 +589,10 @@ class PDFGenerator {
 
   static pw.Widget _buildCompactSummaryBox(List<Bill> bills) {
     final totalBills = bills.length;
-    final paidBills = bills.where((b) => b.status.toLowerCase() == 'paid').length;
-    final unpaidBills = bills.where((b) => b.status.toLowerCase() != 'paid').length;
+    final paidBills =
+        bills.where((b) => b.status.toLowerCase() == 'paid').length;
+    final unpaidBills =
+        bills.where((b) => b.status.toLowerCase() != 'paid').length;
     final totalAmount = bills.fold<double>(0.0, (sum, b) => sum + b.amount);
     final totalPaid = bills
         .where((b) => b.status.toLowerCase() == 'paid')
@@ -628,8 +633,10 @@ class PDFGenerator {
                 child: pw.Column(
                   children: [
                     _buildSummaryRow('Total Bills', '$totalBills'),
-                    _buildSummaryRow('Paid Bills', '$paidBills', valueColor: accentColor),
-                    _buildSummaryRow('Unpaid Bills', '$unpaidBills', valueColor: errorColor),
+                    _buildSummaryRow('Paid Bills', '$paidBills',
+                        valueColor: accentColor),
+                    _buildSummaryRow('Unpaid Bills', '$unpaidBills',
+                        valueColor: errorColor),
                   ],
                 ),
               ),
@@ -638,9 +645,14 @@ class PDFGenerator {
               pw.Expanded(
                 child: pw.Column(
                   children: [
-                    _buildSummaryRow('Total Amount', 'BDT ${totalAmount.toStringAsFixed(2)}'),
-                    _buildSummaryRow('Total Paid', 'BDT ${totalPaid.toStringAsFixed(2)}', valueColor: accentColor),
-                    _buildSummaryRow('Total Due', 'BDT ${totalDue.toStringAsFixed(2)}', valueColor: errorColor),
+                    _buildSummaryRow('Total Amount',
+                        'BDT ${totalAmount.toStringAsFixed(2)}'),
+                    _buildSummaryRow(
+                        'Total Paid', 'BDT ${totalPaid.toStringAsFixed(2)}',
+                        valueColor: accentColor),
+                    _buildSummaryRow(
+                        'Total Due', 'BDT ${totalDue.toStringAsFixed(2)}',
+                        valueColor: errorColor),
                   ],
                 ),
               ),
@@ -916,7 +928,8 @@ class PDFGenerator {
     );
   }
 
-  static pw.Widget _buildSummaryRow(String label, String value, {PdfColor? valueColor}) {
+  static pw.Widget _buildSummaryRow(String label, String value,
+      {PdfColor? valueColor}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.only(bottom: 3),
       child: pw.Row(
@@ -948,7 +961,8 @@ class PDFGenerator {
       Directory? directory;
 
       if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download/SmartLock_Invoices');
+        directory =
+            Directory('/storage/emulated/0/Download/SmartLock_Invoices');
         if (!await directory.exists()) {
           await directory.create(recursive: true);
         }

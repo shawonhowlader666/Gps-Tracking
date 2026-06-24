@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/material.dart' as m;
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
+import 'package:smart_lock/screens/data_controller/data_controller.dart';
 import 'package:smart_lock/services/api_service.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 
@@ -17,11 +18,45 @@ class LockUnlockScreen extends StatefulWidget {
 
 class _LockUnlockScreenState extends State<LockUnlockScreen>
     with TickerProviderStateMixin {
+  static const Color _successColor = Color(0xFF22C55E);
+  static const Color _dangerColor = Color(0xFFEF4444);
+  static const Color _warningColor = Color(0xFFF59E0B);
+  static const Color _greyText = Color(0xFF6B7280);
+
   bool _isLocked = true;
+  bool _isEngineOn = false;
   bool _isLoading = false;
 
   // SOS
   final TextEditingController _sosController = TextEditingController();
+  String? _sosError;
+
+  String? _validatePhone(String value, {bool isRequired = false}) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      if (isRequired) return 'This field is required';
+      return null;
+    }
+
+    final clean = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    if (clean.isEmpty) {
+      return 'Invalid number format';
+    }
+
+    if (clean.startsWith('880') || clean.startsWith('01')) {
+      if (clean.startsWith('880') && clean.length != 13) {
+        return 'BD number with country code must be 13 digits';
+      }
+      if (clean.startsWith('01') && clean.length != 11) {
+        return 'BD mobile number must be 11 digits';
+      }
+    } else {
+      if (clean.length < 8 || clean.length > 15) {
+        return 'Number must be between 8 and 15 digits';
+      }
+    }
+    return null;
+  }
 
   // Animation controllers
   late AnimationController _lockPulseController;
@@ -63,9 +98,11 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     _successScale = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 0.5, end: 1.2), weight: 50),
       TweenSequenceItem(tween: Tween(begin: 1.2, end: 1.0), weight: 50),
-    ]).animate(CurvedAnimation(parent: _successController, curve: Curves.easeOut));
+    ]).animate(
+        CurvedAnimation(parent: _successController, curve: Curves.easeOut));
     _successOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _successController, curve: const Interval(0, 0.4)),
+      CurvedAnimation(
+          parent: _successController, curve: const Interval(0, 0.4)),
     );
 
     _resolveInitialLockState();
@@ -81,28 +118,100 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   }
 
   void _resolveInitialLockState() {
-    final lockStatus =
-    widget.device.deviceData?.lockStatus?.toLowerCase().trim();
-    if (lockStatus != null && lockStatus.isNotEmpty) {
-      final locked =
-          lockStatus == 'locked' || lockStatus == '1' || lockStatus == 'true';
-      setState(() => _isLocked = locked);
-      return;
-    }
-    final status = widget.device.engineStatus;
-    if (status != null) {
-      bool engineOn = false;
-      if (status is bool) {
-        engineOn = status;
-      } else if (status is int) engineOn = status == 1;
-      else if (status is String) {
-        final s = status.toLowerCase().trim();
-        engineOn = s == 'on' || s == '1' || s == 'true';
+    _isEngineOn = _checkEngineStatus(widget.device);
+
+    final devId = widget.device.id;
+    if (devId != null) {
+      final lockOverride = DataController.getLocalLockOverride(devId);
+      if (lockOverride != null) {
+        _isLocked =
+            ['locked', '1', 'true'].contains(lockOverride.toLowerCase().trim());
+        return;
       }
-      setState(() => _isLocked = !engineOn);
-      return;
     }
-    setState(() => _isLocked = true);
+
+    final lockStatus =
+        widget.device.deviceData?.lockStatus?.toLowerCase().trim();
+    if (lockStatus != null && lockStatus.isNotEmpty) {
+      _isLocked =
+          lockStatus == 'locked' || lockStatus == '1' || lockStatus == 'true';
+    } else {
+      _isLocked = !_isEngineOn;
+    }
+  }
+
+  bool _isDeviceOnline(DeviceItem d) {
+    final online = d.online?.toLowerCase().trim() ?? '';
+    if (online.contains('offline')) return false;
+    if (online.contains('online')) return true;
+    final iconColor = d.iconColor?.toLowerCase() ?? '';
+    if (iconColor == 'green' || iconColor == 'yellow') return true;
+    final speed = double.tryParse(d.speed.toString()) ?? 0;
+    if (speed > 0) return true;
+    if (d.timestamp != null && d.timestamp! > 0) {
+      try {
+        final lastUpdate =
+            DateTime.fromMillisecondsSinceEpoch(d.timestamp! * 1000);
+        return DateTime.now().difference(lastUpdate).inMinutes < 5;
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  bool _checkEngineStatus(DeviceItem d) {
+    final devId = d.id;
+    if (devId != null) {
+      final engineOverride = DataController.getLocalEngineOverride(devId);
+      if (engineOverride != null) {
+        return ['on', '1', 'true', 'ign on', 'engine on', 'acc on']
+            .contains(engineOverride.toLowerCase().trim());
+      }
+    }
+
+    if (d.engineStatus != null) {
+      final status = d.engineStatus;
+      if (status is bool) return status;
+      if (status is int) return status == 1;
+      if (status is String) {
+        final s = status.toLowerCase().trim();
+        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s))
+          return true;
+        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
+            .contains(s)) return false;
+      }
+    }
+    final speed = double.tryParse(d.speed.toString()) ?? 0;
+    if (speed > 0) return true;
+    if (d.sensors != null) {
+      for (var sensor in d.sensors!) {
+        try {
+          if (sensor is! Map) continue;
+          final sensorMap = Map<String, dynamic>.from(sensor);
+          final type = (sensorMap['type'] ?? '').toString().toLowerCase();
+          final name = (sensorMap['name'] ?? '').toString().toLowerCase();
+          final value = sensorMap['value'];
+          if (type == 'acc' ||
+              type == 'ignition' ||
+              name.contains('acc') ||
+              name.contains('ignition')) {
+            if (value == null) continue;
+            if (value is bool) return value;
+            if (value is int) return value == 1;
+            if (value is String) {
+              final v = value.toLowerCase().trim();
+              if (['on', '1', 'true'].contains(v)) return true;
+              if (['off', '0', 'false'].contains(v)) return false;
+            }
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+    return d.iconColor?.toLowerCase() == 'yellow' ||
+        d.iconColor?.toLowerCase() == 'green';
   }
 
   void _syncStateToDevice() {
@@ -137,24 +246,44 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     if (mounted) setState(() => _showSuccessAnim = false);
   }
 
-  Future<void> _sendCommand(String commandType, {required bool lockAfter}) async {
+  Future<void> _sendCommand(String commandType,
+      {required bool lockAfter}) async {
     setState(() => _isLoading = true);
     try {
+      // Send raw SinoTrack GPRS commands to directly control the tracker hardware:
+      // 9400000 = Cut off engine (Lock)
+      // 9500000 = Restore engine (Unlock)
       final Map<String, String> requestBody = {
-        'id': '',
         'device_id': widget.device.id.toString(),
-        'type': commandType,
+        'type': 'gprs',
+        'command': lockAfter ? '9400000' : '9500000',
       };
       final res = await APIService.sendCommands(requestBody);
       if (res.statusCode == 200) {
-        setState(() => _isLocked = lockAfter);
+        setState(() {
+          _isLocked = lockAfter;
+          _isEngineOn = !lockAfter;
+        });
+
+        // Set local overrides in DataController to avoid UI bouncing on rapid background polls
+        final devId = widget.device.id;
+        if (devId != null) {
+          DataController.setLocalStatusOverride(
+            devId,
+            engineStatus: lockAfter ? 'off' : 'on',
+            lockStatus: lockAfter ? 'locked' : 'unlocked',
+          );
+        }
+
         _syncStateToDevice();
         await _showSuccessAnimation(lockAfter);
         Fluttertoast.showToast(
-          msg: lockAfter ? '🔒 Vehicle locked successfully' : '🔓 Vehicle unlocked successfully',
+          msg: lockAfter
+              ? '🔒 Vehicle locked successfully'
+              : '🔓 Vehicle unlocked successfully',
           toastLength: Toast.LENGTH_SHORT,
           gravity: ToastGravity.BOTTOM,
-          backgroundColor: lockAfter ? const Color(0xFFEF4444) : const Color(0xFF22C55E),
+          backgroundColor: lockAfter ? _dangerColor : _successColor,
           textColor: Colors.white,
         );
       } else {
@@ -162,7 +291,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           msg: 'Command failed (${res.statusCode}). Please try again.',
           toastLength: Toast.LENGTH_LONG,
           gravity: ToastGravity.BOTTOM,
-          backgroundColor: const Color(0xFFEF4444),
+          backgroundColor: _dangerColor,
           textColor: Colors.white,
         );
       }
@@ -171,7 +300,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         msg: 'Connection error. Check your network.',
         toastLength: Toast.LENGTH_LONG,
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: const Color(0xFFEF4444),
+        backgroundColor: _dangerColor,
         textColor: Colors.white,
       );
     } finally {
@@ -186,7 +315,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       String friendlyName = commandType.toUpperCase();
 
       if (commandType == 'accalm') {
-        // SinoTrack command to enable call alarm when ignition (ACC) is ON
         requestBody = {
           'device_id': widget.device.id.toString(),
           'type': 'gprs',
@@ -194,7 +322,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         };
         friendlyName = 'ACC Call Alarm Enable';
       } else if (commandType == 'gmt') {
-        // SinoTrack command to set timezone to GMT+6 (Bangladesh time)
         requestBody = {
           'device_id': widget.device.id.toString(),
           'type': 'gprs',
@@ -202,7 +329,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         };
         friendlyName = 'GMT+6 Timezone';
       } else if (commandType == 'reset') {
-        // SinoTrack command to reboot device
         requestBody = {
           'device_id': widget.device.id.toString(),
           'type': 'gprs',
@@ -224,9 +350,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
             : 'Command failed (${res.statusCode})',
         toastLength: Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: res.statusCode == 200
-            ? const Color(0xFF22C55E)
-            : const Color(0xFFEF4444),
+        backgroundColor: res.statusCode == 200 ? _successColor : _dangerColor,
         textColor: Colors.white,
       );
     } catch (e) {
@@ -234,7 +358,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         msg: 'Connection error.',
         toastLength: Toast.LENGTH_LONG,
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: const Color(0xFFEF4444),
+        backgroundColor: _dangerColor,
         textColor: Colors.white,
       );
     } finally {
@@ -244,27 +368,49 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
   Future<void> _sendSOS() async {
     final number = _sosController.text.trim();
-    if (number.isEmpty) {
+    final validationError = _validatePhone(number, isRequired: true);
+    if (validationError != null) {
+      setState(() {
+        _sosError = validationError;
+      });
       Fluttertoast.showToast(
-        msg: 'Please enter an SOS number',
+        msg: 'Please fix validation errors first',
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: const Color(0xFFEF4444),
+        backgroundColor: _dangerColor,
         textColor: Colors.white,
       );
       return;
     }
+
+    // Clean number: remove "+", spaces, dashes, parentheses
+    var cleanNumber = number.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // Bangladesh country code handling: if starting with 880 (13 digits), strip "88" to make it 11-digit local format
+    if (cleanNumber.startsWith('880') && cleanNumber.length == 13) {
+      cleanNumber = cleanNumber.substring(2);
+    }
+
+    final isOnline = _isDeviceOnline(widget.device);
+    if (!isOnline) {
+      Fluttertoast.showToast(
+        msg: '⚠️ Device is offline. GPRS commands will not be delivered.',
+        toastLength: Toast.LENGTH_LONG,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: _warningColor,
+        textColor: Colors.white,
+      );
+    }
+
     setState(() => _isLoading = true);
     try {
-      // 1. Set authorized Admin/SOS number
       final Map<String, String> setAdminBody = {
         'device_id': widget.device.id.toString(),
         'type': 'gprs',
-        'command': '${number}0000 1',
+        'command': '${cleanNumber}0000 1',
       };
       final res = await APIService.sendCommands(setAdminBody);
 
       if (res.statusCode == 200) {
-        // 2. Set general alerts to SMS mode (1510000) so it does NOT make calls for standard alarms
         final Map<String, String> smsModeBody = {
           'device_id': widget.device.id.toString(),
           'type': 'gprs',
@@ -272,7 +418,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         };
         await APIService.sendCommands(smsModeBody);
 
-        // 3. Disable ACC call alert initially (8890000) until the user explicitly turns it on
         final Map<String, String> disableAccCallBody = {
           'device_id': widget.device.id.toString(),
           'type': 'gprs',
@@ -284,7 +429,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           msg: '🆘 SOS Set (Calls Disabled / SMS Mode)',
           toastLength: Toast.LENGTH_SHORT,
           gravity: ToastGravity.BOTTOM,
-          backgroundColor: const Color(0xFF22C55E),
+          backgroundColor: _successColor,
           textColor: Colors.white,
         );
       } else {
@@ -292,7 +437,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           msg: 'Failed to set SOS number (${res.statusCode})',
           toastLength: Toast.LENGTH_SHORT,
           gravity: ToastGravity.BOTTOM,
-          backgroundColor: const Color(0xFFEF4444),
+          backgroundColor: _dangerColor,
           textColor: Colors.white,
         );
       }
@@ -300,7 +445,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       Fluttertoast.showToast(
         msg: 'Connection error.',
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: const Color(0xFFEF4444),
+        backgroundColor: _dangerColor,
         textColor: Colors.white,
       );
     } finally {
@@ -316,239 +461,553 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         if (!didPop) _goBack();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F0F0),
+        extendBodyBehindAppBar: true,
+        backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
           elevation: 0,
-          backgroundColor: Colors.white,
+          backgroundColor: Colors.transparent,
           title: const Text(
-            'Lock Screen',
+            'Engine Control',
             style: TextStyle(
-              color: Color(0xFF1E293B),
-              fontWeight: FontWeight.w600,
+              color: Color(0xFF0F172A),
+              fontWeight: FontWeight.w700,
               fontSize: 18,
             ),
           ),
           centerTitle: true,
           leading: IconButton(
-            icon: const m.Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
+            icon: const m.Icon(Icons.arrow_back_ios_new_rounded,
+                color: Color(0xFF0F172A)),
             onPressed: _goBack,
           ),
         ),
-        body: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 32),
-
-                  // ── SOS Section ──
-                  const Text(
-                    'SOS Number',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFD1D5DB)),
-                    ),
-                    child: TextField(
-                      controller: _sosController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        hintText: 'Enter SOS Number',
-                        hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
-                        border: InputBorder.none,
-                        contentPadding:
-                        EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 46,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _sendSOS,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE53935),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'Add',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // ── Custom Command ──
-                  const Text(
-                    'Custom Command',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _buildCustomCmdBtn('ACCALM', 'accalm'),
-                      const SizedBox(width: 10),
-                      _buildCustomCmdBtn('GMT', 'gmt'),
-                      const SizedBox(width: 10),
-                      _buildCustomCmdBtn('RESET', 'reset'),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-
-                  _buildLockUnlockButtons(),
-                ],
-              ),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFFFAFAFA),
+                Color(0xFFF1F5F9),
+              ],
             ),
-
-            // ── Loading overlay ──
-            if (_isLoading) _buildLoadingOverlay(),
-
-            // ── Success animation overlay ──
-            if (_showSuccessAnim) _buildSuccessOverlay(),
-          ],
+          ),
+          child: Stack(
+            children: [
+              SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 110, 20, 30),
+                child: Column(
+                  children: [
+                    _buildHUDStatusRing(),
+                    const SizedBox(height: 24),
+                    _buildVehicleDashboard(),
+                    const SizedBox(height: 28),
+                    _buildCircularControlButtons(),
+                    const SizedBox(height: 32),
+                    _buildSOSSection(),
+                    const SizedBox(height: 28),
+                    _buildCustomCommandSection(),
+                    const SizedBox(height: 28),
+                    _buildSecurityCard(),
+                  ],
+                ),
+              ),
+              if (_isLoading) _buildLoadingOverlay(),
+              if (_showSuccessAnim) _buildSuccessOverlay(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // Circular Lock / Unlock Buttons
-  // ──────────────────────────────────────────────────────────────
-  Widget _buildLockUnlockButtons() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // LOCK BUTTON
-        GestureDetector(
-          onTap: _isLoading
-              ? null
-              : () => _sendCommand('engineStop', lockAfter: true),
-          child: Container(
-            width: 130,
-            height: 130,
+  Widget _buildHUDStatusRing() {
+    return SizedBox(
+      height: 160,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _lockPulseController,
+            builder: (context, child) {
+              final double val = _lockPulseController.value;
+              return Container(
+                width: 120 + (val * 12),
+                height: 120 + (val * 12),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _isLocked
+                          ? _dangerColor.withValues(alpha: 0.08 * (1 - val))
+                          : _successColor.withValues(alpha: 0.08 * (1 - val)),
+                      blurRadius: 18,
+                      spreadRadius: 6 * val,
+                    ),
+                  ],
+                  border: Border.all(
+                    color: _isLocked
+                        ? _dangerColor.withValues(
+                            alpha: 0.15 + (0.35 * (1 - val)))
+                        : _successColor.withValues(
+                            alpha: 0.15 + (0.35 * (1 - val))),
+                    width: 1.5,
+                  ),
+                ),
+              );
+            },
+          ),
+          Container(
+            width: 110,
+            height: 110,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFFE53935),
-              border: Border.all(color: Colors.white),
+              border: Border.all(
+                color: _isLocked
+                    ? _dangerColor.withValues(alpha: 0.1)
+                    : _successColor.withValues(alpha: 0.1),
+                width: 3,
+              ),
+            ),
+          ),
+          Container(
+            width: 95,
+            height: 95,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const RadialGradient(
+                colors: [Colors.white, Color(0xFFF8FAFC)],
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  blurRadius: 4,
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
               ],
+              border: Border.all(
+                color: _isLocked
+                    ? _dangerColor.withValues(alpha: 0.8)
+                    : _successColor.withValues(alpha: 0.8),
+                width: 2,
+              ),
             ),
-            child: const Column(
+            child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.lock,
-                  color: Colors.white,
+                m.Icon(
+                  _isLocked
+                      ? Icons.lock_outline_rounded
+                      : Icons.lock_open_rounded,
+                  color: _isLocked ? _dangerColor : _successColor,
                   size: 32,
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  'Lock',
+                  _isLocked ? "SECURED" : "UNLOCKED",
                   style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                    color: _isLocked ? _dangerColor : _successColor,
                   ),
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVehicleDashboard() {
+    final isOnline = _isDeviceOnline(widget.device);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.015),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC0392B).withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const m.Icon(
+                  Icons.directions_car_filled_rounded,
+                  color: Color(0xFFC0392B),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.device.name ?? 'Unknown Device',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (widget.device.deviceData?.plateNumber != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.device.deviceData!.plateNumber!,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(color: Color(0xFFF1F5F9), height: 1),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildQuickStat(
+                'GPS SIGNAL',
+                isOnline ? 'ONLINE' : 'OFFLINE',
+                Icons.wifi_rounded,
+                isOnline ? _successColor : _dangerColor,
+              ),
+              _buildQuickStat(
+                'IGNITION',
+                _isEngineOn ? 'ON' : 'OFF',
+                Icons.power_rounded,
+                _isEngineOn ? _successColor : _greyText,
+              ),
+              _buildQuickStat(
+                'SECURITY',
+                _isLocked ? 'ARMED' : 'READY',
+                Icons.shield_rounded,
+                _isLocked ? _warningColor : _successColor,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickStat(
+      String label, String value, IconData icon, Color color) {
+    return Column(
+      children: [
+        m.Icon(icon, color: color, size: 18),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF94A3B8),
+            letterSpacing: 0.5,
+          ),
         ),
-
-        const SizedBox(width: 32),
-
-        // UNLOCK BUTTON
-        GestureDetector(
-          onTap: _isLoading
-              ? null
-              : () => _sendCommand('engineResume', lockAfter: false),
-          child: Container(
-            width: 130,
-            height: 130,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.green,
-              border: Border.all(color: Colors.white),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  blurRadius: 4,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.lock_open,
-                  color: Colors.white,
-                  size: 32,
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Unlock',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: color,
           ),
         ),
       ],
     );
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // Custom command chip button
-  // ──────────────────────────────────────────────────────────────
-  Widget _buildCustomCmdBtn(String label, String commandType) {
+  Widget _buildCircularControlButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _buildCircularBtn(
+          isLock: true,
+          label: 'LOCK ENGINE',
+          subtitle: 'Disable ignition',
+          color: _dangerColor,
+          icon: Icons.lock_outline_rounded,
+          activeScale: _lockPulse,
+        ),
+        _buildCircularBtn(
+          isLock: false,
+          label: 'UNLOCK ENGINE',
+          subtitle: 'Enable ignition',
+          color: _successColor,
+          icon: Icons.lock_open_rounded,
+          activeScale: _unlockPulse,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCircularBtn({
+    required bool isLock,
+    required String label,
+    required String subtitle,
+    required Color color,
+    required IconData icon,
+    required Animation<double> activeScale,
+  }) {
+    final bool isActionStateMatched = (isLock == _isLocked);
+
+    // Color choices
+    final Color bgColor =
+        isActionStateMatched ? color : color.withValues(alpha: 0.15);
+    final Color textIconColor = isActionStateMatched ? Colors.white : color;
+    final Color borderCol =
+        isActionStateMatched ? color : color.withValues(alpha: 0.3);
+
+    return GestureDetector(
+      onTap: _isLoading || isActionStateMatched
+          ? null
+          : () => _sendCommand(isLock ? 'engineStop' : 'engineResume',
+              lockAfter: isLock),
+      child: Column(
+        children: [
+          ScaleTransition(
+            scale: isActionStateMatched
+                ? activeScale
+                : const AlwaysStoppedAnimation(1.0),
+            child: Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: bgColor,
+                border: Border.all(color: borderCol, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: m.Icon(
+                  icon,
+                  color: textIconColor,
+                  size: 36,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 10,
+              color: Color(0xFF94A3B8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSOSSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: _dangerColor.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const m.Icon(Icons.sos_rounded,
+                    color: _dangerColor, size: 16),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'SOS Config Command',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color:
+                    _sosError != null ? _dangerColor : const Color(0xFFE2E8F0),
+                width: _sosError != null ? 1.5 : 1.0,
+              ),
+            ),
+            child: TextField(
+              controller: _sosController,
+              keyboardType: TextInputType.phone,
+              onChanged: (val) {
+                setState(() {
+                  _sosError = _validatePhone(val, isRequired: true);
+                });
+              },
+              decoration: const InputDecoration(
+                hintText: 'Enter Authorized SOS Number',
+                hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                border: InputBorder.none,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          if (_sosError != null) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(
+                _sosError!,
+                style: const TextStyle(
+                    color: _dangerColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _sendSOS,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _dangerColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Configure SOS Number',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomCommandSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC0392B).withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const m.Icon(Icons.terminal_rounded,
+                    color: Color(0xFFC0392B), size: 16),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'SinoTrack Quick Commands',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildCustomCmdBtn('ACC CALL', 'accalm', Colors.orange),
+              const SizedBox(width: 8),
+              _buildCustomCmdBtn('ZONE GMT+6', 'gmt', Colors.blue),
+              const SizedBox(width: 8),
+              _buildCustomCmdBtn('REBOOT', 'reset', Colors.purple),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomCmdBtn(String label, String commandType, Color tintColor) {
     return Expanded(
       child: GestureDetector(
         onTap: _isLoading ? null : () => _sendCustomCommand(commandType),
         child: Container(
-          height: 44,
+          height: 38,
           decoration: BoxDecoration(
-            color: const Color(0xFFE53935),
-            borderRadius: BorderRadius.circular(8),
+            color: tintColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: tintColor.withValues(alpha: 0.25)),
           ),
           child: Center(
             child: Text(
               label,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: tintColor,
                 fontWeight: FontWeight.w700,
-                fontSize: 13,
-                letterSpacing: 0.5,
+                fontSize: 11,
               ),
             ),
           ),
@@ -557,33 +1016,78 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     );
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // Loading overlay
-  // ──────────────────────────────────────────────────────────────
+  Widget _buildSecurityCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const m.Icon(Icons.shield_outlined,
+              color: Color(0xFFF59E0B), size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Encrypted Tunnel Active',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'GPRS commands are transmitted securely. For your safety, ensure the vehicle is stationary and in a safe area before cutting off the engine.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[600],
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLoadingOverlay() {
     return Container(
-      color: Colors.black.withValues(alpha: 0.40),
+      color: Colors.black.withValues(alpha: 0.4),
       child: Center(
         child: Container(
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08), blurRadius: 16),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const CircularProgressIndicator(
                 strokeWidth: 3,
-                color: Color(0xFFE53935),
+                color: Color(0xFFC0392B),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Sending command...',
+              const Text(
+                'Sending GPRS command...',
                 style: TextStyle(
-                    color: Colors.grey[800],
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500),
+                  color: Color(0xFF0F172A),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -592,15 +1096,10 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     );
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // Success animation overlay
-  // ──────────────────────────────────────────────────────────────
   Widget _buildSuccessOverlay() {
-    final color = _lastActionWasLock
-        ? const Color(0xFFEF4444)
-        : const Color(0xFF22C55E);
+    final color = _lastActionWasLock ? _dangerColor : _successColor;
     final icon = _lastActionWasLock ? Icons.lock : Icons.lock_open;
-    final label = _lastActionWasLock ? 'Locked!' : 'Unlocked!';
+    final label = _lastActionWasLock ? 'Engine Locked!' : 'Engine Active!';
 
     return AnimatedBuilder(
       animation: _successController,
@@ -613,15 +1112,16 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               child: Opacity(
                 opacity: _successOpacity.value,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 28),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: color.withValues(alpha: 0.3),
-                        blurRadius: 24,
-                        spreadRadius: 4,
+                        color: color.withValues(alpha: 0.25),
+                        blurRadius: 20,
+                        spreadRadius: 2,
                       )
                     ],
                   ),
@@ -629,20 +1129,20 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 72,
-                        height: 72,
+                        width: 64,
+                        height: 64,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: color.withValues(alpha: 0.12),
-                          border: Border.all(color: color, width: 2.5),
+                          color: color.withValues(alpha: 0.1),
+                          border: Border.all(color: color, width: 2),
                         ),
-                        child: m.Icon(icon, color: color, size: 38),
+                        child: m.Icon(icon, color: color, size: 32),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       Text(
                         label,
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: color,
                         ),

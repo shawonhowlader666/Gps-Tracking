@@ -46,18 +46,18 @@ class Geofence extends Object {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'user_id': user_id,
-    'group_id': group_id,
-    'active': active,
-    'name': name,
-    'coordinates': coordinates,
-    'polygon_color': polygon_color,
-    'created_at': created_at,
-    'updated_at': updated_at,
-    'type': type,
-    'radius': radius,
-    'center': center,
-    'devices': devices, // Add this
-  };
+        'id': id,
+        'user_id': user_id,
+        'group_id': group_id,
+        'active': active,
+        'name': name,
+        'coordinates': coordinates,
+        'polygon_color': polygon_color,
+        'created_at': created_at,
+        'updated_at': updated_at,
+        'type': type,
+        'radius': radius,
+        'center': center,
+        'devices': devices, // Add this
+      };
 }

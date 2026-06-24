@@ -22,13 +22,14 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context) async {
     }
 
     final double due = stats?.due ?? 0;
-    
+
     // Alert triggers if there is a due balance OR if expiration is within 5 days OR is already expired
     final bool shouldAlert = due > 0 || isExpired || (daysRemaining <= 5);
     if (!shouldAlert) return null;
 
     // Use stats fallback if stats was null
-    final resolvedStats = stats ?? PaymentStats(due: 0, totalBilled: 0, totalPaid: 0, unpaidBillsCount: 0);
+    final resolvedStats = stats ??
+        PaymentStats(due: 0, totalBilled: 0, totalPaid: 0, unpaidBillsCount: 0);
 
     final todayDay = DateTime.now().day;
     final bool isAfter10th = todayDay > 10;
@@ -128,7 +129,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
 
   bool get _isExpired =>
       widget.expirationInfo?['is_expired'] == true ||
-          widget.expirationInfo?['is_expired'] == 'true';
+      widget.expirationInfo?['is_expired'] == 'true';
 
   int get _overdueBlocks {
     if (_isExpired) return 10;
@@ -153,7 +154,8 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
       await nav.push<String>(
         MaterialPageRoute(
           builder: (_) => ManualPaymentScreen(
-            dueAmount: packageType == '1_year' ? 1800.0 : (due > 0 ? due : 200.0),
+            dueAmount:
+                packageType == '1_year' ? 1800.0 : (due > 0 ? due : 200.0),
             isAfter10th: isAfter10th,
             packageType: packageType,
           ),
@@ -178,7 +180,8 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
           color: Colors.transparent,
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 24),
-            decoration: BoxDecoration(              color: Colors.white,
+            decoration: BoxDecoration(
+              color: Colors.white,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
@@ -251,13 +254,11 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
             const SizedBox(height: 6),
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
                 color: Colors.red.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(20),
-                border:
-                Border.all(color: Colors.red.withValues(alpha: 0.5)),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
               ),
               child: const Text(
                 '⛔  বিল পরিশোধ না করলে এই বার্তা বন্ধ হবে না',
@@ -328,8 +329,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
             const SizedBox(height: 10),
             Text(
               _errorMessage!,
-              style:
-              const TextStyle(color: Color(0xFFE53935), fontSize: 13),
+              style: const TextStyle(color: Color(0xFFE53935), fontSize: 13),
               textAlign: TextAlign.center,
             ),
           ],
@@ -343,12 +343,13 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                 child: SizedBox(
                   height: 52,
                   child: ElevatedButton.icon(
-                    onPressed: _isPaymentLoading ? null : () => _handlePay('1_month'),
+                    onPressed:
+                        _isPaymentLoading ? null : () => _handlePay('1_month'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1B6B3A),
                       foregroundColor: Colors.white,
                       disabledBackgroundColor:
-                      const Color(0xFF1B6B3A).withValues(alpha: 0.6),
+                          const Color(0xFF1B6B3A).withValues(alpha: 0.6),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
@@ -356,13 +357,13 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                     ),
                     icon: _isPaymentLoading
                         ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Icon(Icons.credit_card, size: 18),
                     label: const Text(
                       '১ মাসের বিল',
@@ -380,12 +381,13 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                 child: SizedBox(
                   height: 52,
                   child: ElevatedButton.icon(
-                    onPressed: _isPaymentLoading ? null : () => _handlePay('1_year'),
+                    onPressed:
+                        _isPaymentLoading ? null : () => _handlePay('1_year'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFE4B34E),
                       foregroundColor: Colors.black,
                       disabledBackgroundColor:
-                      const Color(0xFFE4B34E).withValues(alpha: 0.6),
+                          const Color(0xFFE4B34E).withValues(alpha: 0.6),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
@@ -393,13 +395,13 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                     ),
                     icon: _isPaymentLoading
                         ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.black,
-                      ),
-                    )
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.black,
+                            ),
+                          )
                         : const Icon(Icons.star, size: 18),
                     label: const Text(
                       '১ বছরের বিল',
@@ -434,8 +436,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                 icon: const Icon(Icons.access_time, size: 18),
                 label: const Text(
                   '৭ দিন পরে পুনরায় মনে করিয়ে দিন',
-                  style:
-                  TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
               ),
             ),
@@ -444,8 +445,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
           if (widget.isAfter10th)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                  vertical: 12, horizontal: 16),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
               decoration: BoxDecoration(
                 color: const Color(0xFFFFEEEE),
                 borderRadius: BorderRadius.circular(14),
@@ -455,8 +455,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.info_outline,
-                      color: Color(0xFFE53935), size: 18),
+                  Icon(Icons.info_outline, color: Color(0xFFE53935), size: 18),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -483,8 +482,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
       children: [
         if (overdueDays > 0)
           Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
               color: const Color(0xFFFFEEEE),
               borderRadius: BorderRadius.circular(20),
@@ -509,9 +507,8 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                 height: 10,
                 margin: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
-                  color: isRed
-                      ? const Color(0xFFE53935)
-                      : const Color(0xFFFFCDD2),
+                  color:
+                      isRed ? const Color(0xFFE53935) : const Color(0xFFFFCDD2),
                   borderRadius: BorderRadius.circular(5),
                 ),
               ),
@@ -537,9 +534,8 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
     }
 
     final remaining = _daysRemaining > 0 ? _daysRemaining : 0;
-    final message = _isExpired
-        ? 'আপনার সেবা বন্ধ হয়ে গেছে।'
-        : 'সেবা বন্ধ হতে আর মাত্র ';
+    final message =
+        _isExpired ? 'আপনার সেবা বন্ধ হয়ে গেছে।' : 'সেবা বন্ধ হতে আর মাত্র ';
 
     return RichText(
       textAlign: TextAlign.center,

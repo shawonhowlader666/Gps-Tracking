@@ -48,10 +48,10 @@ class TodayReportData {
 
   bool get isEmpty =>
       (routeLength == null || routeLength!.isEmpty) &&
-          (moveDuration == null || moveDuration!.isEmpty) &&
-          (stopDuration == null || stopDuration!.isEmpty) &&
-          (topSpeed == null || topSpeed!.isEmpty) &&
-          (engineHours == null || engineHours!.isEmpty);
+      (moveDuration == null || moveDuration!.isEmpty) &&
+      (stopDuration == null || stopDuration!.isEmpty) &&
+      (topSpeed == null || topSpeed!.isEmpty) &&
+      (engineHours == null || engineHours!.isEmpty);
 
   bool get isNotEmpty => !isEmpty;
 
@@ -172,10 +172,10 @@ class ReportService {
   }
 
   static Map<String, DateTime> _getDateRangeForPeriod(
-      ReportPeriod period,
-      DateTime? customStart,
-      DateTime? customEnd,
-      ) {
+    ReportPeriod period,
+    DateTime? customStart,
+    DateTime? customEnd,
+  ) {
     final now = DateTime.now();
     DateTime from, to;
 
@@ -188,7 +188,8 @@ class ReportService {
       case ReportPeriod.yesterday:
         final yesterday = now.subtract(const Duration(days: 1));
         from = DateTime(yesterday.year, yesterday.month, yesterday.day);
-        to = DateTime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59);
+        to = DateTime(
+            yesterday.year, yesterday.month, yesterday.day, 23, 59, 59);
         break;
 
       case ReportPeriod.thisWeek:
@@ -217,12 +218,14 @@ class ReportService {
     required DateTime toDate,
     bool forceRefresh = false,
   }) async {
-    final cacheKey = 'device_${deviceId}_${_formatDate(fromDate)}_${_formatDate(toDate)}';
+    final cacheKey =
+        'device_${deviceId}_${_formatDate(fromDate)}_${_formatDate(toDate)}';
 
     if (!forceRefresh &&
         _cache.containsKey(cacheKey) &&
         _lastCacheTime != null &&
-        DateTime.now().difference(_lastCacheTime!).inSeconds < _cacheDurationSeconds) {
+        DateTime.now().difference(_lastCacheTime!).inSeconds <
+            _cacheDurationSeconds) {
       return _cache[cacheKey]!;
     }
 
@@ -289,7 +292,7 @@ class ReportService {
 
       final bytes = await response.fold<List<int>>(
         <int>[],
-            (prev, element) => prev..addAll(element),
+        (prev, element) => prev..addAll(element),
       );
 
       if (bytes.isEmpty) return null;
@@ -316,7 +319,8 @@ class ReportService {
 
       String text = '';
       for (int i = 0; i < document.pages.count; i++) {
-        final pageText = extractor.extractText(startPageIndex: i, endPageIndex: i);
+        final pageText =
+            extractor.extractText(startPageIndex: i, endPageIndex: i);
         text += pageText ?? '';
         text += '\n';
       }
@@ -378,7 +382,9 @@ class ReportService {
           if (value.isEmpty && i + 1 < lines.length) {
             final nextLine = lines[i + 1];
             final isNextLineKey = keyMap.keys.any(
-                  (k) => nextLine.toLowerCase() == k || nextLine.toLowerCase().endsWith(k),
+              (k) =>
+                  nextLine.toLowerCase() == k ||
+                  nextLine.toLowerCase().endsWith(k),
             );
             if (!isNextLineKey) value = nextLine;
           }
@@ -396,20 +402,26 @@ class ReportService {
 
   static void _parseAlternative(String text, TodayReportData data) {
     final patterns = <String, void Function(String)>{
-      r'Route\s+length[:\s]+([0-9.]+\s*(?:Km|km|KM|mi|Mi))': (v) => data.routeLength = v,
+      r'Route\s+length[:\s]+([0-9.]+\s*(?:Km|km|KM|mi|Mi))': (v) =>
+          data.routeLength = v,
       r'Move\s+duration[:\s]+([0-9hms\s:]+)': (v) => data.moveDuration = v,
       r'Stop\s+duration[:\s]+([0-9hms\s:]+)': (v) => data.stopDuration = v,
-      r'Top\s+speed[:\s]+([0-9.]+\s*(?:kph|km/h|Kph|mph))': (v) => data.topSpeed = v,
-      r'Average\s+speed[:\s]+([0-9.]+\s*(?:kph|km/h|Kph|mph))': (v) => data.averageSpeed = v,
+      r'Top\s+speed[:\s]+([0-9.]+\s*(?:kph|km/h|Kph|mph))': (v) =>
+          data.topSpeed = v,
+      r'Average\s+speed[:\s]+([0-9.]+\s*(?:kph|km/h|Kph|mph))': (v) =>
+          data.averageSpeed = v,
       r'Overspeed\s+count[:\s]+([0-9]+)': (v) => data.overspeedCount = v,
       r'Engine\s+hours[:\s]+([0-9hms\s:]+)': (v) => data.engineHours = v,
       r'Engine\s+work[:\s]+([0-9hms\s:]+)': (v) => data.engineWork = v,
       r'Engine\s+idle[:\s]+([0-9hms\s:]+)': (v) => data.engineIdle = v,
-      r'Odometer[:\s]+([0-9.]+\s*(?:Km|km|KM|mi|Mi)?)': (v) => data.odometer = v,
-      r'Fuel\s+consumption[:\s]+([0-9.]+\s*(?:L|l|gal)?)': (v) => data.fuelConsumption = v,
+      r'Odometer[:\s]+([0-9.]+\s*(?:Km|km|KM|mi|Mi)?)': (v) =>
+          data.odometer = v,
+      r'Fuel\s+consumption[:\s]+([0-9.]+\s*(?:L|l|gal)?)': (v) =>
+          data.fuelConsumption = v,
     };
 
-    final normalizedText = text.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ');
+    final normalizedText =
+        text.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ');
 
     for (final entry in patterns.entries) {
       final regex = RegExp(entry.key, caseSensitive: false);

@@ -24,15 +24,17 @@ class PaymentService {
       final password = UserRepository.getPassword();
       if (email == null || password == null) return false;
 
-      final response = await http.post(
-        Uri.parse("$baseUrl/auth/login"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "login": email,
-          "password": password,
-          "device_name": "mobile_app",
-        }),
-      ).timeout(timeoutDuration);
+      final response = await http
+          .post(
+            Uri.parse("$baseUrl/auth/login"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "login": email,
+              "password": password,
+              "device_name": "mobile_app",
+            }),
+          )
+          .timeout(timeoutDuration);
 
       if (response.statusCode == 200) {
         _token = jsonDecode(response.body)['token'];
@@ -54,10 +56,10 @@ class PaymentService {
   static bool get hasToken => _token != null;
 
   static Map<String, String> get _headers => {
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-    if (_token != null) "Authorization": "Bearer $_token",
-  };
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        if (_token != null) "Authorization": "Bearer $_token",
+      };
 
   static Future<bool> _ensureLoggedIn() async {
     if (_token == null) return await login();
@@ -68,18 +70,22 @@ class PaymentService {
   static Future<Map<String, dynamic>?> _getJson(String path) async {
     if (!await _ensureLoggedIn()) return null;
 
-    var response = await http.get(
-      Uri.parse("$baseUrl$path"),
-      headers: _headers,
-    ).timeout(timeoutDuration);
+    var response = await http
+        .get(
+          Uri.parse("$baseUrl$path"),
+          headers: _headers,
+        )
+        .timeout(timeoutDuration);
 
     if (response.statusCode == 401) {
       _token = null;
       if (!await login()) return null;
-      response = await http.get(
-        Uri.parse("$baseUrl$path"),
-        headers: _headers,
-      ).timeout(timeoutDuration);
+      response = await http
+          .get(
+            Uri.parse("$baseUrl$path"),
+            headers: _headers,
+          )
+          .timeout(timeoutDuration);
     }
 
     if (response.statusCode == 200) return jsonDecode(response.body);
@@ -87,24 +93,28 @@ class PaymentService {
   }
 
   /// Generic POST with auto-retry on 401
-  static Future<Map<String, dynamic>?> _postJson(
-      String path, {Map<String, dynamic>? body}) async {
+  static Future<Map<String, dynamic>?> _postJson(String path,
+      {Map<String, dynamic>? body}) async {
     if (!await _ensureLoggedIn()) return null;
 
-    var response = await http.post(
-      Uri.parse("$baseUrl$path"),
-      headers: _headers,
-      body: body != null ? jsonEncode(body) : null,
-    ).timeout(timeoutDuration);
+    var response = await http
+        .post(
+          Uri.parse("$baseUrl$path"),
+          headers: _headers,
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(timeoutDuration);
 
     if (response.statusCode == 401) {
       _token = null;
       if (!await login()) return null;
-      response = await http.post(
-        Uri.parse("$baseUrl$path"),
-        headers: _headers,
-        body: body != null ? jsonEncode(body) : null,
-      ).timeout(timeoutDuration);
+      response = await http
+          .post(
+            Uri.parse("$baseUrl$path"),
+            headers: _headers,
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(timeoutDuration);
     }
 
     if (response.statusCode == 200) return jsonDecode(response.body);

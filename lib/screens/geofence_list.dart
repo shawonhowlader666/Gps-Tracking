@@ -64,7 +64,8 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
     try {
       for (var fence in fenceList) {
         if (fence.id != null) {
-          final devices = await APIService.getGeofenceDevices(int.tryParse(fence.id.toString()));
+          final devices = await APIService.getGeofenceDevices(
+              int.tryParse(fence.id.toString()));
           if (devices != null && devices.isNotEmpty) {
             List<Map<String, dynamic>> deviceList = [];
             for (var deviceData in devices) {
@@ -154,7 +155,8 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 18),
+                  Icon(Icons.warning_amber_rounded,
+                      color: Colors.red.shade700, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -182,7 +184,8 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
               backgroundColor: _primaryRed,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text('Delete'),
           ),
@@ -230,10 +233,15 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
 
     if (searchQuery.isNotEmpty) {
       result = result.where((fence) {
-        final nameMatch = fence.name?.toLowerCase().contains(searchQuery.toLowerCase()) ?? false;
-        final deviceMatch = fenceDevices[int.tryParse(fence.id.toString())]?.any(
-                (device) => device['name'].toString().toLowerCase().contains(searchQuery.toLowerCase())
-        ) ?? false;
+        final nameMatch =
+            fence.name?.toLowerCase().contains(searchQuery.toLowerCase()) ??
+                false;
+        final deviceMatch = fenceDevices[int.tryParse(fence.id.toString())]
+                ?.any((device) => device['name']
+                    .toString()
+                    .toLowerCase()
+                    .contains(searchQuery.toLowerCase())) ??
+            false;
         return nameMatch || deviceMatch;
       }).toList();
     }
@@ -254,8 +262,8 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
             child: isLoading
                 ? Center(child: CircularProgressIndicator(color: _primaryRed))
                 : filteredList.isEmpty
-                ? _buildEmptyState()
-                : _buildList(),
+                    ? _buildEmptyState()
+                    : _buildList(),
           ),
         ],
       ),
@@ -302,16 +310,17 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
         onChanged: (value) => setState(() => searchQuery = value),
         decoration: InputDecoration(
           hintText: 'Search geofences...',
-          hintStyle: TextStyle(color: _greyText.withValues(alpha: 0.6), fontSize: 14),
+          hintStyle:
+              TextStyle(color: _greyText.withValues(alpha: 0.6), fontSize: 14),
           prefixIcon: Icon(Icons.search, color: _primaryRed, size: 22),
           suffixIcon: searchQuery.isNotEmpty
               ? IconButton(
-            icon: const Icon(Icons.clear, size: 20),
-            onPressed: () {
-              _searchController.clear();
-              setState(() => searchQuery = '');
-            },
-          )
+                  icon: const Icon(Icons.clear, size: 20),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => searchQuery = '');
+                  },
+                )
               : null,
           filled: true,
           fillColor: const Color(0xFFF9FAFB),
@@ -418,7 +427,9 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              searchQuery.isNotEmpty ? Icons.search_off : Icons.location_off_outlined,
+              searchQuery.isNotEmpty
+                  ? Icons.search_off
+                  : Icons.location_off_outlined,
               size: 60,
               color: _primaryRed.withValues(alpha: 0.5),
             ),
@@ -487,11 +498,15 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: isActive ? _primaryRed.withValues(alpha: 0.1) : Colors.grey.shade100,
+                    color: isActive
+                        ? _primaryRed.withValues(alpha: 0.1)
+                        : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    fenceType == 'polygon' ? Icons.pentagon_outlined : Icons.radio_button_unchecked,
+                    fenceType == 'polygon'
+                        ? Icons.pentagon_outlined
+                        : Icons.radio_button_unchecked,
                     color: isActive ? _primaryRed : _greyText,
                     size: 26,
                   ),
@@ -517,9 +532,12 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: isActive ? Colors.green.shade50 : Colors.grey.shade100,
+                              color: isActive
+                                  ? Colors.green.shade50
+                                  : Colors.grey.shade100,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -527,7 +545,9 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: isActive ? Colors.green.shade700 : _greyText,
+                                color: isActive
+                                    ? Colors.green.shade700
+                                    : _greyText,
                               ),
                             ),
                           ),
@@ -536,13 +556,15 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Icon(Icons.directions_car, size: 14, color: _greyText),
+                          Icon(Icons.directions_car,
+                              size: 14, color: _greyText),
                           const SizedBox(width: 4),
                           Text(
                             '$deviceCount ${deviceCount == 1 ? "vehicle" : "vehicles"}',
                             style: TextStyle(fontSize: 12, color: _greyText),
                           ),
-                          if (fence.radius != null && fenceType == 'circle') ...[
+                          if (fence.radius != null &&
+                              fenceType == 'circle') ...[
                             const SizedBox(width: 12),
                             Icon(Icons.straighten, size: 14, color: _greyText),
                             const SizedBox(width: 4),
@@ -574,14 +596,19 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                         scale: 0.85,
                         child: Switch(
                           value: isActive,
-                          onChanged: (value) => _toggleFenceStatus(fence, value),
+                          onChanged: (value) =>
+                              _toggleFenceStatus(fence, value),
                           activeThumbColor: _primaryRed,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),
                       Text(
                         isActive ? 'Active' : 'Inactive',
-                        style: TextStyle(fontSize: 12, color: _greyText, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: _greyText,
+                            fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
@@ -600,7 +627,8 @@ class _GeofenceListPageState extends State<GeofenceListPage> {
                   },
                 ),
                 IconButton(
-                  icon: Icon(Icons.delete_outline, color: Colors.red.shade600, size: 20),
+                  icon: Icon(Icons.delete_outline,
+                      color: Colors.red.shade600, size: 20),
                   onPressed: () => _deleteFence(fence),
                 ),
               ],

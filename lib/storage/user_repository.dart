@@ -25,7 +25,21 @@ class UserRepository {
   }
 
   static void setEmail(String email) {
-    prefs!.setString(PREF_USER_EMAIL, email);
+    // Sanitize before persisting: strip any corrupted suffix such as
+    // ") - Bike (IMEI: N/A, SIM: ...)" that can accumulate via stale cache.
+    String clean = email;
+    final parenIdx = clean.indexOf(')');
+    if (parenIdx != -1) {
+      final candidate = clean.substring(0, parenIdx).trim();
+      if (candidate.isNotEmpty) clean = candidate;
+    } else {
+      final dashIdx = clean.indexOf(' - ');
+      if (dashIdx != -1) {
+        final candidate = clean.substring(0, dashIdx).trim();
+        if (candidate.isNotEmpty) clean = candidate;
+      }
+    }
+    prefs!.setString(PREF_USER_EMAIL, clean);
   }
 
   static String? getName() {

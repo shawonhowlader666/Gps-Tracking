@@ -9,7 +9,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config.dart';
 import '../storage/user_repository.dart';
 
-
 class ManualPaymentScreen extends StatefulWidget {
   final double dueAmount;
 
@@ -31,21 +30,21 @@ class ManualPaymentScreen extends StatefulWidget {
 class _ManualPaymentScreenState extends State<ManualPaymentScreen>
     with SingleTickerProviderStateMixin {
   // ── Colors ──────────────────────────────────────────────────────────────────
-  static const Color _bg      = Color(0xFFF4F6FB);
-  static const Color _accent  = Color(0xFF980E04);
+  static const Color _bg = Color(0xFFF4F6FB);
+  static const Color _accent = Color(0xFF980E04);
 
-  static const Color _bkashColor  = Color(0xFFE2136E);
-  static const Color _nagadColor  = Color(0xFFF26522);
+  static const Color _bkashColor = Color(0xFFE2136E);
+  static const Color _nagadColor = Color(0xFFF26522);
   static const Color _rocketColor = Color(0xFF8B1FA8);
 
   // ── State ────────────────────────────────────────────────────────────────────
   _PayMethod? _selected;
   final _amountController = TextEditingController();
   final _senderController = TextEditingController();
-  final _txnController    = TextEditingController();
+  final _txnController = TextEditingController();
 
   late final AnimationController _fadeCtrl;
-  late final Animation<double>   _fadeAnim;
+  late final Animation<double> _fadeAnim;
 
   final GlobalKey _receiptKey = GlobalKey();
 
@@ -79,31 +78,33 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
 
   // ── Payment methods ──────────────────────────────────────────────────────────
   List<_PayMethod> get _methods => [
-    _PayMethod(
-      id: 'bkash',
-      label: 'bKash',
-      number: PHONE_NO,
-      color: _bkashColor,
-      instruction: 'bKash অ্যাপ খুলুন → Send Money → নম্বর দিন → Amount → PIN',
-      imagePath: 'assets/icons/bkash.png',
-    ),
-    _PayMethod(
-      id: 'nagad',
-      label: 'Nagad',
-      number: PHONE_NO,
-      color: _nagadColor,
-      instruction: 'Nagad অ্যাপ খুলুন → Send Money → নম্বর দিন → Amount → PIN',
-      imagePath: 'assets/icons/nogod.png',
-    ),
-    _PayMethod(
-      id: 'rocket',
-      label: 'Rocket',
-      number: PHONE_NO,
-      color: _rocketColor,
-      instruction: 'Dial *322# → Send Money → নম্বর দিন → Amount → PIN',
-      imagePath: 'assets/icons/rocket.png',
-    ),
-  ];
+        _PayMethod(
+          id: 'bkash',
+          label: 'bKash',
+          number: PHONE_NO,
+          color: _bkashColor,
+          instruction:
+              'bKash অ্যাপ খুলুন → Send Money → নম্বর দিন → Amount → PIN',
+          imagePath: 'assets/icons/bkash.png',
+        ),
+        _PayMethod(
+          id: 'nagad',
+          label: 'Nagad',
+          number: PHONE_NO,
+          color: _nagadColor,
+          instruction:
+              'Nagad অ্যাপ খুলুন → Send Money → নম্বর দিন → Amount → PIN',
+          imagePath: 'assets/icons/nogod.png',
+        ),
+        _PayMethod(
+          id: 'rocket',
+          label: 'Rocket',
+          number: PHONE_NO,
+          color: _rocketColor,
+          instruction: 'Dial *322# → Send Money → নম্বর দিন → Amount → PIN',
+          imagePath: 'assets/icons/rocket.png',
+        ),
+      ];
 
   // ── Back handler ─────────────────────────────────────────────────────────────
   // ✅ Back করলে simply pop — কোনো result পাঠাবে না
@@ -135,16 +136,16 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
 
     try {
       final boundary = _receiptKey.currentContext?.findRenderObject()
-      as RenderRepaintBoundary?;
+          as RenderRepaintBoundary?;
       if (boundary == null) throw Exception('Cannot capture receipt');
 
-      final image    = await boundary.toImage(pixelRatio: 3.0);
+      final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw Exception('Failed to encode image');
 
       final Uint8List pngBytes = byteData.buffer.asUint8List();
 
-      final dir  = await getTemporaryDirectory();
+      final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/payment_receipt.png');
       await file.writeAsBytes(pngBytes);
 
@@ -156,28 +157,29 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
       }
 
       final adminNumber = whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
-      final userEmail   = UserRepository.getEmail() ?? 'N/A';
-      
-      final String packageStr = widget.packageType == '1_year' 
-          ? '1 Year (25% Discount BDT 1800)' 
+      final userEmail = UserRepository.getEmail() ?? 'N/A';
+
+      final String packageStr = widget.packageType == '1_year'
+          ? '1 Year (25% Discount BDT 1800)'
           : (widget.packageType == '1_month' ? '1 Month (BDT 200)' : 'N/A');
 
-      final msg         = Uri.encodeComponent(
+      final msg = Uri.encodeComponent(
         '🧾 *Manual Payment Notification*\n\n'
-            '👤 User: $userEmail\n'
-            '💳 Method: ${_selected!.label}\n'
-            '📦 Package: $packageStr\n'
-            '📱 Sender No: ${_senderController.text.trim()}\n'
-            '💰 Amount: BDT ${_amountController.text.trim()}৳\n'
-            '🔖 TxnID: ${_txnController.text.trim()}\n'
-            '📅 Date: ${_formatNow()}\n\n'
-            '📎 Screenshot attached above.\n'
-            '_Please confirm payment._',
+        '👤 User: $userEmail\n'
+        '💳 Method: ${_selected!.label}\n'
+        '📦 Package: $packageStr\n'
+        '📱 Sender No: ${_senderController.text.trim()}\n'
+        '💰 Amount: BDT ${_amountController.text.trim()}৳\n'
+        '🔖 TxnID: ${_txnController.text.trim()}\n'
+        '📅 Date: ${_formatNow()}\n\n'
+        '📎 Screenshot attached above.\n'
+        '_Please confirm payment._',
       );
 
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'image/png')],
-        text: 'Manual Payment Receipt - BDT ${_amountController.text.trim()}৳ via ${_selected!.label}',
+        text:
+            'Manual Payment Receipt - BDT ${_amountController.text.trim()}৳ via ${_selected!.label}',
         subject: 'Payment Receipt',
       );
 
@@ -259,22 +261,22 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
           // ✅ After 10th: AppBar এ warning badge দেখাবে
           bottom: widget.isAfter10th
               ? PreferredSize(
-            preferredSize: const Size.fromHeight(28),
-            child: Container(
-              width: double.infinity,
-              color: Colors.red.shade700,
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: const Text(
-                '⚠️  পেমেন্ট না করলে ফিরে গেলে আবার সতর্কতা দেখাবে',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          )
+                  preferredSize: const Size.fromHeight(28),
+                  child: Container(
+                    width: double.infinity,
+                    color: Colors.red.shade700,
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: const Text(
+                      '⚠️  পেমেন্ট না করলে ফিরে গেলে আবার সতর্কতা দেখাবে',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                )
               : null,
         ),
         body: FadeTransition(
@@ -286,28 +288,24 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
               children: [
                 _DueBanner(amount: widget.dueAmount),
                 const SizedBox(height: 20),
-
                 _StepHeader(step: '1', label: 'পেমেন্ট পদ্ধতি বেছে নিন'),
                 const SizedBox(height: 12),
                 ..._methods.map((m) => _MethodTile(
-                  method: m,
-                  isSelected: _selected?.id == m.id,
-                  onTap: () => setState(() => _selected = m),
-                )),
-
+                      method: m,
+                      isSelected: _selected?.id == m.id,
+                      onTap: () => setState(() => _selected = m),
+                    )),
                 if (_selected != null) ...[
                   const SizedBox(height: 20),
                   _StepHeader(step: '2', label: 'টাকা পাঠান'),
                   const SizedBox(height: 12),
                   _InstructionCard(method: _selected!, onCopy: _copyNumber),
                 ],
-
                 const SizedBox(height: 20),
                 _StepHeader(
                     step: _selected != null ? '3' : '2',
                     label: 'পেমেন্টের তথ্য দিন'),
                 const SizedBox(height: 12),
-
                 _InputField(
                   controller: _amountController,
                   label: 'পরিমাণ (BDT)',
@@ -317,7 +315,6 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 ),
                 const SizedBox(height: 12),
-
                 _InputField(
                   controller: _senderController,
                   label: 'আপনার ${_selected?.label ?? 'মোবাইল'} নম্বর',
@@ -329,7 +326,6 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
                   ],
                 ),
                 const SizedBox(height: 12),
-
                 _InputField(
                   controller: _txnController,
                   label: 'Transaction ID',
@@ -337,11 +333,9 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
                   icon: Icons.receipt_long,
                   keyboardType: TextInputType.text,
                 ),
-
                 const SizedBox(height: 24),
                 _StepHeader(
-                    step: _selected != null ? '4' : '3',
-                    label: 'রসিদ প্রিভিউ'),
+                    step: _selected != null ? '4' : '3', label: 'রসিদ প্রিভিউ'),
                 const SizedBox(height: 12),
                 _ReceiptCard(
                   repaintKey: _receiptKey,
@@ -352,7 +346,6 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
                   dateStr: _formatNow(),
                   userEmail: UserRepository.getEmail() ?? '',
                 ),
-
                 const SizedBox(height: 24),
                 _SendButton(isSending: _isSending, onTap: _captureAndShare),
                 const SizedBox(height: 32),
@@ -373,7 +366,7 @@ class _PayMethod {
   final String id;
   final String label;
   final String number;
-  final Color  color;
+  final Color color;
   final String instruction;
   final String imagePath;
 
@@ -501,9 +494,8 @@ class _MethodTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected
-              ? method.color.withValues(alpha: 0.08)
-              : Colors.white,
+          color:
+              isSelected ? method.color.withValues(alpha: 0.08) : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? method.color : Colors.grey.shade200,
@@ -549,16 +541,14 @@ class _MethodTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: isSelected
-                          ? method.color
-                          : const Color(0xFF1A2340),
+                      color:
+                          isSelected ? method.color : const Color(0xFF1A2340),
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     method.number,
-                    style: TextStyle(
-                        fontSize: 13, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -635,7 +625,6 @@ class _InstructionCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-
           Row(
             children: [
               Expanded(
@@ -661,8 +650,8 @@ class _InstructionCard extends StatelessWidget {
               GestureDetector(
                 onTap: onCopy,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: method.color,
                     borderRadius: BorderRadius.circular(8),
@@ -673,8 +662,7 @@ class _InstructionCard extends StatelessWidget {
                       Icon(Icons.copy, color: Colors.white, size: 14),
                       SizedBox(width: 6),
                       Text('Copy',
-                          style: TextStyle(
-                              color: Colors.white, fontSize: 13)),
+                          style: TextStyle(color: Colors.white, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -693,9 +681,7 @@ class _InstructionCard extends StatelessWidget {
                 child: Text(
                   method.instruction,
                   style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade700,
-                      height: 1.5),
+                      fontSize: 13, color: Colors.grey.shade700, height: 1.5),
                 ),
               ),
             ],
@@ -741,10 +727,8 @@ class _InputField extends StatelessWidget {
           style: const TextStyle(fontSize: 15, color: Color(0xFF1A2340)),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle:
-            TextStyle(color: Colors.grey.shade400, fontSize: 14),
-            prefixIcon:
-            Icon(icon, color: const Color(0xFF3E6FB8), size: 20),
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+            prefixIcon: Icon(icon, color: const Color(0xFF3E6FB8), size: 20),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
@@ -757,11 +741,10 @@ class _InputField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                  color: Color(0xFF3E6FB8), width: 2),
+              borderSide: const BorderSide(color: Color(0xFF3E6FB8), width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
         ),
       ],
@@ -811,12 +794,11 @@ class _ReceiptCard extends StatelessWidget {
           children: [
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                  vertical: 18, horizontal: 20),
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
               decoration: BoxDecoration(
                 color: accent,
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(18)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(18)),
               ),
               child: Column(
                 children: [
@@ -850,12 +832,11 @@ class _ReceiptCard extends StatelessWidget {
                           fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
                   Text(dateStr,
-                      style: const TextStyle(
-                          color: Colors.white70, fontSize: 12)),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 12)),
                 ],
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -884,16 +865,14 @@ class _ReceiptCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: accent.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: accent.withValues(alpha: 0.3)),
+                      border: Border.all(color: accent.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Amount Paid',
                             style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600)),
+                                fontSize: 15, fontWeight: FontWeight.w600)),
                         Text(
                           'BDT ${amount.isNotEmpty ? amount : '0'}৳',
                           style: TextStyle(
@@ -907,8 +886,8 @@ class _ReceiptCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.orange.shade50,
                       borderRadius: BorderRadius.circular(20),
@@ -931,16 +910,14 @@ class _ReceiptCard extends StatelessWidget {
                 ],
               ),
             ),
-
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.grey.shade50,
-                borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(18)),
-                border: Border(
-                    top: BorderSide(color: Colors.grey.shade200)),
+                borderRadius:
+                    const BorderRadius.vertical(bottom: Radius.circular(18)),
+                border: Border(top: BorderSide(color: Colors.grey.shade200)),
               ),
               child: Text(
                 'SmartLock BD • smartlockbd.com',
@@ -966,8 +943,7 @@ class _ReceiptCard extends StatelessWidget {
           SizedBox(
             width: 130,
             child: Text(label,
-                style: TextStyle(
-                    fontSize: 13, color: Colors.grey.shade500)),
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
           ),
           Expanded(
             child: Text(
@@ -1009,12 +985,12 @@ class _SendButton extends StatelessWidget {
           boxShadow: isSending
               ? []
               : [
-            BoxShadow(
-              color: Colors.black45.withValues(alpha: 0.4),
-              blurRadius: 2,
-              offset: const Offset(0, 6),
-            ),
-          ],
+                  BoxShadow(
+                    color: Colors.black45.withValues(alpha: 0.4),
+                    blurRadius: 2,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,

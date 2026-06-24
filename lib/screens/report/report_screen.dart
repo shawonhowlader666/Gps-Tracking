@@ -7,7 +7,7 @@ import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 class ReportScreen extends StatefulWidget {
   final int deviceId;
   final String deviceName;
-  final DeviceItem? device;  // ADD THIS
+  final DeviceItem? device; // ADD THIS
   final int initialTab;
   final String? presetPeriod;
 
@@ -15,7 +15,7 @@ class ReportScreen extends StatefulWidget {
     super.key,
     required this.deviceId,
     required this.deviceName,
-    this.device,  // ADD THIS
+    this.device, // ADD THIS
     this.initialTab = 0,
     this.presetPeriod,
   });
@@ -99,7 +99,7 @@ class _ReportScreenState extends State<ReportScreen>
           MonthlyReportTab(
             deviceId: widget.deviceId,
             deviceName: widget.deviceName,
-            device: widget.device,  // PASS DEVICE
+            device: widget.device, // PASS DEVICE
           ),
           CustomReportTab(
             deviceId: widget.deviceId,

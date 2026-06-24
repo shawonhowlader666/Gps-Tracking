@@ -154,8 +154,11 @@ class _MileageReportScreenState extends State<MileageReportScreen> {
 
     setState(() {
       _fromDate = DateTime(
-        picked.year, picked.month, picked.day,
-        time?.hour ?? 0, time?.minute ?? 0,
+        picked.year,
+        picked.month,
+        picked.day,
+        time?.hour ?? 0,
+        time?.minute ?? 0,
       );
       _customTotalKm = null;
     });
@@ -182,19 +185,22 @@ class _MileageReportScreenState extends State<MileageReportScreen> {
 
     setState(() {
       _toDate = DateTime(
-        picked.year, picked.month, picked.day,
-        time?.hour ?? 23, time?.minute ?? 59,
+        picked.year,
+        picked.month,
+        picked.day,
+        time?.hour ?? 23,
+        time?.minute ?? 59,
       );
       _customTotalKm = null;
     });
   }
 
   Widget _redTheme(BuildContext ctx, Widget? child) => Theme(
-    data: Theme.of(ctx).copyWith(
-      colorScheme: const ColorScheme.light(primary: _red),
-    ),
-    child: child!,
-  );
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: _red),
+        ),
+        child: child!,
+      );
 
   String _formatDateTime(DateTime dt) {
     final d = dt.day.toString().padLeft(2, '0');
@@ -303,7 +309,8 @@ class _ChartCard extends StatelessWidget {
           if (loading)
             const SizedBox(
               height: 180,
-              child: Center(child: CircularProgressIndicator(color: Color(0xFFE53935))),
+              child: Center(
+                  child: CircularProgressIndicator(color: Color(0xFFE53935))),
             )
           else
             SizedBox(
@@ -363,7 +370,8 @@ class _BarChart extends StatelessWidget {
             ...List.generate(data.length, (i) {
               final item = data[i];
               final barH = maxKm == 0 ? 0.0 : (item.km / yMax) * barAreaHeight;
-              final left = yAxisWidth + i * barSlotWidth + (barSlotWidth - barWidth) / 2;
+              final left =
+                  yAxisWidth + i * barSlotWidth + (barSlotWidth - barWidth) / 2;
               final top = valueHeight + (barAreaHeight - barH);
 
               return Stack(
@@ -377,7 +385,8 @@ class _BarChart extends StatelessWidget {
                     child: Container(
                       decoration: BoxDecoration(
                         color: barColor,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(4)),
                       ),
                     ),
                   ),
@@ -404,7 +413,8 @@ class _BarChart extends StatelessWidget {
                     child: Text(
                       item.label,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 8.5, color: Colors.black54),
+                      style:
+                          const TextStyle(fontSize: 8.5, color: Colors.black54),
                     ),
                   ),
                 ],
@@ -416,8 +426,8 @@ class _BarChart extends StatelessWidget {
     });
   }
 
-  List<Widget> _buildYLabels(
-      double yMax, double yAxisWidth, double barAreaHeight, double valueHeight) {
+  List<Widget> _buildYLabels(double yMax, double yAxisWidth,
+      double barAreaHeight, double valueHeight) {
     const steps = 3;
     return List.generate(steps + 1, (i) {
       final value = (yMax / steps * (steps - i)).round();
@@ -531,7 +541,9 @@ class _CustomRangeCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _DateButton(
-            label: fromDate != null ? formatDateTime(fromDate!) : 'From Date & Time',
+            label: fromDate != null
+                ? formatDateTime(fromDate!)
+                : 'From Date & Time',
             onTap: onPickFrom,
             selected: fromDate != null,
           ),
@@ -566,24 +578,26 @@ class _CustomRangeCard extends StatelessWidget {
                 ),
                 elevation: 2,
               ),
-              onPressed: (fromDate != null && toDate != null && !loading) ? onFetch : null,
+              onPressed: (fromDate != null && toDate != null && !loading)
+                  ? onFetch
+                  : null,
               child: loading
                   ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2.5,
-                ),
-              )
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
                   : const Text(
-                'KM Report',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
+                      'KM Report',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 14),
@@ -647,7 +661,7 @@ class _DateButton extends StatelessWidget {
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 class _DayMileage {
-  final String label;     // "08-05-2026"
+  final String label; // "08-05-2026"
   final String fullLabel;
   final double km;
 

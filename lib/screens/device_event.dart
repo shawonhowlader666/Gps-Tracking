@@ -108,14 +108,14 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
       if (args != null) {
         _timer.cancel();
         APIService.getEventByID(args!.id.toString(), args!.fromDate,
-            args!.fromTime, args!.toDate, args!.toTime)
+                args!.fromTime, args!.toDate, args!.toTime)
             .then((value) => {
-          eventList = [],
-          eventList!.addAll(value!),
-          _postsController.add(1),
-          isLoading = false,
-          setState(() {})
-        });
+                  eventList = [],
+                  eventList!.addAll(value!),
+                  _postsController.add(1),
+                  isLoading = false,
+                  setState(() {})
+                });
       }
     });
   }

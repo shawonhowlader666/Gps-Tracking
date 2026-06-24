@@ -1,4 +1,4 @@
-class BottomMenu{
+class BottomMenu {
   String? title;
   String? img;
   String? tapPath;

@@ -22,7 +22,6 @@ class SplashScreenPage extends StatefulWidget {
 
 class _SplashScreenPageState extends State<SplashScreenPage>
     with TickerProviderStateMixin {
-
   // ─── Timing ──────────────────────────────────────────────────────────────
   static const Duration _minimumSplashDuration = Duration(seconds: 2);
   static const Duration _initialDelay = Duration(milliseconds: 400);
@@ -151,7 +150,8 @@ class _SplashScreenPageState extends State<SplashScreenPage>
     final spytrackConfig = data['spytrack'] as Map<String, dynamic>;
 
     SERVER_URL = spytrackConfig['url'] as List;
-    SHOW_ADS = (spytrackConfig['ads'] as bool? ?? false) && serverType == 'free';
+    SHOW_ADS =
+        (spytrackConfig['ads'] as bool? ?? false) && serverType == 'free';
     WHATS_APP = spytrackConfig['whatsapp'] as String? ?? '';
     PHONE_NO = spytrackConfig['phone'] as String? ?? '';
     EMAIL = spytrackConfig['email'] as String? ?? '';
@@ -180,7 +180,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
               MaterialPageRoute(
                 builder: (_) => ServerMaintenanceScreen(message: message),
               ),
-                  (route) => false,
+              (route) => false,
             );
           });
         }
@@ -277,8 +277,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
               left: 0,
               right: 0,
               child: Center(
-                child:
-                _showCheckmark ? _buildCheckmark() : _buildLoader(),
+                child: _showCheckmark ? _buildCheckmark() : _buildLoader(),
               ),
             ),
           ],

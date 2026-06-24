@@ -24,7 +24,7 @@ import 'package:smart_lock/storage/user_repository.dart';
 
 import 'common_method.dart';
 
-enum DeviceStatus { running, idle, stop, offline }
+enum DeviceStatus { running, idle, stop, offline, expired }
 
 // ==================== SMOOTH ANIMATOR ====================
 class SmoothCarAnimator {
@@ -83,31 +83,20 @@ class SmoothCarAnimator {
       _currentBearing = _normalizeBearing(_targetBearing);
       onPositionUpdate(_currentPosition, _currentBearing);
       _targetPosition = null;
-      _currentSpeed = 0;
       _stop();
       return;
     }
 
-    double targetSpeed = distance < 10
-        ? _minSpeed
-        : distance < 50
-        ? _minSpeed + (distance - 10) / 40 * (_maxSpeed - _minSpeed)
-        : _maxSpeed;
-
-    _currentSpeed = _currentSpeed < targetSpeed
-        ? m.min(_currentSpeed + _acceleration * dt, targetSpeed)
-        : m.max(_currentSpeed - _acceleration * dt, targetSpeed);
-
-    final moveRatio =
-    ((_currentSpeed * dt) / distance).clamp(0.0, 1.0);
+    final speed = (distance / 1.5).clamp(5.0, 150.0);
+    final moveRatio = ((speed * dt) / distance).clamp(0.0, 1.0);
     _currentPosition = LatLng(
       _currentPosition.latitude +
           (_targetPosition!.latitude - _currentPosition.latitude) * moveRatio,
       _currentPosition.longitude +
           (_targetPosition!.longitude - _currentPosition.longitude) * moveRatio,
     );
-    _currentBearing =
-        _interpolateBearing(_currentBearing, _targetBearing, _bearingSpeed * dt);
+    _currentBearing = _interpolateBearing(
+        _currentBearing, _targetBearing, _bearingSpeed * dt);
     onPositionUpdate(_currentPosition, _currentBearing);
   }
 
@@ -178,8 +167,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
   bool _userInteracting = false;
   bool _isProgrammaticMove = false;
 
-  Set<Marker> _markers = {};
-  Set<Polyline> _polylines = {};
+  final ValueNotifier<Set<Marker>> _markersNotifier =
+      ValueNotifier<Set<Marker>>({});
+  final ValueNotifier<Set<Polyline>> _polylinesNotifier =
+      ValueNotifier<Set<Polyline>>({});
 
   DeviceItem? device;
   String todaytotalDistance = "--";
@@ -191,6 +182,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   SmoothCarAnimator? _carAnimator;
   BitmapDescriptor? _markerIcon;
   bool _isMarkerReady = false;
+  String? _lastLocalIconPath;
 
   final List<LatLng> _polylinePoints = [];
   static const int _maxPolylinePoints = 100;
@@ -208,13 +200,59 @@ class _TrackDeviceState extends State<TrackDevicePage>
   static const _neutralColor = Color(0xFF9CA3AF);
   static const _darkColor = Color(0xFF374151);
 
+  StreamSubscription? _onlyDevicesSubscription;
+
+  bool _hasDeviceChanged(DeviceItem? a, DeviceItem b) {
+    if (a == null) return true;
+    final currentLocalPath =
+        UserRepository.prefs?.getString("custom_icon_path_${b.id}");
+    if (_lastLocalIconPath != currentLocalPath) {
+      return true;
+    }
+    return a.lat != b.lat ||
+        a.lng != b.lng ||
+        a.speed != b.speed ||
+        a.online != b.online ||
+        a.course != b.course ||
+        a.engineStatus != b.engineStatus ||
+        a.stopDuration != b.stopDuration ||
+        a.totalDistance != b.totalDistance ||
+        a.power != b.power ||
+        a.icon?.path != b.icon?.path ||
+        a.icon?.type != b.icon?.type ||
+        a.iconColor != b.iconColor;
+  }
+
   @override
   void initState() {
     super.initState();
     device = widget.device;
     if (widget.device != null) {
+      _lastLocalIconPath = UserRepository.prefs
+          ?.getString("custom_icon_path_${widget.device!.id}");
       _updateBatteryStatus(widget.device!);
     }
+
+    final DataController controller = Get.put(DataController());
+    _onlyDevicesSubscription = controller.onlyDevices.listen((devices) {
+      if (mounted && !_isDisposed) {
+        for (var element in devices) {
+          if (element.id == widget.id) {
+            if (_hasDeviceChanged(device, element)) {
+              _lastLocalIconPath = UserRepository.prefs
+                  ?.getString("custom_icon_path_${element.id}");
+              setState(() {
+                device = element;
+              });
+              _updateBatteryStatus(element);
+              updateMarker(element);
+            }
+            break;
+          }
+        }
+      }
+    });
+
     _loadMapStyle();
     _initializeAll();
   }
@@ -239,17 +277,14 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   LatLng _getInitialPosition() {
     if (device?.lat != null && device?.lng != null) {
-      return LatLng(
-          double.parse(device!.lat.toString()),
+      return LatLng(double.parse(device!.lat.toString()),
           double.parse(device!.lng.toString()));
     }
     return const LatLng(0, 0);
   }
 
   void _loadMapStyle() {
-    rootBundle
-        .loadString('assets/map_style.txt')
-        .then((string) {
+    rootBundle.loadString('assets/map_style.txt').then((string) {
       _mapStyle = string;
       if (_isMapCreated && _mapController != null) {
         _mapController!.setMapStyle(_mapStyle);
@@ -264,7 +299,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
       return;
     }
     try {
-      _markerIcon = await Util.getMarkerIcon(device!.icon!.path!);
+      _markerIcon = await Util.getMarkerIcon(
+        device!.icon!.path!,
+        statusColor: Util.getDeviceStatusColorStr(device!),
+        iconType: device!.icon?.type ?? device!.iconType,
+        deviceName: device!.name,
+        deviceId: device!.id,
+      );
       _isMarkerReady = true;
       if (mounted && !_isDisposed) _updateMapMarkers();
     } catch (e) {
@@ -281,22 +322,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   void _startCameraTimer() {
-    _cameraTimer =
-        Timer.periodic(const Duration(milliseconds: 100), (_) {
-          if (_followVehicle &&
-              _isMapCreated &&
-              _carAnimator != null &&
-              !_userInteracting &&
-              !_isProgrammaticMove) {
-            _isProgrammaticMove = true;
-            _mapController
-                ?.animateCamera(
-                CameraUpdate.newLatLng(_carAnimator!.currentPosition))
-                .then((_) => Future.delayed(
-                const Duration(milliseconds: 50),
-                    () => _isProgrammaticMove = false));
-          }
-        });
+    // Camera follow is updated instantly inside the animator callback
   }
 
   Future<void> _fetchAllData() async {
@@ -314,8 +340,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
         final history = await APIService.getHistory(
             deviceId.toString(), fromDate, "00:00", toDate, "23:59");
         if (history != null && mounted && !_isDisposed) {
-          setState(
-                  () => todaytotalDistance = history.distance_sum ?? "0");
+          setState(() => todaytotalDistance = history.distance_sum ?? "0");
         }
       } catch (e) {
         log("History error: $e");
@@ -323,7 +348,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
       try {
         final report =
-        await ReportService.getTodayReportData(deviceId: deviceId);
+            await ReportService.getTodayReportData(deviceId: deviceId);
         if (mounted && !_isDisposed) {
           setState(() {
             todayData = report;
@@ -338,15 +363,33 @@ class _TrackDeviceState extends State<TrackDevicePage>
     }
   }
 
-  void updateMarker(DeviceItem element) {
-    if (_isDisposed || !_isMarkerReady || _carAnimator == null) return;
+  void updateMarker(DeviceItem element) async {
+    if (_isDisposed || _carAnimator == null) return;
     final newPos = LatLng(double.parse(element.lat.toString()),
         double.parse(element.lng.toString()));
-    final rotation =
-        element.iconType == "arrow" || element.iconType == "rotating";
     final newBearing =
-    rotation ? double.parse(element.course.toString()) : 0.0;
+        double.tryParse(element.course?.toString() ?? '0.0') ?? 0.0;
     _carAnimator!.moveTo(newPos, newBearing);
+
+    // Dynamically update marker icon on state change (status, color, local settings)
+    if (element.icon?.path != null) {
+      try {
+        final icon = await Util.getMarkerIcon(
+          element.icon!.path!,
+          statusColor: Util.getDeviceStatusColorStr(element),
+          iconType: element.icon?.type ?? element.iconType,
+          deviceName: element.name,
+          deviceId: element.id,
+        );
+        if (!_isDisposed && icon != _markerIcon) {
+          _markerIcon = icon;
+          _isMarkerReady = true;
+          _updateMapMarkers();
+        }
+      } catch (e) {
+        debugPrint("Error updating marker icon: $e");
+      }
+    }
   }
 
   void _onCarPositionUpdate(LatLng position, double bearing) {
@@ -360,6 +403,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
       }
     }
     _updateMapMarkers();
+    if (_followVehicle &&
+        _isMapCreated &&
+        _mapController != null &&
+        !_isProgrammaticMove) {
+      _mapController!.moveCamera(CameraUpdate.newLatLng(position));
+    }
   }
 
   void _updateMapMarkers() {
@@ -373,21 +422,22 @@ class _TrackDeviceState extends State<TrackDevicePage>
       flat: true,
       zIndex: 2,
     );
+    final points = List<LatLng>.from(_polylinePoints);
+    if (!points.contains(_carAnimator!.currentPosition)) {
+      points.add(_carAnimator!.currentPosition);
+    }
     final polyline = Polyline(
       polylineId: const PolylineId("trail"),
-      points: List.from(_polylinePoints),
+      points: points,
       color: _primaryBlue.withValues(alpha: 0.7),
-      width: 3,
+      width: 4,
       geodesic: true,
+      jointType: JointType.round,
       startCap: Cap.roundCap,
       endCap: Cap.roundCap,
     );
-    if (mounted) {
-      setState(() {
-        _markers = {marker};
-        _polylines = {polyline};
-      });
-    }
+    _markersNotifier.value = {marker};
+    _polylinesNotifier.value = {polyline};
   }
 
   double _calculateDistance(LatLng a, LatLng b) {
@@ -404,35 +454,19 @@ class _TrackDeviceState extends State<TrackDevicePage>
   // ==================== STATUS ====================
   DeviceStatus _getDeviceStatus(DeviceItem? d) {
     if (d == null) return DeviceStatus.offline;
-    if (!_isDeviceOnline(d)) return DeviceStatus.offline;
-    final speed = double.tryParse(d.speed.toString()) ?? 0;
-    if (speed > 0) return DeviceStatus.running;
-    return _isEngineOn(d) ? DeviceStatus.idle : DeviceStatus.stop;
-  }
-
-  bool _isDeviceOnline(DeviceItem d) {
-    final online = d.online?.toLowerCase().trim() ?? '';
-    if (online.contains('offline')) return false;
-    if (online.contains('online')) return true;
-    final iconColor = d.iconColor?.toLowerCase() ?? '';
-    if (iconColor == 'green' || iconColor == 'yellow') return true;
-    final speed = double.tryParse(d.speed.toString()) ?? 0;
-    return speed > 0;
-  }
-
-  bool _isEngineOn(DeviceItem d) {
-    if (d.engineStatus != null) {
-      final status = d.engineStatus;
-      if (status is bool) return status;
-      if (status is int) return status == 1;
-      if (status is String) {
-        final s = status.toLowerCase();
-        if (['on', '1', 'true'].contains(s)) return true;
-      }
+    final colorStr = Util.getDeviceStatusColorStr(d);
+    switch (colorStr) {
+      case 'green':
+        return DeviceStatus.running;
+      case 'yellow':
+        return DeviceStatus.idle;
+      case 'red':
+        return DeviceStatus.stop;
+      case 'orange':
+        return DeviceStatus.expired;
+      default:
+        return DeviceStatus.offline;
     }
-    final speed = double.tryParse(d.speed.toString()) ?? 0;
-    if (speed > 0) return true;
-    return d.iconColor?.toLowerCase() == 'yellow';
   }
 
   Color _getStatusColor() {
@@ -445,6 +479,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
         return _dangerColor;
       case DeviceStatus.offline:
         return _neutralColor;
+      case DeviceStatus.expired:
+        return Colors.orange;
     }
   }
 
@@ -458,17 +494,20 @@ class _TrackDeviceState extends State<TrackDevicePage>
         return "Stopped";
       case DeviceStatus.offline:
         return "Offline";
+      case DeviceStatus.expired:
+        return "Expired";
     }
   }
 
   void _fetchAddress() {
     if (device?.lat == null) return;
-    
+
     final double? latVal = double.tryParse(device!.lat.toString());
     final double? lngVal = double.tryParse(device!.lng.toString());
     if (latVal == null || lngVal == null) return;
-    final currentCoordinates = "${latVal.toStringAsFixed(4)},${lngVal.toStringAsFixed(4)}";
-    
+    final currentCoordinates =
+        "${latVal.toStringAsFixed(4)},${lngVal.toStringAsFixed(4)}";
+
     if (_lastFetchedCoordinates == currentCoordinates) return;
     _lastFetchedCoordinates = currentCoordinates;
 
@@ -479,7 +518,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
     }
 
     APIService.getGeocoderAddress(
-        device!.lat.toString(), device!.lng.toString())
+            device!.lat.toString(), device!.lng.toString())
         .then((addr) {
       if (!_isDisposed && mounted) {
         setState(() => _address = addr.replaceAll('"', ''));
@@ -542,7 +581,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
         if (isVoltage) {
           formattedValue = '$cleanVal V';
         } else {
-          formattedValue = '$cleanVal%';
+          formattedValue = cleanVal;
         }
       }
     }
@@ -560,7 +599,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       if (isVoltage) {
         text = '$rawVal V';
       } else {
-        text = '$rawVal%';
+        text = rawVal.toString();
       }
     }
 
@@ -577,7 +616,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
               name.contains('adc') ||
               name.contains('analog') ||
               text.toLowerCase().contains('v')) &&
-          !(type == 'battery' || name.contains('battery') || text.contains('%'));
+          !(type == 'battery' ||
+              name.contains('battery') ||
+              text.contains('%'));
       final label = isVoltage ? 'Voltage' : 'Battery';
       _lastBatteryLabelCache[devId] = label;
       if (UserRepository.prefs != null) {
@@ -706,21 +747,29 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   // ==================== ACTIONS ====================
-  void _centerOnVehicle() {
+  void _centerOnVehicle() async {
     if (_carAnimator == null || _mapController == null) return;
-    _isProgrammaticMove = true;
-    setState(() => _followVehicle = true);
-    _mapController!
-        .animateCamera(
-      CameraUpdate.newCameraPosition(CameraPosition(
-        target: _carAnimator!.currentPosition,
-        zoom: 17,
-        bearing: _carAnimator!.currentBearing,
-        tilt: 45,
-      )),
-    )
-        .then((_) => Future.delayed(const Duration(milliseconds: 100),
-            () => _isProgrammaticMove = false));
+    setState(() {
+      _isProgrammaticMove = true;
+      _followVehicle = true;
+    });
+    try {
+      await _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(CameraPosition(
+          target: _carAnimator!.currentPosition,
+          zoom: 17,
+          bearing: _carAnimator!.currentBearing,
+          tilt: 45,
+        )),
+      );
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProgrammaticMove = false;
+        });
+      }
+    }
   }
 
   // ==================== MY LOCATION ====================
@@ -750,21 +799,29 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
       final myLatLng = LatLng(position.latitude, position.longitude);
 
-      setState(() => _followVehicle = false);
+      setState(() {
+        _isProgrammaticMove = true;
+        _followVehicle = false;
+      });
 
-      _isProgrammaticMove = true;
-      await _mapController?.animateCamera(
-        CameraUpdate.newCameraPosition(CameraPosition(
-          target: myLatLng,
-          zoom: 17,
-        )),
-      );
-      Future.delayed(const Duration(milliseconds: 100),
-              () => _isProgrammaticMove = false);
+      if (_mapController != null) {
+        await _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(CameraPosition(
+            target: myLatLng,
+            zoom: 17,
+          )),
+        );
+      }
     } catch (e) {
       Get.snackbar('Error', 'Could not get your location: $e',
           backgroundColor: Colors.red.withValues(alpha: 0.9),
           colorText: Colors.white);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProgrammaticMove = false;
+        });
+      }
     }
   }
 
@@ -773,13 +830,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
     setState(() => _trafficEnabled = !_trafficEnabled);
   }
 
-  void _openPlayback() =>
-      Get.to(() => PlaybackScreen(id: widget.id, name: widget.name, device: device));
+  void _openPlayback() => Get.to(
+      () => PlaybackScreen(id: widget.id, name: widget.name, device: device));
 
   void _openLock() async {
     if (device == null) return;
     final updatedDevice = await Get.to<DeviceItem>(
-          () => LockUnlockScreen(device: device!),
+      () => LockUnlockScreen(device: device!),
     );
     if (updatedDevice != null && mounted) {
       setState(() => device = updatedDevice);
@@ -808,8 +865,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   void _openStreetView() {
     if (device?.lat != null) {
-      Get.to(() => StreetViewScreen(
-          latitude: device!.lat!, longitude: device!.lng!));
+      Get.to(() =>
+          StreetViewScreen(latitude: device!.lat!, longitude: device!.lng!));
     }
   }
 
@@ -827,10 +884,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
   @override
   void dispose() {
     _isDisposed = true;
+    _onlyDevicesSubscription?.cancel();
     _dataTimer?.cancel();
     _cameraTimer?.cancel();
     _carAnimator?.dispose();
     _mapController = null;
+    _markersNotifier.dispose();
+    _polylinesNotifier.dispose();
     super.dispose();
   }
 
@@ -838,19 +898,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: GetX<DataController>(
-        init: DataController(),
-        builder: (controller) {
-          for (var element in controller.onlyDevices) {
-            if (element.id == widget.id) {
-              device = element;
-              _updateBatteryStatus(element);
-              updateMarker(element);
-            }
-          }
-          return _buildBody();
-        },
-      ),
+      body: _buildBody(),
     );
   }
 
@@ -868,64 +916,51 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   Widget _buildMap() {
-    return GoogleMap(
-      mapType: _currentMapType,
-      trafficEnabled: _trafficEnabled,
-      initialCameraPosition:
-      CameraPosition(target: _getInitialPosition(), zoom: 16),
-      onCameraMove: (pos) => _currentZoom = pos.zoom,
-      onCameraMoveStarted: () {
-        if (!_isProgrammaticMove) _userInteracting = true;
+    return ValueListenableBuilder<Set<Marker>>(
+      valueListenable: _markersNotifier,
+      builder: (context, markers, _) {
+        return ValueListenableBuilder<Set<Polyline>>(
+          valueListenable: _polylinesNotifier,
+          builder: (context, polylines, _) {
+            return GoogleMap(
+              mapType: _currentMapType,
+              trafficEnabled: _trafficEnabled,
+              initialCameraPosition:
+                  CameraPosition(target: _getInitialPosition(), zoom: 16),
+              onCameraMove: (pos) {
+                _currentZoom = pos.zoom;
+              },
+              onMapCreated: (controller) {
+                _mapController = controller;
+                _isMapCreated = true;
+                if (_mapStyle != null) controller.setMapStyle(_mapStyle);
+                if (_carAnimator != null) {
+                  controller.animateCamera(CameraUpdate.newCameraPosition(
+                    CameraPosition(
+                        target: _carAnimator!.currentPosition, zoom: 16),
+                  ));
+                }
+              },
+              markers: markers,
+              polylines: polylines,
+              padding: const EdgeInsets.only(bottom: 260),
+              rotateGesturesEnabled: true,
+              tiltGesturesEnabled: true,
+              scrollGesturesEnabled: !_followVehicle,
+              zoomGesturesEnabled: true,
+              mapToolbarEnabled: false,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+            );
+          },
+        );
       },
-      onCameraIdle: () {
-        if (_userInteracting &&
-            !_isProgrammaticMove &&
-            _followVehicle &&
-            _carAnimator != null) {
-          _mapController
-              ?.getLatLng(ScreenCoordinate(
-            x: (MediaQuery.of(context).size.width / 2).toInt(),
-            y: (MediaQuery.of(context).size.height / 2).toInt(),
-          ))
-              .then((centerLatLng) {
-            if (mounted &&
-                _calculateDistance(
-                    _carAnimator!.currentPosition, centerLatLng) >
-                    100) {
-              setState(() => _followVehicle = false);
-            }
-          });
-        }
-        _userInteracting = false;
-      },
-      onMapCreated: (controller) {
-        _mapController = controller;
-        _isMapCreated = true;
-        if (_mapStyle != null) controller.setMapStyle(_mapStyle);
-        if (_carAnimator != null) {
-          controller.animateCamera(CameraUpdate.newCameraPosition(
-            CameraPosition(
-                target: _carAnimator!.currentPosition, zoom: 16),
-          ));
-        }
-      },
-      markers: _markers,
-      polylines: _polylines,
-      padding: const EdgeInsets.only(bottom: 260),
-      rotateGesturesEnabled: true,
-      tiltGesturesEnabled: true,
-      scrollGesturesEnabled: true,
-      zoomGesturesEnabled: true,
-      mapToolbarEnabled: false,
-      myLocationEnabled: true,
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
     );
   }
 
   Widget _buildSpeedOverlay() {
-    final speed =
-        double.tryParse(device?.speed.toString() ?? '0') ?? 0;
+    final speed = double.tryParse(device?.speed.toString() ?? '0') ?? 0;
     return Positioned(
       top: MediaQuery.of(context).padding.top + 56,
       left: 12,
@@ -977,8 +1012,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
           icon: const Icon(Icons.arrow_back, color: Colors.black, size: 20),
           onPressed: () => Get.back(),
           padding: const EdgeInsets.all(8),
-          constraints:
-          const BoxConstraints(minWidth: 36, minHeight: 36),
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
         ),
       ),
     );
@@ -997,7 +1031,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
           _buildMapBtn(
             Icons.bar_chart,
             _darkColor,
-                () {
+            () {
               if (device != null) _showReport(device!);
             },
           ),
@@ -1005,7 +1039,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
           _buildMapBtn(
             Icons.directions_car,
             _darkColor,
-                () {
+            () {
               if (device != null) {
                 Navigator.push(
                   context,
@@ -1034,7 +1068,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
           _buildMapBtn(
             Icons.map_outlined,
             _darkColor,
-                () => setState(() {
+            () => setState(() {
               _currentMapType = _currentMapType == MapType.normal
                   ? MapType.hybrid
                   : MapType.normal;
@@ -1105,13 +1139,11 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   Widget _buildMapBtn(IconData icon, Color iconColor, VoidCallback onTap,
-      {bool selected = false,
-        Color? selectedColor,
-        Color? bgColor}) {
+      {bool selected = false, Color? selectedColor, Color? bgColor}) {
     final bg =
         bgColor ?? (selected ? (selectedColor ?? _primaryBlue) : Colors.white);
     final ic =
-    bgColor != null ? Colors.white : (selected ? Colors.white : iconColor);
+        bgColor != null ? Colors.white : (selected ? Colors.white : iconColor);
     return Material(
       color: bg,
       elevation: 2,
@@ -1186,14 +1218,14 @@ class _TrackDeviceState extends State<TrackDevicePage>
         children: [
           _buildActionBtn(Icons.play_circle_fill, 'Play Back',
               const Color(0xFF3B82F6), _openPlayback),
-          _buildActionBtn(Icons.notifications_active, 'Alert',
-              const Color(0xFFF59E0B), () {
-                Get.to(() => EventsPage());
-              }),
+          _buildActionBtn(
+              Icons.notifications_active, 'Alert', const Color(0xFFF59E0B), () {
+            Get.to(() => EventsPage());
+          }),
           _buildActionBtn(
               Icons.lock, 'Lock', const Color(0xFF22C55E), _openLock),
-          _buildActionBtn(Icons.settings, 'Setting', const Color(0xFF0EA5E9),
-              _openDetails),
+          _buildActionBtn(
+              Icons.settings, 'Setting', const Color(0xFF0EA5E9), _openDetails),
         ],
       ),
     );
@@ -1233,8 +1265,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
           border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
       child: Text(
         _address ?? '',
-        style:
-        const TextStyle(fontSize: 12, color: Color(0xFF374151)),
+        style: const TextStyle(fontSize: 12, color: Color(0xFF374151)),
       ),
     );
   }
@@ -1267,7 +1298,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   Widget _buildStatusRow() {
     final status = _getDeviceStatus(device);
-    final isEngineOn = device != null ? _isEngineOn(device!) : false;
+    final isEngineOn = device != null ? Util.isEngineOn(device!) : false;
     final stopDuration = device?.stopDuration ?? '--';
     String expiryStr = '--';
     try {
@@ -1276,7 +1307,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
         final date = DateTime.tryParse(expiry);
         if (date != null) {
           expiryStr =
-          '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
+              '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
         }
       }
     } catch (_) {}
@@ -1289,25 +1320,23 @@ class _TrackDeviceState extends State<TrackDevicePage>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Status / Speed
-          Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_getStatusText(),
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey[500],
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.3)),
-                Text(
-                  status == DeviceStatus.running
-                      ? '${double.tryParse(device?.speed?.toString() ?? '0')?.toInt() ?? 0} km/h'
-                      : stopDuration,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: _getStatusColor()),
-                ),
-              ]),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_getStatusText(),
+                style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[500],
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.3)),
+            Text(
+              status == DeviceStatus.running
+                  ? '${double.tryParse(device?.speed?.toString() ?? '0')?.toInt() ?? 0} km/h'
+                  : stopDuration,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _getStatusColor()),
+            ),
+          ]),
 
           // ACC / Engine
           Column(children: [
@@ -1370,8 +1399,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   Widget _buildMileageRow() {
-    final totalMileage =
-        device?.totalDistance?.toStringAsFixed(1) ?? '0';
+    final totalMileage = device?.totalDistance?.toStringAsFixed(1) ?? '0';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
@@ -1402,4 +1430,3 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 }
-

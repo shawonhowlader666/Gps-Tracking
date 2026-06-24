@@ -34,11 +34,11 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
   late final Animation<double> _pulseAnim;
 
   // ── colours / styles ────────────────────────────────────────────────────────
-  static const Color _crimson   = Color(0xFFDC2626);
-  static const Color _amber     = Color(0xFFD97706);
-  static const Color _green     = Color(0xFF16A34A);
-  static const Color _darkBg    = Color(0xFF1C1917);
-  static const Color _cardBg    = Color(0xFF292524);
+  static const Color _crimson = Color(0xFFDC2626);
+  static const Color _amber = Color(0xFFD97706);
+  static const Color _green = Color(0xFF16A34A);
+  static const Color _darkBg = Color(0xFF1C1917);
+  static const Color _cardBg = Color(0xFF292524);
   static const Color _textLight = Color(0xFFF5F5F4);
   static const Color _textMuted = Color(0xFFA8A29E);
 
@@ -71,8 +71,8 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
     setState(() => _state = _CardState.loading);
 
     try {
-      final stats    = await PaymentService.getStats();
-      final expInfo  = await PaymentService.getExpirationInfo();
+      final stats = await PaymentService.getStats();
+      final expInfo = await PaymentService.getExpirationInfo();
 
       if (!mounted) return;
 
@@ -88,15 +88,15 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
       if (expInfo != null) {
         final raw = expInfo['expiration_date']?.toString();
         expDate = raw != null ? DateTime.tryParse(raw) : null;
-        expired = expInfo['is_expired'] == true ||
-            expInfo['is_expired'] == 'true';
+        expired =
+            expInfo['is_expired'] == true || expInfo['is_expired'] == 'true';
       }
 
       setState(() {
-        _due            = due;
+        _due = due;
         _expirationDate = expDate;
-        _isExpired      = expired;
-        _state          = _CardState.due;
+        _isExpired = expired;
+        _state = _CardState.due;
       });
 
       _startCountdown();
@@ -150,7 +150,7 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
       case _CardState.loading:
         return _buildShell(child: _buildLoading());
       case _CardState.noDue:
-        return const SizedBox.shrink();        // hide if no due
+        return const SizedBox.shrink(); // hide if no due
       case _CardState.error:
         return _buildShell(child: _buildError());
       case _CardState.due:
@@ -306,8 +306,8 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
             color: _crimson.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(Icons.receipt_long_rounded,
-              color: _crimson, size: 20),
+          child:
+              const Icon(Icons.receipt_long_rounded, color: _crimson, size: 20),
         ),
         const SizedBox(width: 12),
 
@@ -355,8 +355,7 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
         // Expiry date badge
         if (_expirationDate != null)
           Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(8),
@@ -377,8 +376,8 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
                 const SizedBox(height: 2),
                 Text(
                   '${_expirationDate!.day.toString().padLeft(2, '0')}/'
-                      '${_expirationDate!.month.toString().padLeft(2, '0')}/'
-                      '${_expirationDate!.year}',
+                  '${_expirationDate!.month.toString().padLeft(2, '0')}/'
+                  '${_expirationDate!.year}',
                   style: const TextStyle(
                     color: _textLight,
                     fontSize: 11,
@@ -424,8 +423,8 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
       );
     }
 
-    final days    = _remaining.inDays;
-    final hours   = _remaining.inHours % 24;
+    final days = _remaining.inDays;
+    final hours = _remaining.inHours % 24;
     final minutes = _remaining.inMinutes % 60;
     final seconds = _remaining.inSeconds % 60;
 
@@ -453,11 +452,9 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildTimeUnit(
-                  value: days, label: 'দিন', color: urgencyColor),
+              _buildTimeUnit(value: days, label: 'দিন', color: urgencyColor),
               _buildSeparator(),
-              _buildTimeUnit(
-                  value: hours, label: 'ঘণ্টা', color: urgencyColor),
+              _buildTimeUnit(value: hours, label: 'ঘণ্টা', color: urgencyColor),
               _buildSeparator(),
               _buildTimeUnit(
                   value: minutes, label: 'মিনিট', color: urgencyColor),
@@ -533,11 +530,11 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
         ),
         icon: _isPaying
             ? const SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(
-              strokeWidth: 2, color: Colors.white),
-        )
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
             : const Icon(Icons.credit_card_rounded, size: 20),
         label: Text(
           _isPaying ? 'অনুগ্রহ করে অপেক্ষা করুন...' : 'এখনই পরিশোধ করুন',

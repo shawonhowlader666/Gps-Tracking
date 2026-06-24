@@ -8,7 +8,11 @@ class Event extends Object {
   dynamic speed;
 
   Event(
-      {this.id, String? message, this.latitude, this.longitude, this.device_name}) {
+      {this.id,
+      String? message,
+      this.latitude,
+      this.longitude,
+      this.device_name}) {
     this.message = _cleanMessage(message);
   }
 

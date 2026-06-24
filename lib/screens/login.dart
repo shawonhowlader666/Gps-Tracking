@@ -22,7 +22,6 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
-
   // ─── Theme ────────────────────────────────────────────────────────────────
   static const Color _red = Color(0xFFE53935);
   static const Color _grey = Color(0xFFE0E0E0);
@@ -127,7 +126,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       }
 
       SERVER_URL = serverList;
-      SHOW_ADS = (spytrackConfig['ads'] as bool? ?? false) && serverType == 'free';
+      SHOW_ADS =
+          (spytrackConfig['ads'] as bool? ?? false) && serverType == 'free';
       WHATS_APP = spytrackConfig['whatsapp'] as String? ?? '';
       PHONE_NO = spytrackConfig['phone'] as String? ?? '';
       EMAIL = spytrackConfig['email'] as String? ?? '';
@@ -169,7 +169,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 MaterialPageRoute(
                   builder: (_) => ServerMaintenanceScreen(message: message),
                 ),
-                    (route) => false,
+                (route) => false,
               );
             });
           }
@@ -224,7 +224,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       message += " $cleanIdentifier";
     }
 
-    final Uri uri = Uri.parse('https://wa.me/$cleanNumber?text=${Uri.encodeComponent(message)}');
+    final Uri uri = Uri.parse(
+        'https://wa.me/$cleanNumber?text=${Uri.encodeComponent(message)}');
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -294,8 +295,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
     try {
       final List<dynamic> activeServers = _availableServers
-          .where((s) =>
-      (s['message'] as String? ?? '').isEmpty)
+          .where((s) => (s['message'] as String? ?? '').isEmpty)
           .toList();
 
       if (activeServers.isEmpty) {
@@ -313,7 +313,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       for (final server in activeServers) {
         try {
           final response =
-          await APIService.login(server['url'], email, password);
+              await APIService.login(server['url'], email, password);
           if (response == null) continue;
           lastStatusCode = response.statusCode;
           if (response.statusCode == 200) {
@@ -322,7 +322,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             );
             UserRepository.setServerUrl(server['url'] as String);
             UserRepository.setHash(user.userApiHash!);
-            await _prefs.setString('serverType', server['type'] as String? ?? 'free');
+            await _prefs.setString(
+                'serverType', server['type'] as String? ?? 'free');
 
             if (_rememberMe) {
               UserRepository.setEmail(email);
@@ -446,8 +447,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         color: _textGrey,
                         size: 20,
                       ),
-                      onPressed: () => setState(
-                              () => _passwordVisible = !_passwordVisible),
+                      onPressed: () =>
+                          setState(() => _passwordVisible = !_passwordVisible),
                     ),
                   ),
 
@@ -471,32 +472,32 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       ),
                       child: _isLoading
                           ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white),
-                        ),
-                      )
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
                           : _isLoadingServers
-                          ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white),
-                        ),
-                      )
-                          : const Text(
-                        'LogIn',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white),
+                                  ),
+                                )
+                              : const Text(
+                                  'LogIn',
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
                     ),
                   ),
 
@@ -510,7 +511,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       children: [
                         TextSpan(
                           text:
-                          'By Successfully login, You are agreeing with Our\n',
+                              'By Successfully login, You are agreeing with Our\n',
                         ),
                         TextSpan(
                           text: 'Terms and Conditions',
@@ -588,7 +589,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         hintStyle: const TextStyle(color: _textGrey, fontSize: 14),
         suffixIcon: suffix,
         contentPadding:
-        const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         filled: true,
         fillColor: Colors.white,
         enabledBorder: OutlineInputBorder(
@@ -597,8 +598,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-          const BorderSide(color: Color(0xFFE53935), width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFFE53935), width: 1.5),
         ),
       ),
     );

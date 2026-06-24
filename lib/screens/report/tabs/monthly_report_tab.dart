@@ -60,7 +60,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
     try {
       final firstDay = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
       final lastDay =
-      DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
+          DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
       final today = DateTime.now();
       final effectiveLastDay = lastDay.isAfter(today) ? today : lastDay;
       _totalDays = effectiveLastDay.day;
@@ -160,8 +160,8 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
   Widget build(BuildContext context) {
     super.build(context);
     final now = DateTime.now();
-    final isCurrentMonth = _selectedMonth.year == now.year &&
-        _selectedMonth.month == now.month;
+    final isCurrentMonth =
+        _selectedMonth.year == now.year && _selectedMonth.month == now.month;
 
     return RefreshIndicator(
       onRefresh: _loadMonthlyReport,
@@ -198,7 +198,8 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
       ),
       child: Row(
         children: [
-          _NavBtn(icon: Icons.chevron_left_rounded, onTap: () => _changeMonth(-1)),
+          _NavBtn(
+              icon: Icons.chevron_left_rounded, onTap: () => _changeMonth(-1)),
           Expanded(
             child: Column(
               children: [
@@ -368,8 +369,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
         ),
         const Spacer(),
         Container(
-          padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: _red.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(20),
@@ -427,10 +427,8 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          tilePadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          childrenPadding:
-          const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
           leading: Container(
             width: 50,
             height: 50,
@@ -438,8 +436,8 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
               color: isToday
                   ? _red
                   : isWeekend
-                  ? Colors.orange.withValues(alpha: 0.1)
-                  : _red.withValues(alpha: 0.08),
+                      ? Colors.orange.withValues(alpha: 0.1)
+                      : _red.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -453,8 +451,8 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
                     color: isToday
                         ? Colors.white
                         : isWeekend
-                        ? Colors.orange
-                        : _red,
+                            ? Colors.orange
+                            : _red,
                   ),
                 ),
                 Text(
@@ -465,8 +463,8 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
                     color: isToday
                         ? Colors.white70
                         : isWeekend
-                        ? Colors.orange
-                        : _red,
+                            ? Colors.orange
+                            : _red,
                   ),
                 ),
               ],
@@ -476,14 +474,14 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
             children: [
               Text(
                 day.data.routeLength ?? '0 km',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 17),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
               ),
               if (isToday) ...[
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 7, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
                     color: const Color(0xFF4CAF50),
                     borderRadius: BorderRadius.circular(4),
@@ -604,9 +602,7 @@ class _NavBtn extends StatelessWidget {
         ),
         child: Icon(icon,
             size: 22,
-            color: enabled
-                ? const Color(0xFFD32F2F)
-                : Colors.grey[300]),
+            color: enabled ? const Color(0xFFD32F2F) : Colors.grey[300]),
       ),
     );
   }
@@ -632,8 +628,8 @@ class _SummaryItem extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           label,
-          style:
-          TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.6)),
+          style: TextStyle(
+              fontSize: 11, color: Colors.white.withValues(alpha: 0.6)),
         ),
       ],
     );
@@ -661,8 +657,8 @@ class _MiniDetail extends StatelessWidget {
                   style: TextStyle(fontSize: 10, color: Colors.grey[500])),
               Text(
                 value,
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
               ),
             ],

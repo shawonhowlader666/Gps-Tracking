@@ -25,8 +25,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _statusRefreshTimer;
 
   final RxInt _runningCount = 0.obs;
-  final RxInt _idleCount    = 0.obs;
-  final RxInt _stopCount    = 0.obs;
+  final RxInt _idleCount = 0.obs;
+  final RxInt _stopCount = 0.obs;
   final RxInt _offlineCount = 0.obs;
   final RxInt _expiredCount = 0.obs;
 
@@ -42,12 +42,12 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   // ── DevicePage এর মতো same color ──
-  static const Color _greenColor  = Color(0xFF22C55E); // running
+  static const Color _greenColor = Color(0xFF22C55E); // running
   static const Color _yellowColor = Color(0xFFF59E0B); // idle
-  static const Color _redColor    = Color(0xFFEF4444); // stop
-  static const Color _greyColor   = Color(0xFF9CA3AF); // offline
+  static const Color _redColor = Color(0xFFEF4444); // stop
+  static const Color _greyColor = Color(0xFF9CA3AF); // offline
   static const Color _orangeColor = Color(0xFFF97316); // expired
-  static const Color dangerColor  = Color(0xFFEF4444);
+  static const Color dangerColor = Color(0xFFEF4444);
 
   @override
   void initState() {
@@ -90,17 +90,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
     for (final device in vehicles) {
       switch (_getVehicleStatus(device)) {
-        case VehicleStatus.running:  running++;  break;
-        case VehicleStatus.idle:     idle++;     break;
-        case VehicleStatus.stop:     stop++;     break;
-        case VehicleStatus.offline:  offline++;  break;
-        case VehicleStatus.expired:  expired++;  break;
+        case VehicleStatus.running:
+          running++;
+          break;
+        case VehicleStatus.idle:
+          idle++;
+          break;
+        case VehicleStatus.stop:
+          stop++;
+          break;
+        case VehicleStatus.offline:
+          offline++;
+          break;
+        case VehicleStatus.expired:
+          expired++;
+          break;
       }
     }
 
     _runningCount.value = running;
-    _idleCount.value    = idle;
-    _stopCount.value    = stop;
+    _idleCount.value = idle;
+    _stopCount.value = stop;
     _offlineCount.value = offline;
     _expiredCount.value = expired;
   }
@@ -118,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // ══════════════════════════════════════════════════════
 
   VehicleStatus _getVehicleStatus(DeviceItem device) {
-    if (_isExpired(device))       return VehicleStatus.expired;
+    if (_isExpired(device)) return VehicleStatus.expired;
     if (!_isDeviceOnline(device)) return VehicleStatus.offline;
 
     final speed = double.tryParse(device.speed.toString()) ?? 0;
@@ -129,14 +139,14 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isDeviceOnline(DeviceItem device) {
     final online = device.online?.toLowerCase().trim() ?? '';
     if (online.contains('offline')) return false;
-    if (online.contains('online'))  return true;
+    if (online.contains('online')) return true;
 
     final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
     if (iconColor == 'green' || iconColor == 'yellow') return true;
 
     if (device.timestamp != null && device.timestamp! > 0) {
       final lastUpdate =
-      DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
+          DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
       if (DateTime.now().difference(lastUpdate).inMinutes < 5) return true;
     }
 
@@ -145,33 +155,50 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   bool _isEngineOn(DeviceItem device) {
+    // Check local override first
+    final devId = device.id;
+    if (devId != null) {
+      final engineOverride = DataController.getLocalEngineOverride(devId);
+      if (engineOverride != null) {
+        return ['on', '1', 'true', 'ign on', 'engine on', 'acc on']
+            .contains(engineOverride.toLowerCase().trim());
+      }
+    }
+
     if (device.engineStatus != null) {
       final status = device.engineStatus;
-      if (status is bool)   return status;
-      if (status is int)    return status == 1;
+      if (status is bool) return status;
+      if (status is int) return status == 1;
       if (status is String) {
         final s = status.toLowerCase().trim();
-        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s))     return true;
-        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off'].contains(s)) return false;
+        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s))
+          return true;
+        if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
+            .contains(s)) return false;
       }
     }
 
     if (device.sensors != null) {
       for (var sensor in device.sensors!) {
         try {
-          final type  = (sensor['type']  ?? '').toString().toLowerCase();
-          final name  = (sensor['name']  ?? '').toString().toLowerCase();
-          final value =  sensor['value'];
-          if (type == 'acc' || type == 'ignition' || type == 'engine' ||
-              name.contains('ignition') || name.contains('acc') ||
+          final type = (sensor['type'] ?? '').toString().toLowerCase();
+          final name = (sensor['name'] ?? '').toString().toLowerCase();
+          final value = sensor['value'];
+          if (type == 'acc' ||
+              type == 'ignition' ||
+              type == 'engine' ||
+              name.contains('ignition') ||
+              name.contains('acc') ||
               name.contains('engine')) {
             if (value == null) continue;
-            if (value is bool)   return value;
-            if (value is int)    return value == 1;
+            if (value is bool) return value;
+            if (value is int) return value == 1;
             if (value is String) {
               final v = value.toLowerCase().trim();
-              if (['on', '1', 'true', 'ign on', 'acc on', 'engine on'].contains(v))     return true;
-              if (['off', '0', 'false', 'ign off', 'acc off', 'engine off'].contains(v)) return false;
+              if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
+                  .contains(v)) return true;
+              if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
+                  .contains(v)) return false;
             }
           }
         } catch (_) {}
@@ -267,10 +294,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       actions: [
         Obx(() => _buildAppBarIcon(
-          Icons.notifications_outlined,
+              Icons.notifications_outlined,
               () {},
-          badge: dataController.events.length,
-        )),
+              badge: dataController.events.length,
+            )),
         const SizedBox(width: 12),
       ],
     );
@@ -365,7 +392,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(
             _sliderImages.length,
-                (index) => AnimatedContainer(
+            (index) => AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               margin: const EdgeInsets.symmetric(horizontal: 4),
               width: _currentSlide == index ? 20 : 8,
@@ -389,9 +416,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Obx(() {
       _calculateStatusCounts();
 
-      final total   = dataController.onlyDevices.length;
+      final total = dataController.onlyDevices.length;
       final running = _runningCount.value;
-      final idle    = _idleCount.value;
+      final idle = _idleCount.value;
       final stopped = _stopCount.value;
       final offline = _offlineCount.value;
       final expired = _expiredCount.value;
@@ -435,9 +462,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 14),
-
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -447,13 +472,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: total == 0
                       ? _buildEmptyDonut()
                       : _buildDonut(
-                    running: running,
-                    idle: idle,
-                    stopped: stopped,
-                    offline: offline,
-                    expired: expired,
-                    total: total,
-                  ),
+                          running: running,
+                          idle: idle,
+                          stopped: stopped,
+                          offline: offline,
+                          expired: expired,
+                          total: total,
+                        ),
                 ),
 
                 const SizedBox(width: 20),
@@ -464,15 +489,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildLegendRow(color: _greenColor,  label: 'Moving',  count: running),
+                      _buildLegendRow(
+                          color: _greenColor, label: 'Moving', count: running),
                       const SizedBox(height: 8),
-                      _buildLegendRow(color: _redColor,    label: 'Stopped', count: stopped),
+                      _buildLegendRow(
+                          color: _redColor, label: 'Stopped', count: stopped),
                       const SizedBox(height: 8),
-                      _buildLegendRow(color: _yellowColor, label: 'Idle',    count: idle),
+                      _buildLegendRow(
+                          color: _yellowColor, label: 'Idle', count: idle),
                       const SizedBox(height: 8),
-                      _buildLegendRow(color: _redColor,   label: 'Offline', count: offline),
+                      _buildLegendRow(
+                          color: _redColor, label: 'Offline', count: offline),
                       const SizedBox(height: 8),
-                      _buildLegendRow(color: _orangeColor, label: 'Expired', count: expired),
+                      _buildLegendRow(
+                          color: _orangeColor,
+                          label: 'Expired',
+                          count: expired),
                     ],
                   ),
                 ),
@@ -536,10 +568,10 @@ class _HomeScreenState extends State<HomeScreen> {
     required int expired,
   }) {
     final entries = [
-      _StatusEntry(color: _greenColor,  count: running),
-      _StatusEntry(color: _redColor,    count: stopped),
+      _StatusEntry(color: _greenColor, count: running),
+      _StatusEntry(color: _redColor, count: stopped),
       _StatusEntry(color: _yellowColor, count: idle),
-      _StatusEntry(color: _redColor,   count: offline),
+      _StatusEntry(color: _redColor, count: offline),
       _StatusEntry(color: _orangeColor, count: expired),
     ].where((e) => e.count > 0).toList();
 
@@ -547,11 +579,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return entries
         .map((e) => PieChartSectionData(
-      color: e.color,
-      value: e.count.toDouble(),
-      title: '',
-      radius: 52,
-    ))
+              color: e.color,
+              value: e.count.toDouble(),
+              title: '',
+              radius: 52,
+            ))
         .toList();
   }
 
@@ -586,9 +618,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<PieChartSectionData> _emptySection() => [
-    PieChartSectionData(
-        color: Colors.grey[200], value: 1, title: '', radius: 52),
-  ];
+        PieChartSectionData(
+            color: Colors.grey[200], value: 1, title: '', radius: 52),
+      ];
 
   Widget _buildLegendRow({
     required Color color,

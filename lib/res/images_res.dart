@@ -5,7 +5,7 @@ library;
 // ignore_for_file: constant_identifier_names
 // ignore_for_file: lines_longer_than_80_chars
 class ImagesRes {
-ImagesRes._();
+  ImagesRes._();
   static const String PLUGIN_NAME = 'app';
   static const String PLUGIN_VERSION = '1.0.3+4';
   static const String APPLE_STORE = 'images/apple-store.png';
@@ -20,8 +20,10 @@ ImagesRes._();
   static const String NO_DATA_O = 'images/no-data-o.png';
   static const String NO_DATA = 'images/no-data.png';
   static const String NO_IMAGE = 'images/no-image.jpg';
-  static const String NO_STREETVIEW_290X125 = 'images/no-streetview-290x125.jpg';
-  static const String NO_STREETVIEW_598X313 = 'images/no-streetview-598x313.jpg';
+  static const String NO_STREETVIEW_290X125 =
+      'images/no-streetview-290x125.jpg';
+  static const String NO_STREETVIEW_598X313 =
+      'images/no-streetview-598x313.jpg';
   static const String NO_STREETVIEW = 'images/no-streetview.jpg';
   static const String REPORT_BARS = 'images/report_bars.jpg';
   static const String REPORT_CURVE = 'images/report_curve.jpg';

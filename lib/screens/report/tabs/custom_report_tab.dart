@@ -48,8 +48,7 @@ class _CustomReportTabState extends State<CustomReportTab>
     super.initState();
     if (widget.presetPeriod != null) {
       _applyPreset(widget.presetPeriod!);
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _generateReport());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _generateReport());
     }
   }
 
@@ -155,13 +154,13 @@ class _CustomReportTabState extends State<CustomReportTab>
           const SizedBox(
             height: 200,
             child: Center(
-                child: CircularProgressIndicator(
-                    color: _red, strokeWidth: 2.5)),
+                child:
+                    CircularProgressIndicator(color: _red, strokeWidth: 2.5)),
           )
         else if (_errorMessage != null)
           _buildErrorState()
         else if (_reportData != null && _reportData!.isNotEmpty)
-            _buildResults(),
+          _buildResults(),
       ],
     );
   }
@@ -183,9 +182,7 @@ class _CustomReportTabState extends State<CustomReportTab>
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _presets
-              .map((p) => _buildPresetChip(p))
-              .toList(),
+          children: _presets.map((p) => _buildPresetChip(p)).toList(),
         ),
       ],
     );
@@ -208,19 +205,19 @@ class _CustomReportTabState extends State<CustomReportTab>
               color: isActive ? _red : Colors.grey.withValues(alpha: 0.2)),
           boxShadow: isActive
               ? [
-            BoxShadow(
-              color: _red.withValues(alpha: 0.25),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            )
-          ]
+                  BoxShadow(
+                    color: _red.withValues(alpha: 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  )
+                ]
               : [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            )
-          ],
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  )
+                ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -267,10 +264,10 @@ class _CustomReportTabState extends State<CustomReportTab>
             children: [
               Expanded(
                   child: _DatePickerBox(
-                    label: 'From',
-                    date: _startDate,
-                    onTap: () => _selectDate(true),
-                  )),
+                label: 'From',
+                date: _startDate,
+                onTap: () => _selectDate(true),
+              )),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Icon(Icons.arrow_forward_rounded,
@@ -278,10 +275,10 @@ class _CustomReportTabState extends State<CustomReportTab>
               ),
               Expanded(
                   child: _DatePickerBox(
-                    label: 'To',
-                    date: _endDate,
-                    onTap: () => _selectDate(false),
-                  )),
+                label: 'To',
+                date: _endDate,
+                onTap: () => _selectDate(false),
+              )),
             ],
           ),
           const SizedBox(height: 14),
@@ -324,40 +321,39 @@ class _CustomReportTabState extends State<CustomReportTab>
           foregroundColor: Colors.white,
           disabledBackgroundColor: _red.withValues(alpha: 0.5),
           elevation: 0,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           shadowColor: _red.withValues(alpha: 0.4),
         ),
         child: _isLoading
             ? Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Generating...',
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-          ],
-        )
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Generating...',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              )
             : Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.analytics_rounded, size: 20),
-            SizedBox(width: 10),
-            Text(
-              'Generate Report',
-              style: TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-          ],
-        ),
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.analytics_rounded, size: 20),
+                  SizedBox(width: 10),
+                  Text(
+                    'Generate Report',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -371,8 +367,7 @@ class _CustomReportTabState extends State<CustomReportTab>
       ),
       child: Column(
         children: [
-          Icon(Icons.error_outline_rounded,
-              size: 44, color: Colors.red[300]),
+          Icon(Icons.error_outline_rounded, size: 44, color: Colors.red[300]),
           const SizedBox(height: 12),
           Text(_errorMessage!,
               style: TextStyle(color: Colors.grey[600], fontSize: 14)),
@@ -413,8 +408,7 @@ class _CustomReportTabState extends State<CustomReportTab>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius:
-              BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Row(
               children: [
@@ -460,40 +454,32 @@ class _CustomReportTabState extends State<CustomReportTab>
             child: Column(
               children: [
                 if (data.routeLength != null)
-                  _ResultRow('Distance', data.routeLength!,
-                      Icons.route_rounded, const Color(0xFF3F51B5)),
+                  _ResultRow('Distance', data.routeLength!, Icons.route_rounded,
+                      const Color(0xFF3F51B5)),
                 if (data.moveDuration != null)
                   _ResultRow('Move Duration', data.moveDuration!,
-                      Icons.directions_car_rounded,
-                      const Color(0xFF43A047)),
+                      Icons.directions_car_rounded, const Color(0xFF43A047)),
                 if (data.stopDuration != null)
                   _ResultRow('Stop Duration', data.stopDuration!,
-                      Icons.local_parking_rounded,
-                      const Color(0xFFFF9800)),
+                      Icons.local_parking_rounded, const Color(0xFFFF9800)),
                 if (data.topSpeed != null)
-                  _ResultRow('Top Speed', data.topSpeed!,
-                      Icons.speed_rounded, _red),
+                  _ResultRow(
+                      'Top Speed', data.topSpeed!, Icons.speed_rounded, _red),
                 if (data.averageSpeed != null)
                   _ResultRow('Avg Speed', data.averageSpeed!,
-                      Icons.trending_up_rounded,
-                      const Color(0xFF00BCD4)),
+                      Icons.trending_up_rounded, const Color(0xFF00BCD4)),
                 if (data.engineHours != null)
                   _ResultRow('Engine Hours', data.engineHours!,
-                      Icons.engineering_rounded,
-                      const Color(0xFF9C27B0)),
+                      Icons.engineering_rounded, const Color(0xFF9C27B0)),
                 if (data.fuelConsumption != null)
                   _ResultRow('Fuel', data.fuelConsumption!,
-                      Icons.local_gas_station_rounded,
-                      const Color(0xFFFF7043)),
+                      Icons.local_gas_station_rounded, const Color(0xFFFF7043)),
                 if (data.odometer != null)
-                  _ResultRow('Odometer', data.odometer!,
-                      Icons.speed_rounded, const Color(0xFF5C6BC0)),
-                if (data.overspeedCount != null &&
-                    data.overspeedCount != '0')
-                  _ResultRow('Overspeed',
-                      '${data.overspeedCount} times',
-                      Icons.warning_amber_rounded,
-                      const Color(0xFFE91E63),
+                  _ResultRow('Odometer', data.odometer!, Icons.speed_rounded,
+                      const Color(0xFF5C6BC0)),
+                if (data.overspeedCount != null && data.overspeedCount != '0')
+                  _ResultRow('Overspeed', '${data.overspeedCount} times',
+                      Icons.warning_amber_rounded, const Color(0xFFE91E63),
                       last: true),
               ],
             ),
@@ -530,15 +516,13 @@ class _DatePickerBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFFF4F6F9),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: Colors.grey.withValues(alpha: 0.15)),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label,
-                style: TextStyle(
-                    fontSize: 11, color: Colors.grey[500])),
+                style: TextStyle(fontSize: 11, color: Colors.grey[500])),
             const SizedBox(height: 5),
             Row(
               children: [
@@ -590,8 +574,7 @@ class _ResultRow extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(label,
-                    style: TextStyle(
-                        fontSize: 14, color: Colors.grey[700])),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[700])),
               ),
               Text(
                 value,

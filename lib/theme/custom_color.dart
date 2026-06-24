@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:from_css_color/from_css_color.dart';
 
-
 const Color MAPS_IMAGES_COLOR = Color(0xFF0a4349);
 const Color YELLOW_CUSTOM = Color(0xffFFAC00);
 
 class CustomColor {
   static var primaryColor = MaterialColor(0xFF39a4db, color);
-  static var primary= Colors.red;
+  static var primary = Colors.red;
   static var secondaryColor = Colors.white;
   static var onColor = Colors.green;
   static var offColor = Colors.grey;

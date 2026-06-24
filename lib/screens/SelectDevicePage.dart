@@ -43,10 +43,10 @@ class _SelectDevicePageState extends State<SelectDevicePage> {
     }
 
     Get.to(() => ReportScreen(
-      deviceId: _selectedDevice!.id ?? 0,
-      deviceName: _selectedDevice!.name ?? '',
-      device: _selectedDevice!,
-    ));
+          deviceId: _selectedDevice!.id ?? 0,
+          deviceName: _selectedDevice!.name ?? '',
+          device: _selectedDevice!,
+        ));
   }
 
   List<DeviceItem> _filterDevices(List<DeviceItem> devices) {
@@ -123,12 +123,12 @@ class _SelectDevicePageState extends State<SelectDevicePage> {
                         ),
                         suffixIcon: _searchQuery.isNotEmpty
                             ? IconButton(
-                          icon: const Icon(Icons.clear, size: 20),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        )
+                                icon: const Icon(Icons.clear, size: 20),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                              )
                             : null,
                         filled: true,
                         fillColor: const Color(0xFFF9FAFB),
@@ -230,127 +230,127 @@ class _SelectDevicePageState extends State<SelectDevicePage> {
                 child: filteredDevices.isEmpty
                     ? _buildEmptyState()
                     : Container(
-                  color: Colors.white,
-                  child: ListView.separated(
-                    padding: EdgeInsets.zero,
-                    itemCount: filteredDevices.length,
-                    separatorBuilder: (context, index) => const Divider(
-                      height: 1,
-                      indent: 72,
-                      color: Color(0xFFF0F0F0),
-                    ),
-                    itemBuilder: (context, index) {
-                      final device = filteredDevices[index];
-                      final isSelected = _selectedDevice?.id == device.id;
-
-                      return InkWell(
-                        onTap: () {
-                          setState(() {
-                            _selectedDevice = device;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
+                        color: Colors.white,
+                        child: ListView.separated(
+                          padding: EdgeInsets.zero,
+                          itemCount: filteredDevices.length,
+                          separatorBuilder: (context, index) => const Divider(
+                            height: 1,
+                            indent: 72,
+                            color: Color(0xFFF0F0F0),
                           ),
-                          color: isSelected
-                              ? _primaryRed.withValues(alpha: 0.05)
-                              : Colors.transparent,
-                          child: Row(
-                            children: [
-                              // Device Icon
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? _primaryRed.withValues(alpha: 0.1)
-                                      : const Color(0xFFF3F4F6),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.directions_car,
-                                  color: isSelected
-                                      ? _primaryRed
-                                      : _greyText,
-                                  size: 26,
-                                ),
-                              ),
-                              const SizedBox(width: 14),
+                          itemBuilder: (context, index) {
+                            final device = filteredDevices[index];
+                            final isSelected = _selectedDevice?.id == device.id;
 
-                              // Device Info
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                            return InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _selectedDevice = device;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                                color: isSelected
+                                    ? _primaryRed.withValues(alpha: 0.05)
+                                    : Colors.transparent,
+                                child: Row(
                                   children: [
-                                    Text(
-                                      device.name ?? "No Name",
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
+                                    // Device Icon
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? _primaryRed.withValues(alpha: 0.1)
+                                            : const Color(0xFFF3F4F6),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.directions_car,
                                         color: isSelected
                                             ? _primaryRed
-                                            : _darkText,
+                                            : _greyText,
+                                        size: 26,
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.phonelink_lock,
-                                          size: 13,
-                                          color: _greyText,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          device.imei ?? "N/A",
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: _greyText,
+                                    const SizedBox(width: 14),
+
+                                    // Device Info
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            device.name ?? "No Name",
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                              color: isSelected
+                                                  ? _primaryRed
+                                                  : _darkText,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.phonelink_lock,
+                                                size: 13,
+                                                color: _greyText,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                device.imei ?? "N/A",
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: _greyText,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
+
+                                    // Selection Indicator
+                                    if (isSelected)
+                                      Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: _primaryRed,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.check,
+                                          color: Colors.white,
+                                          size: 18,
+                                        ),
+                                      )
+                                    else
+                                      Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: const Color(0xFFD1D5DB),
+                                            width: 2,
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
-
-                              // Selection Indicator
-                              if (isSelected)
-                                Container(
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color: _primaryRed,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.check,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                                )
-                              else
-                                Container(
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: const Color(0xFFD1D5DB),
-                                      width: 2,
-                                    ),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-                ),
+                      ),
               ),
 
               // Generate Report Button
@@ -371,9 +371,8 @@ class _SelectDevicePageState extends State<SelectDevicePage> {
                   child: ElevatedButton(
                     onPressed: _generateReport,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _selectedDevice != null
-                          ? _primaryRed
-                          : _greyText,
+                      backgroundColor:
+                          _selectedDevice != null ? _primaryRed : _greyText,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 16),

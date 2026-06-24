@@ -75,70 +75,67 @@ class Permissions {
 
   Permissions(
       {this.devices,
-        this.beacons,
-        this.alerts,
-        this.geofences,
-        this.routes,
-        this.poi,
-        this.reports,
-        this.drivers,
-        this.customEvents,
-        this.userGprsTemplates,
-        this.userSmsTemplates,
-        this.smsGateway,
-        this.sendCommand,
-        this.history,
-        this.maintenance,
-        this.camera,
-        this.deviceCamera,
-        this.tasks,
-        this.chat,
-        this.mediaCategories,
-        this.forwards,
-        this.deviceImei,
-        this.deviceSimNumber,
-        this.deviceForward,
-        this.deviceProtocol,
-        this.deviceExpirationDate,
-        this.deviceInstallationDate,
-        this.deviceSimActivationDate,
-        this.deviceSimExpirationDate,
-        this.deviceMsisdn,
-        this.deviceCustomFields,
-        this.deviceDeviceTypeId,
-        this.sharing,
-        this.checklistTemplate,
-        this.checklist,
-        this.checklistActivity,
-        this.checklistQrCode,
-        this.checklistQrPreStartOnly,
-        this.checklistOptionalImage,
-        this.deviceConfiguration,
-        this.deviceRouteTypes,
-        this.callActions,
-        this.widgetTemplateWebhook,
-        this.customDeviceAdd,
-        this.externalUrl,
-        this.userLoginToken,
-        this.userClientId});
+      this.beacons,
+      this.alerts,
+      this.geofences,
+      this.routes,
+      this.poi,
+      this.reports,
+      this.drivers,
+      this.customEvents,
+      this.userGprsTemplates,
+      this.userSmsTemplates,
+      this.smsGateway,
+      this.sendCommand,
+      this.history,
+      this.maintenance,
+      this.camera,
+      this.deviceCamera,
+      this.tasks,
+      this.chat,
+      this.mediaCategories,
+      this.forwards,
+      this.deviceImei,
+      this.deviceSimNumber,
+      this.deviceForward,
+      this.deviceProtocol,
+      this.deviceExpirationDate,
+      this.deviceInstallationDate,
+      this.deviceSimActivationDate,
+      this.deviceSimExpirationDate,
+      this.deviceMsisdn,
+      this.deviceCustomFields,
+      this.deviceDeviceTypeId,
+      this.sharing,
+      this.checklistTemplate,
+      this.checklist,
+      this.checklistActivity,
+      this.checklistQrCode,
+      this.checklistQrPreStartOnly,
+      this.checklistOptionalImage,
+      this.deviceConfiguration,
+      this.deviceRouteTypes,
+      this.callActions,
+      this.widgetTemplateWebhook,
+      this.customDeviceAdd,
+      this.externalUrl,
+      this.userLoginToken,
+      this.userClientId});
 
   Permissions.fromJson(Map<String, dynamic> json) {
     devices =
-    json['devices'] != null ? Devices.fromJson(json['devices']) : null;
+        json['devices'] != null ? Devices.fromJson(json['devices']) : null;
     beacons =
-    json['beacons'] != null ? Devices.fromJson(json['beacons']) : null;
-    alerts =
-    json['alerts'] != null ? Devices.fromJson(json['alerts']) : null;
-    geofences = json['geofences'] != null
-        ? Devices.fromJson(json['geofences'])
-        : null;
-    routes =
-    json['routes'] != null ? Devices.fromJson(json['routes']) : null;
+        json['beacons'] != null ? Devices.fromJson(json['beacons']) : null;
+    alerts = json['alerts'] != null ? Devices.fromJson(json['alerts']) : null;
+    geofences =
+        json['geofences'] != null ? Devices.fromJson(json['geofences']) : null;
+    routes = json['routes'] != null ? Devices.fromJson(json['routes']) : null;
     poi = json['poi'] != null ? Devices.fromJson(json['poi']) : null;
     reports =
-    json['reports'] != null ? Devices.fromJson(json['reports']) : null;
+        json['reports'] != null ? Devices.fromJson(json['reports']) : null;
     drivers =
-    json['drivers'] != null ? Devices.fromJson(json['drivers']) : null;
+        json['drivers'] != null ? Devices.fromJson(json['drivers']) : null;
     customEvents = json['custom_events'] != null
         ? Devices.fromJson(json['custom_events'])
         : null;
@@ -155,12 +152,11 @@ class Permissions {
         ? Devices.fromJson(json['send_command'])
         : null;
     history =
-    json['history'] != null ? Devices.fromJson(json['history']) : null;
+        json['history'] != null ? Devices.fromJson(json['history']) : null;
     maintenance = json['maintenance'] != null
         ? Devices.fromJson(json['maintenance'])
         : null;
-    camera =
-    json['camera'] != null ? Devices.fromJson(json['camera']) : null;
+    camera = json['camera'] != null ? Devices.fromJson(json['camera']) : null;
     deviceCamera = json['device_camera'] != null
         ? Devices.fromJson(json['device_camera'])
         : null;
@@ -169,9 +165,8 @@ class Permissions {
     mediaCategories = json['media_categories'] != null
         ? Devices.fromJson(json['media_categories'])
         : null;
-    forwards = json['forwards'] != null
-        ? Devices.fromJson(json['forwards'])
-        : null;
+    forwards =
+        json['forwards'] != null ? Devices.fromJson(json['forwards']) : null;
     deviceImei = json['device.imei'] != null
         ? Devices.fromJson(json['device.imei'])
         : null;
@@ -206,13 +201,12 @@ class Permissions {
         ? Devices.fromJson(json['device.device_type_id'])
         : null;
     sharing =
-    json['sharing'] != null ? Devices.fromJson(json['sharing']) : null;
+        json['sharing'] != null ? Devices.fromJson(json['sharing']) : null;
     checklistTemplate = json['checklist_template'] != null
         ? Devices.fromJson(json['checklist_template'])
         : null;
-    checklist = json['checklist'] != null
-        ? Devices.fromJson(json['checklist'])
-        : null;
+    checklist =
+        json['checklist'] != null ? Devices.fromJson(json['checklist']) : null;
     checklistActivity = json['checklist_activity'] != null
         ? Devices.fromJson(json['checklist_activity'])
         : null;
@@ -335,12 +329,10 @@ class Permissions {
       data['device.installation_date'] = deviceInstallationDate!.toJson();
     }
     if (deviceSimActivationDate != null) {
-      data['device.sim_activation_date'] =
-          deviceSimActivationDate!.toJson();
+      data['device.sim_activation_date'] = deviceSimActivationDate!.toJson();
     }
     if (deviceSimExpirationDate != null) {
-      data['device.sim_expiration_date'] =
-          deviceSimExpirationDate!.toJson();
+      data['device.sim_expiration_date'] = deviceSimExpirationDate!.toJson();
     }
     if (deviceMsisdn != null) {
       data['device.msisdn'] = deviceMsisdn!.toJson();
@@ -367,8 +359,7 @@ class Permissions {
       data['checklist_qr_code'] = checklistQrCode!.toJson();
     }
     if (checklistQrPreStartOnly != null) {
-      data['checklist_qr_pre_start_only'] =
-          checklistQrPreStartOnly!.toJson();
+      data['checklist_qr_pre_start_only'] = checklistQrPreStartOnly!.toJson();
     }
     if (checklistOptionalImage != null) {
       data['checklist_optional_image'] = checklistOptionalImage!.toJson();

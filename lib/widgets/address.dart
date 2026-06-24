@@ -67,11 +67,12 @@ class _AddressTextState extends State<AddressText> {
 
   @override
   Widget build(BuildContext context) {
-    final displayStyle = widget.style ?? const TextStyle(
-      color: Colors.black,
-      fontFamily: "Popins",
-      fontSize: 12,
-    );
+    final displayStyle = widget.style ??
+        const TextStyle(
+          color: Colors.black,
+          fontFamily: "Popins",
+          fontSize: 12,
+        );
 
     if (_isLoading && _address == null) {
       return Text(
@@ -145,10 +146,11 @@ class _AddressMarqueeTextState extends State<AddressMarqueeText> {
 
   @override
   Widget build(BuildContext context) {
-    final displayStyle = widget.style ?? TextStyle(
-      color: CustomColor.cssBlack,
-      fontSize: 13,
-    );
+    final displayStyle = widget.style ??
+        TextStyle(
+          color: CustomColor.cssBlack,
+          fontSize: 13,
+        );
 
     if (_isLoading && _address == null) {
       return Text(

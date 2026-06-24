@@ -44,14 +44,14 @@ class _ReportRoutePageState extends State<ReportRoutePage> {
       if (args != null) {
         timer.cancel();
         APIService.getReport(
-            args!.id.toString(), args!.fromDate, args!.toDate, args!.type)
+                args!.id.toString(), args!.fromDate, args!.toDate, args!.type)
             .then((value) {
           String decodedUrl = Uri.decodeFull(value!.url!);
 
           String correctedUrl = decodedUrl.replaceAll('%5B0%5D', '[]');
           String correctedUrl2 = correctedUrl.replaceAll('[0]', '[]');
           String correctedUrl3 =
-          correctedUrl2.replaceAll('send_to_email[]=', 'send_to_email=');
+              correctedUrl2.replaceAll('send_to_email[]=', 'send_to_email=');
           url = correctedUrl3;
           print(url!);
           _downloadFile(url!, "general");
@@ -73,8 +73,7 @@ class _ReportRoutePageState extends State<ReportRoutePage> {
     // File pdffile = new File('$dir/$filename-$randomNumber.pdf');
     // //Navigator.pop(context); // Load from assets
     // file = pdffile;
-    writeFile(
-        bytes, "$filename${DateTime.now().millisecond}.pdf");
+    writeFile(bytes, "$filename${DateTime.now().millisecond}.pdf");
     _postsController!.add(1);
     await file!.writeAsBytes(bytes);
     Fluttertoast.showToast(

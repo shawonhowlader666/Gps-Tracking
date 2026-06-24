@@ -15,16 +15,16 @@ class CommandList {
 
   CommandList(
       {this.devicesSms,
-        this.devicesGprs,
-        this.smsTemplates,
-        this.gprsTemplates,
-        this.commands,
-        this.units,
-        this.numberIndex,
-        this.actions,
-        this.deviceId,
-        this.commandSchedules,
-        this.status});
+      this.devicesGprs,
+      this.smsTemplates,
+      this.gprsTemplates,
+      this.commands,
+      this.units,
+      this.numberIndex,
+      this.actions,
+      this.deviceId,
+      this.commandSchedules,
+      this.status});
 
   CommandList.fromJson(Map<String, dynamic> json) {
     if (json['devices_sms'] != null) {
@@ -77,12 +77,10 @@ class CommandList {
       data['devices_gprs'] = devicesGprs!.map((v) => v.toJson()).toList();
     }
     if (smsTemplates != null) {
-      data['sms_templates'] =
-          smsTemplates!.map((v) => v.toJson()).toList();
+      data['sms_templates'] = smsTemplates!.map((v) => v.toJson()).toList();
     }
     if (gprsTemplates != null) {
-      data['gprs_templates'] =
-          gprsTemplates!.map((v) => v.toJson()).toList();
+      data['gprs_templates'] = gprsTemplates!.map((v) => v.toJson()).toList();
     }
     if (commands != null) {
       data['commands'] = commands!.map((v) => v.toJson()).toList();

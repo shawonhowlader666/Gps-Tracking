@@ -3,7 +3,8 @@ import 'package:smart_lock/theme/custom_color.dart';
 
 class CustomButtonItemMore extends StatelessWidget {
   const CustomButtonItemMore(
-      {super.key, @required this.onTap,
+      {super.key,
+      @required this.onTap,
       @required this.buttonText,
       @required this.imagePath,
       @required this.color});

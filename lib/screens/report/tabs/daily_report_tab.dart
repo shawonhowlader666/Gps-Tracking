@@ -116,9 +116,9 @@ class _DailyReportTabState extends State<DailyReportTab>
           else if (_errorMessage != null)
             _buildErrorState()
           else if (_reportData == null || _reportData!.isEmpty)
-              _buildEmptyState()
-            else
-              _buildReportContent(),
+            _buildEmptyState()
+          else
+            _buildReportContent(),
         ],
       ),
     );
@@ -143,8 +143,8 @@ class _DailyReportTabState extends State<DailyReportTab>
       child: Row(
         children: [
           _buildNavBtn(Icons.chevron_left_rounded, () {
-            setState(() =>
-            _selectedDate = _selectedDate.subtract(const Duration(days: 1)));
+            setState(() => _selectedDate =
+                _selectedDate.subtract(const Duration(days: 1)));
             _loadReport();
           }),
           Expanded(
@@ -153,12 +153,13 @@ class _DailyReportTabState extends State<DailyReportTab>
               child: Column(
                 children: [
                   Text(
-                    isToday ? 'Today' : DateFormat('EEEE').format(_selectedDate),
+                    isToday
+                        ? 'Today'
+                        : DateFormat('EEEE').format(_selectedDate),
                     style: TextStyle(
                       fontSize: 12,
                       color: isToday ? _red : Colors.grey[500],
-                      fontWeight:
-                      isToday ? FontWeight.w700 : FontWeight.w400,
+                      fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -187,10 +188,10 @@ class _DailyReportTabState extends State<DailyReportTab>
             isToday
                 ? null
                 : () {
-              setState(() => _selectedDate =
-                  _selectedDate.add(const Duration(days: 1)));
-              _loadReport();
-            },
+                    setState(() => _selectedDate =
+                        _selectedDate.add(const Duration(days: 1)));
+                    _loadReport();
+                  },
           ),
         ],
       ),
@@ -210,8 +211,7 @@ class _DailyReportTabState extends State<DailyReportTab>
               : Colors.grey.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon,
-            size: 22, color: enabled ? _red : Colors.grey[300]),
+        child: Icon(icon, size: 22, color: enabled ? _red : Colors.grey[300]),
       ),
     );
   }
@@ -328,18 +328,14 @@ class _DailyReportTabState extends State<DailyReportTab>
           Row(
             children: [
               Expanded(
-                  child: _buildMiniStat(
-                      'Moving',
-                      data.moveDuration ?? '—',
+                  child: _buildMiniStat('Moving', data.moveDuration ?? '—',
                       Icons.directions_car_rounded)),
               Container(
                   width: 1,
                   height: 44,
                   color: Colors.white.withValues(alpha: 0.2)),
               Expanded(
-                  child: _buildMiniStat(
-                      'Stopped',
-                      data.stopDuration ?? '—',
+                  child: _buildMiniStat('Stopped', data.stopDuration ?? '—',
                       Icons.local_parking_rounded)),
             ],
           ),
@@ -395,13 +391,12 @@ class _DailyReportTabState extends State<DailyReportTab>
           if (data.overspeedCount != null && data.overspeedCount != '0') ...[
             const SizedBox(height: 12),
             Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.25)),
+                border:
+                    Border.all(color: Colors.orange.withValues(alpha: 0.25)),
               ),
               child: Row(
                 children: [
@@ -483,13 +478,11 @@ class _DailyReportTabState extends State<DailyReportTab>
               padding: const EdgeInsets.only(left: 12),
               child: SizedBox(
                 height: 22,
-                child: VerticalDivider(
-                    color: Colors.grey[300], thickness: 1.5),
+                child: VerticalDivider(color: Colors.grey[300], thickness: 1.5),
               ),
             ),
           if (data.routeEnd != null)
-            _RoutePoint(
-                label: 'End', value: data.routeEnd!, color: _red),
+            _RoutePoint(label: 'End', value: data.routeEnd!, color: _red),
         ],
       ),
     );
@@ -572,8 +565,7 @@ class _StatTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
           const SizedBox(height: 5),
           Text(
             value,
@@ -595,8 +587,7 @@ class _DataRow extends StatelessWidget {
   final String value;
   final bool last;
 
-  const _DataRow(
-      {required this.label, required this.value, this.last = false});
+  const _DataRow({required this.label, required this.value, this.last = false});
 
   @override
   Widget build(BuildContext context) {
@@ -608,8 +599,7 @@ class _DataRow extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(label,
-                  style:
-                  TextStyle(fontSize: 13, color: Colors.grey[600])),
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600])),
               Text(
                 value,
                 style: const TextStyle(
@@ -621,8 +611,7 @@ class _DataRow extends StatelessWidget {
             ],
           ),
         ),
-        if (!last)
-          Divider(height: 1, color: Colors.grey[100]),
+        if (!last) Divider(height: 1, color: Colors.grey[100]),
       ],
     );
   }
@@ -648,9 +637,7 @@ class _RoutePoint extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           child: Icon(
-            label == 'Start'
-                ? Icons.play_arrow_rounded
-                : Icons.stop_rounded,
+            label == 'Start' ? Icons.play_arrow_rounded : Icons.stop_rounded,
             size: 16,
             color: color,
           ),
@@ -661,12 +648,11 @@ class _RoutePoint extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
-                  style:
-                  TextStyle(fontSize: 11, color: Colors.grey[500])),
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500])),
               Text(
                 value,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),

@@ -87,9 +87,9 @@ class _MainBottomNavState extends State<MainBottomNav> {
           builder: (controller) {
             return !controller.isLoading.value
                 ? IndexedStack(
-              index: _selectedIndex,
-              children: _screens,
-            )
+                    index: _selectedIndex,
+                    children: _screens,
+                  )
                 : const Center(child: CircularProgressIndicator());
           },
         ),
@@ -117,7 +117,7 @@ class _MainBottomNavState extends State<MainBottomNav> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: List.generate(
               _navItems.length,
-                  (index) => _buildNavItem(index),
+              (index) => _buildNavItem(index),
             ),
           ),
         ),

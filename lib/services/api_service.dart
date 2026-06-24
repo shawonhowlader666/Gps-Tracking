@@ -47,8 +47,8 @@ class APIService {
     String rawCookie = response.headers['set-cookie'].toString();
     int index = rawCookie.indexOf(';');
     headers['cookie'] =
-    (index == -1) ? rawCookie : rawCookie.substring(0, index);
-    }
+        (index == -1) ? rawCookie : rawCookie.substring(0, index);
+  }
 
   static Future<RxList<Device>?> getDevices() async {
     final response = await http.get(Uri.parse(
@@ -148,7 +148,7 @@ class APIService {
 
   static Future<http.Response> sendCommands(body) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
             "$serverURL/api/send_gprs_command?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
@@ -158,7 +158,8 @@ class APIService {
   }
 
   static Future<http.Response?> addGeofence(Map<String, dynamic> fence) async {
-    headers['content-type'] = "application/x-www-form-urlencoded; charset=UTF-8";
+    headers['content-type'] =
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
       Uri.parse(
           "$serverURL/api/add_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
@@ -189,7 +190,8 @@ class APIService {
   }
 
   static Future<http.Response> destroyGeofence(id) async {
-    headers['content-type'] = "application/x-www-form-urlencoded; charset=UTF-8";
+    headers['content-type'] =
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.get(
         Uri.parse(
             "$serverURL/api/destroy_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&geofence_id=$id"),
@@ -215,8 +217,10 @@ class APIService {
     return null;
   }
 
-  static Future<http.Response?> updateGeofence(int fenceId, Map<String, dynamic> data) async {
-    headers['content-type'] = "application/x-www-form-urlencoded; charset=UTF-8";
+  static Future<http.Response?> updateGeofence(
+      int fenceId, Map<String, dynamic> data) async {
+    headers['content-type'] =
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
       Uri.parse(
           "$serverURL/api/edit_geofence?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
@@ -234,7 +238,7 @@ class APIService {
         headers: headers);
     if (response.statusCode == 200) {
       Iterable list =
-      json.decode(response.body.replaceAll("ï»¿", ""))['items']['alerts'];
+          json.decode(response.body.replaceAll("ï»¿", ""))['items']['alerts'];
       if (list.isNotEmpty) {
         return list.map((model) => Alert.fromJson(model)).toList();
       } else {
@@ -258,40 +262,92 @@ class APIService {
   static Future<RxList<Event>?> getEventList() async {
     try {
       headers['Accept'] = "application/json";
-      final language = UserRepository.getLanguage() ?? 'en';
       final hash = UserRepository.getHash() ?? '';
+      final language = UserRepository.getLanguage() ?? 'en';
+
+      // Gpswox requires from_date & to_date — without them it returns empty
+      final now = DateTime.now();
+      final dateStr =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final fromDate = '$dateStr 00:00:00';
+      final toDate = '$dateStr 23:59:59';
+
       final uri = Uri.parse(
-        "$serverURL/api/get_events?user_api_hash=$hash&lang=$language",
+        '$serverURL/api/get_events'
+        '?user_api_hash=${Uri.encodeComponent(hash)}'
+        '&lang=$language'
+        '&from_date=${Uri.encodeComponent(fromDate)}'
+        '&to_date=${Uri.encodeComponent(toDate)}',
       );
-      final response = await http.get(
-        uri,
-        headers: headers,
-      ).timeout(const Duration(seconds: 30));
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint('[Events] URL: $uri');
+      debugPrint('[Events] Status: ${response.statusCode}');
+      if (response.body.length > 10) {
+        debugPrint('[Events] Body (500): ${response.body.substring(0, response.body.length.clamp(0, 500))}');
+      }
 
       if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body.replaceAll("ï»¿", ""));
-        if (jsonData['items'] != null && jsonData['items']['data'] != null) {
-          Iterable list = jsonData['items']['data'];
-          if (list.isNotEmpty) {
-            return list.map((model) => Event.fromJson(model)).toList().obs;
-          }
+        final decoded = json.decode(response.body.replaceAll('﻿', ''));
+
+        Iterable? list;
+
+        // Gpswox standard format: {"items": {"data": [...]}}
+        if (decoded is Map &&
+            decoded['items'] is Map &&
+            decoded['items']['data'] is List) {
+          list = decoded['items']['data'] as List;
         }
+        // Fallback: {"data": [...]}
+        else if (decoded is Map && decoded['data'] is List) {
+          list = decoded['data'] as List;
+        }
+        // Fallback: direct array
+        else if (decoded is List) {
+          list = decoded;
+        }
+
+        if (list != null && list.isNotEmpty) {
+          debugPrint('[Events] Parsed ${list.length} events');
+          // EventHistory has richer fields; convert to Event for the UI
+          final events = list.map((model) {
+            final h = EventHistory.fromJson(model as Map<String, dynamic>);
+            return Event(
+              id: h.id,
+              message: h.message?.toString(),
+              latitude: h.latitude,
+              longitude: h.longitude,
+              device_name: h.device_name?.toString(),
+            )..time = h.time?.toString();
+          }).toList();
+          return events.obs;
+        }
+
+        debugPrint('[Events] Empty/unparseable response. Keys: '
+            '${decoded is Map ? decoded.keys.toList() : "(not a map)"}');
       }
       return null;
-    } on SocketException {
+    } on SocketException catch (e) {
+      debugPrint('[Events] SocketException: $e');
       return null;
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
+      debugPrint('[Events] Timeout: $e');
       return null;
-    } on FormatException {
+    } on FormatException catch (e) {
+      debugPrint('[Events] Bad JSON: $e');
       return null;
     } catch (e) {
+      debugPrint('[Events] Unexpected error: $e');
       return null;
     }
   }
 
   static Future<http.Response> getGeocoder(lat, lng) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.get(
         Uri.parse(
             "$serverURL/api/geo_address?lat=$lat&lon=$lng&user_api_hash=${UserRepository.getHash()}"),
@@ -321,21 +377,23 @@ class APIService {
   static Future<String> getGeocoderAddress(lat, lng) async {
     final key = _getCoordinateKey(lat, lng);
     if (key.isEmpty) return "";
-    
+
     // 1. Synchronous Cache Check
     if (_addressCache.containsKey(key)) {
       return _addressCache[key]!;
     }
-    
+
     // 2. Request Coalescing - return the in-flight future if one exists
     if (_inFlightFutures.containsKey(key)) {
       return _inFlightFutures[key]!;
     }
 
     final Future<String> future = () async {
-      headers['content-type'] = "application/x-www-form-urlencoded; charset=UTF-8";
+      headers['content-type'] =
+          "application/x-www-form-urlencoded; charset=UTF-8";
       try {
-        final url = "$serverURL/api/geo_address?lat=$lat&lon=$lng&user_api_hash=${UserRepository.getHash()}";
+        final url =
+            "$serverURL/api/geo_address?lat=$lat&lon=$lng&user_api_hash=${UserRepository.getHash()}";
         final response = await http.get(Uri.parse(url), headers: headers);
         if (response.statusCode == 200) {
           final address = response.body;
@@ -356,7 +414,7 @@ class APIService {
 
   static Future<http.Response> activateAlert(val) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
             "$serverURL/api/change_active_alert?user_api_hash=${UserRepository.getHash()}"),
@@ -367,7 +425,7 @@ class APIService {
 
   static Future<dynamic> generateShare(deviceId, expirationDate, name) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
             "${"${serverURL!}/api/sharing?user_api_hash=${UserRepository.getHash()}&active=1&name=" + name + "&expiration_date=" + expirationDate}&delete_after_expiration=1&devices%5B%5D=" +
@@ -384,7 +442,7 @@ class APIService {
 
   static Future<http.Response> changePassword(password) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     Map<String, String> requestBody = <String, String>{
       'password': password,
       "password_confirmation": password
@@ -408,7 +466,7 @@ class APIService {
 
   static Future<http.Response> activateDevice(val) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
             "$serverURL/api/change_active_device?user_api_hash=${UserRepository.getHash()}"),
@@ -419,7 +477,7 @@ class APIService {
 
   static Future<http.Response> editDeviceData(val) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
             "$serverURL/api/edit_device_data?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
@@ -430,7 +488,7 @@ class APIService {
 
   static Future<http.Response> getEditDeviceData(String deviceId) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
             "$serverURL/api/edit_device_data?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&device_id=$deviceId"),
@@ -440,7 +498,7 @@ class APIService {
 
   static Future<http.Response> editDevice(val) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
             "$serverURL/api/edit_device?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
@@ -451,7 +509,7 @@ class APIService {
 
   static Future<http.Response> addDevice(val) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
             "$serverURL/api/add_device?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
@@ -474,7 +532,7 @@ class APIService {
         headers: headers);
     if (response.statusCode == 200) {
       Iterable list =
-      json.decode(response.body.replaceAll("ï»¿", ""))['items']['data'];
+          json.decode(response.body.replaceAll("ï»¿", ""))['items']['data'];
       if (list.isNotEmpty) {
         return list.map((model) => EventHistory.fromJson(model)).toList();
       } else {
@@ -494,7 +552,7 @@ class APIService {
         headers: headers);
     if (response.statusCode == 200) {
       Iterable list =
-      json.decode(response.body.replaceAll("ï»¿", ""))['items']['data'];
+          json.decode(response.body.replaceAll("ï»¿", ""))['items']['data'];
       if (list.isNotEmpty) {
         return list.map((model) => EventHistory.fromJson(model)).toList();
       } else {
@@ -507,7 +565,7 @@ class APIService {
 
   static Future<http.Response> addAlert(String request) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
         Uri.parse(
             "$serverURL/api/add_alert?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}$request"),
@@ -517,9 +575,10 @@ class APIService {
 
   static Future<http.Response> destroyAlert(id) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.get(
-        Uri.parse("${serverURL!}/api/destroy_alert?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&alert_id=$id"),
+        Uri.parse(
+            "${serverURL!}/api/destroy_alert?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&alert_id=$id"),
         headers: headers);
     return response;
   }
@@ -528,11 +587,12 @@ class APIService {
       String fromTime, String toDate, String toTime) async {
     headers['Accept'] = "application/json";
     final response = await http.get(
-        Uri.parse("${serverURL!}/api/get_events?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&from_date=$fromDate&from_time=$fromTime&to_date=$toDate&to_time=$toTime&device_id=$id"),
+        Uri.parse(
+            "${serverURL!}/api/get_events?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&from_date=$fromDate&from_time=$fromTime&to_date=$toDate&to_time=$toTime&device_id=$id"),
         headers: headers);
     if (response.statusCode == 200) {
       Iterable list =
-      json.decode(response.body.replaceAll("ï»¿", ""))['items']['data'];
+          json.decode(response.body.replaceAll("ï»¿", ""))['items']['data'];
       if (list.isNotEmpty) {
         return list.map((model) => Event.fromJson(model)).toList();
       } else {
@@ -545,9 +605,10 @@ class APIService {
 
   static Future<http.Response> activateFence(val) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     final response = await http.post(
-        Uri.parse("${serverURL!}/api/change_active_geofence?user_api_hash=${UserRepository.getHash()}"),
+        Uri.parse(
+            "${serverURL!}/api/change_active_geofence?user_api_hash=${UserRepository.getHash()}"),
         body: val,
         headers: headers);
     return response;
@@ -555,7 +616,8 @@ class APIService {
 
   static Future<RouteReport?> getReportGeofence(
       String deviceID, String fromDate, String toDate, int type) async {
-    final response = await http.get(Uri.parse("${serverURL!}/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&geofences[]=0&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0"));
+    final response = await http.get(Uri.parse(
+        "${serverURL!}/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&geofences[]=0&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0"));
     if (response.statusCode == 200) {
       return RouteReport.fromJson(
           json.decode(response.body.replaceAll("ï»¿", "")));
@@ -566,7 +628,7 @@ class APIService {
 
   static Future<http.Response> changePasswordByUser(password) async {
     headers['content-type'] =
-    "application/x-www-form-urlencoded; charset=UTF-8";
+        "application/x-www-form-urlencoded; charset=UTF-8";
     Map<String, String> requestBody = <String, String>{
       'password': password,
       "password_confirmation": password
