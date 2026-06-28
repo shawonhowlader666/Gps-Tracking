@@ -45,7 +45,7 @@ class _DevicePageState extends State<DevicePage> {
   // ── Brand colours ─────────────────────────────────────────────────────────
   static const Color _primaryRed = Color(0xFFCC0000);
   static const Color _greenColor = Color(0xFF22C55E);
-  static const Color _yellowColor = Color(0xFFF59E0B);
+  static const Color _yellowColor = Color(0xFFFFD600);
   static const Color _redColor = Color(0xFFEF4444);
   static const Color _greyColor = Color(0xFF9CA3AF);
   static const Color _blueColor = Color(0xFF3B82F6);
@@ -139,7 +139,10 @@ class _DevicePageState extends State<DevicePage> {
           if (engineOverride != null) {
             return engineOverride.toLowerCase() == 'off' ? 'Off' : 'On';
           }
-        } else if (cleanLower.contains('lock')) {
+        } else if (cleanLower.contains('lock') ||
+            cleanLower.contains('block') ||
+            cleanLower.contains('immobiliz') ||
+            cleanLower.contains('relay')) {
           final String? lockOverride =
               DataController.getLocalLockOverride(devIdInt);
           if (lockOverride != null) {
@@ -181,7 +184,10 @@ class _DevicePageState extends State<DevicePage> {
         resolvedName.contains('adc') ||
         resolvedName.contains('analog')) {
       return '54.4';
-    } else if (resolvedName.contains('lock')) {
+    } else if (resolvedName.contains('lock') ||
+        resolvedName.contains('block') ||
+        resolvedName.contains('immobiliz') ||
+        resolvedName.contains('relay')) {
       return 'Off';
     } else if (resolvedName.contains('engine')) {
       return 'Off';
@@ -210,10 +216,17 @@ class _DevicePageState extends State<DevicePage> {
             final rawName =
                 (sensor['name'] ?? sensor['type'] ?? 'Sensor').toString();
 
-            // Correct the Engine Statust typo
+            // Shorten sensor names for smaller screens
             String displayName = rawName;
-            if (rawName.toLowerCase().trim() == 'engine statust') {
-              displayName = 'Engine Status';
+            final lowerName = rawName.toLowerCase().trim();
+            if (lowerName == 'engine statust' ||
+                lowerName == 'engine status' ||
+                lowerName == 'engine') {
+              displayName = 'Engine';
+            } else if (lowerName == 'battery' || lowerName == 'battery level') {
+              displayName = 'Battery';
+            } else if (lowerName == 'lock' || lowerName == 'lock status') {
+              displayName = 'Lock';
             }
 
             final rawValue = (sensor['value'] ?? '').toString();
@@ -222,8 +235,8 @@ class _DevicePageState extends State<DevicePage> {
             return Container(
               margin: const EdgeInsets.only(right: 6),
               padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 5,
+                horizontal: 7,
+                vertical: 3.5,
               ),
               decoration: BoxDecoration(
                 color: Colors.grey.shade100,
@@ -235,8 +248,9 @@ class _DevicePageState extends State<DevicePage> {
               child: Text(
                 '$displayName : $value',
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: 9.5,
                   fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
                 ),
               ),
             );
@@ -256,8 +270,8 @@ class _DevicePageState extends State<DevicePage> {
   /// True if the device has sent a position in the last 5 minutes.
   bool _isDeviceOnline(DeviceItem device) {
     final online = device.online?.toLowerCase().trim() ?? '';
-    if (online.contains('offline')) return false;
-    if (online.contains('online')) return true;
+    if (online.contains('offline') || online == '0' || online == 'false') return false;
+    if (online.contains('online') || online == '1' || online == 'true') return true;
 
     final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
     if (iconColor == 'green' || iconColor == 'yellow') return true;
@@ -376,7 +390,7 @@ class _DevicePageState extends State<DevicePage> {
       case DeviceStatus.stop:
         return _redColor;
       case DeviceStatus.offline:
-        return _greyColor;
+        return _redColor;
       case DeviceStatus.expired:
         return _orangeColor;
     }
@@ -445,7 +459,12 @@ class _DevicePageState extends State<DevicePage> {
                 .toList();
             break;
           default:
-            displayDevices = all;
+            displayDevices = List<DeviceItem>.from(all)
+              ..sort((a, b) {
+                final statusA = _getDeviceStatus(a);
+                final statusB = _getDeviceStatus(b);
+                return statusA.index.compareTo(statusB.index);
+              });
         }
 
         return Column(
@@ -720,10 +739,10 @@ class _DevicePageState extends State<DevicePage> {
                     ),
                     Text(
                       'KM/H',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 10,
-                        color: Colors.grey[500],
-                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2937),
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 0.5,
                       ),
                     ),
@@ -752,26 +771,38 @@ class _DevicePageState extends State<DevicePage> {
                           child: Text(
                             device.name ?? device.deviceData?.imei ?? '',
                             style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 13.5, // Scaled down slightly
                                 fontWeight: FontWeight.w700,
                                 color: statusColor),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
 
-                    const SizedBox(height: 2),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 19),
-                      child: Text(
-                        'IMEI: ${device.imei ?? device.deviceData?.imei ?? 'N/A'}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
+                    const SizedBox(height: 2.5),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.fingerprint_rounded,
+                          size: 14,
+                          color: Color(0xFF64748B), // Slate grey icon
                         ),
-                      ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            'IMEI: ${device.imei ?? device.deviceData?.imei ?? 'N/A'}',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF111827),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
 
                     _dotDivider(),
@@ -790,7 +821,8 @@ class _DevicePageState extends State<DevicePage> {
                           child: Text(
                             '$statusText  ${_getStatusDuration(device, status)}',
                             style: const TextStyle(
-                                fontSize: 13, color: Color(0xFF374151)),
+                                fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF111827)),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -809,10 +841,12 @@ class _DevicePageState extends State<DevicePage> {
                           child: Text(
                             _getRemainingText(device),
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 11.5,
                               color: _getRemainingColor(device),
                               fontWeight: FontWeight.w600,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -831,8 +865,9 @@ class _DevicePageState extends State<DevicePage> {
                               ? const Text(
                                   'Address not available',
                                   style: TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xFF374151),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF111827),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -841,8 +876,9 @@ class _DevicePageState extends State<DevicePage> {
                                   device.lat.toString(),
                                   device.lng.toString(),
                                   style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xFF374151),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF111827),
                                   ),
                                 ),
                         ),

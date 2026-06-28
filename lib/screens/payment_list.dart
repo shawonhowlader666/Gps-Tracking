@@ -7,6 +7,7 @@ import 'package:smart_lock/screens/web_view.dart';
 import 'package:open_file/open_file.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
+import 'package:fluttertoast/fluttertoast.dart' as ft;
 import 'dart:io';
 
 import '../services/pdf_generator.dart';
@@ -75,8 +76,18 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
 
       setState(() {
         _isLoading = false;
-        _errorMessage = _getErrorMessage(e);
+        _errorMessage = '${_getErrorMessage(e)}\n\n(Details: $e)';
       });
+      
+      try {
+        ft.Fluttertoast.showToast(
+          msg: "Billing Error: $e",
+          toastLength: ft.Toast.LENGTH_LONG,
+          gravity: ft.ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      } catch (_) {}
     }
   }
 
@@ -204,14 +215,14 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
             const SizedBox(height: 6),
             Text(
               'Due: BDT ${_stats!.due.toStringAsFixed(0)}৳',
-              style: const TextStyle(fontSize: 14, color: Color(0xFF3E6FB8)),
+              style: const TextStyle(fontSize: 14, color: Color(0xFF980E04)),
             ),
             const SizedBox(height: 24),
 
             // SSL / Online payment
             _payOptionTile(
               icon: Icons.credit_card_rounded,
-              color: const Color(0xFF3E6FB8),
+              color: const Color(0xFF980E04),
               title: 'Pay Online (SSL Commerz)',
               subtitle: 'Card, Mobile Banking, Internet Banking',
               onTap: () async {
@@ -657,7 +668,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3E6FB8),
+                backgroundColor: const Color(0xFF980E04),
                 foregroundColor: Colors.white,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -683,12 +694,12 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF3E6FB8), Color(0xFF5C8ACF)],
+          colors: [Color(0xFF980E04), Color(0xFFC0392B)],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF3E6FB8).withValues(alpha: 0.3),
+            color: const Color(0xFF980E04).withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -752,10 +763,10 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
                   : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF3E6FB8),
+                foregroundColor: const Color(0xFF980E04),
                 disabledBackgroundColor: Colors.white.withValues(alpha: 0.5),
                 disabledForegroundColor:
-                    const Color(0xFF3E6FB8).withValues(alpha: 0.5),
+                    const Color(0xFF980E04).withValues(alpha: 0.5),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -914,7 +925,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.download, size: 20),
-                color: const Color(0xFF3E6FB8),
+                color: const Color(0xFF980E04),
                 tooltip: 'Download PDF',
                 onPressed: () => _downloadBillPDF(bill),
                 padding: EdgeInsets.zero,

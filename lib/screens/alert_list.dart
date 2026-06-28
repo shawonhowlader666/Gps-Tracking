@@ -34,6 +34,9 @@ class _AlertListPageState extends State<AlertListPage> {
   List<Geofence> fenceList = [];
 
   late DataController dataController;
+  StreamSubscription? _devicesSubscription;
+  bool _hasFetchedAlerts = false;
+  bool _isAutoChecking = false;
 
   // Add Alert Variables
   List<String> selectedDevices = [];
@@ -79,11 +82,20 @@ class _AlertListPageState extends State<AlertListPage> {
     super.initState();
     _initController();
     _initialize();
+    
+    _devicesSubscription = dataController.onlyDevices.listen((devices) {
+      if (mounted) {
+        setState(() {
+          devicesList = devices;
+        });
+        _autoCreateDefaultAlertsIfNeeded();
+      }
+    });
   }
 
   Future<void> _initialize() async {
-    await getUser();
     _loadDevices();
+    await getUser();
     _loadFences();
   }
 
@@ -121,6 +133,14 @@ class _AlertListPageState extends State<AlertListPage> {
   Future<void> getUser() async {
     try {
       prefs = await SharedPreferences.getInstance();
+      
+      // Force default to ON (true) for local-only idle and offline alerts on first run of this version
+      if (prefs?.getBool('local_defaults_set_v3') != true) {
+        await prefs?.setBool('auto_alert_idle', true);
+        await prefs?.setBool('auto_alert_offline', true);
+        await prefs?.setBool('local_defaults_set_v3', true);
+      }
+      
       String? userJson = prefs?.getString("user");
 
       if (userJson == null || userJson.isEmpty) {
@@ -162,11 +182,14 @@ class _AlertListPageState extends State<AlertListPage> {
       if (mounted) {
         setState(() {
           isLoading = false;
+          _hasFetchedAlerts = true;
           if (value != null) {
             alertList.clear();
             alertList.addAll(value);
           }
         });
+        _syncPrefsWithServerState();
+        _autoCreateDefaultAlertsIfNeeded();
       }
     } catch (e) {
       debugPrint("Error getting alerts: $e");
@@ -174,6 +197,107 @@ class _AlertListPageState extends State<AlertListPage> {
         setState(() => isLoading = false);
         _showSnackBar('Failed to load alerts', isError: true);
       }
+    }
+  }
+
+  Future<void> _syncPrefsWithServerState() async {
+    final activePrefs = prefs ?? await SharedPreferences.getInstance();
+    
+    bool isEngineActive = false;
+    final List<String> activeTypes = [];
+    
+    for (var a in alertList) {
+      final t = a.type?.toLowerCase();
+      final active = a.active.toString() == "1";
+      if (t == 'ignition_duration' || t == 'ignition') {
+        isEngineActive = active;
+      }
+      if (active && t != null) {
+        activeTypes.add(t);
+      }
+    }
+    
+    await activePrefs.setBool('auto_alert_engine', isEngineActive);
+    await activePrefs.setStringList('active_server_alerts', activeTypes);
+  }
+
+  Future<void> _autoCreateDefaultAlertsIfNeeded() async {
+    if (!_hasFetchedAlerts) return;
+    if (_isAutoChecking) return;
+    _isAutoChecking = true;
+    
+    try {
+      final List<String> requiredKeys = ['engine'];
+      bool changedAny = false;
+      
+      for (final key in requiredKeys) {
+        final String targetType = 'ignition_duration';
+                
+        Alert? existing;
+        for (var a in alertList) {
+          final t = a.type?.toLowerCase();
+          final bool isMatch = (t == 'ignition_duration' || t == 'ignition');
+          if (isMatch) {
+            existing = a;
+            break;
+          }
+        }
+        
+        if (existing == null) {
+          if (devicesList.isEmpty) continue;
+          
+          final String nameVal = 'Engine ON / OFF';
+          final String name = Uri.encodeComponent(nameVal);
+          final String devices = devicesList.map((d) => 'devices[]=${d.id}').join('&');
+          final String paramVal = '0';
+          
+          final String request = '&name=$name&type=$targetType&$targetType=$paramVal&$devices&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1';
+          
+          try {
+            final resp = await APIService.addAlert(request);
+            if (resp.statusCode == 200) {
+              changedAny = true;
+              final activePrefs = prefs ?? await SharedPreferences.getInstance();
+              await activePrefs.setBool('auto_alert_$key', true);
+            } else {
+              debugPrint("Failed to create alert $key: ${resp.statusCode} - ${resp.body}");
+            }
+          } catch (e) {
+            debugPrint("Auto-create default alert error: $e");
+          }
+        } else if (existing.active.toString() != "1") {
+          // If it exists but is inactive, automatically activate it!
+          Map<String, String> requestBody = {
+            'id': existing.id.toString(),
+            'active': "true"
+          };
+          try {
+            final resp = await APIService.activateAlert(requestBody);
+            if (resp.statusCode == 200) {
+              changedAny = true;
+              final activePrefs = prefs ?? await SharedPreferences.getInstance();
+              await activePrefs.setBool('auto_alert_$key', true);
+            }
+          } catch (e) {
+            debugPrint("Auto-activate default alert error: $e");
+          }
+        }
+      }
+      
+      if (changedAny && mounted) {
+        try {
+          final value = await APIService.getAlertList();
+          if (value != null && mounted) {
+            setState(() {
+              alertList.clear();
+              alertList.addAll(value);
+            });
+            _syncPrefsWithServerState();
+          }
+        } catch (_) {}
+      }
+    } finally {
+      _isAutoChecking = false;
     }
   }
 
@@ -440,20 +564,23 @@ class _AlertListPageState extends State<AlertListPage> {
     String name = Uri.encodeComponent(_nameCtl.text.trim());
     String type = selectedType;
     String devices = selectedDevices.join("&");
+    
+    // Always enable push and sound notifications on the server for the alert
+    const notifParams = "&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1";
 
     if (_isSimpleType()) {
-      return "&name=$name&type=$type&$devices";
+      return "&name=$name&type=$type&$devices$notifParams";
     }
 
     if (_isGeofenceType()) {
       String geofences = selectedFenceList.join("&");
       int zoneVal = (type == 'geofence_out') ? 2 : 1;
-      return "&name=$name&type=$type&zone=$zoneVal&$geofences&$devices";
+      return "&name=$name&type=$type&zone=$zoneVal&$geofences&$devices$notifParams";
     }
 
     String value = Uri.encodeComponent(_typeCtl.text.trim());
     String paramName = _getParameterName();
-    return "&name=$name&type=$type&$paramName=$value&$devices";
+    return "&name=$name&type=$type&$paramName=$value&$devices$notifParams";
   }
 
   bool _isSimpleType() {
@@ -515,6 +642,7 @@ class _AlertListPageState extends State<AlertListPage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _devicesSubscription?.cancel();
     _nameCtl.dispose();
     _typeCtl.dispose();
     super.dispose();
@@ -549,6 +677,13 @@ class _AlertListPageState extends State<AlertListPage> {
     );
   }
 
+  // Built-in auto-tracking alerts (always active, can't be deleted)
+  static const List<Map<String, dynamic>> _autoAlerts = [
+    {'icon': Icons.key, 'label': 'Engine ON / OFF', 'desc': 'Auto-detect ignition changes', 'key': 'engine'},
+    {'icon': Icons.timer_outlined, 'label': 'Idle Detection', 'desc': 'Engine ON — speed ≤ 1 km/h', 'key': 'idle'},
+    {'icon': Icons.wifi_off, 'label': 'Offline / Online', 'desc': 'Connection lost or restored', 'key': 'offline'},
+  ];
+
   Widget _buildBody() {
     if (isLoading) {
       return Center(
@@ -556,17 +691,227 @@ class _AlertListPageState extends State<AlertListPage> {
       );
     }
 
-    if (alertList.isEmpty) {
-      return _buildEmptyState();
-    }
+    final filteredCustomAlerts = alertList.where((alert) {
+      final t = alert.type?.toLowerCase() ?? '';
+      return t != 'ignition_duration' && t != 'idle_duration' && t != 'offline_duration' &&
+             t != 'ignition' && t != 'idle' && t != 'offline';
+    }).toList();
 
     return RefreshIndicator(
       onRefresh: () async => getAlerts(),
       color: _primaryRed,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: alertList.length,
-        itemBuilder: (context, index) => _buildAlertCard(alertList[index]),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+        children: [
+          // ── Auto Alerts Section ─────────────────────────────────────────
+          _buildSectionHeader('Auto Tracking', Icons.auto_awesome, _primaryRed),
+          const SizedBox(height: 6),
+          ..._autoAlerts.map((a) => _buildAutoAlertCard(
+                icon: a['icon'] as IconData,
+                label: a['label'] as String,
+                desc: a['desc'] as String,
+                alertKey: a['key'] as String,
+              )),
+          const SizedBox(height: 10),
+
+          // ── Server Alerts Section ───────────────────────────────────────
+          if (filteredCustomAlerts.isNotEmpty) ...[
+            _buildSectionHeader('Custom Alerts', Icons.notification_add, _primaryRed),
+            const SizedBox(height: 6),
+            ...filteredCustomAlerts.map((alert) => _buildAlertCard(alert)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: color,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Divider(color: color.withValues(alpha: 0.2), height: 1)),
+      ],
+    );
+  }
+
+  void toggleAutoAlert(String alertKey, bool turnOn) async {
+    final activePrefs = prefs ?? await SharedPreferences.getInstance();
+
+    if (alertKey == 'idle' || alertKey == 'offline') {
+      await activePrefs.setBool('auto_alert_$alertKey', turnOn);
+      setState(() {});
+      _showSnackBar(turnOn ? 'Alert activated' : 'Alert deactivated');
+      return;
+    }
+
+    setState(() => isLoading = true);
+    
+    final String targetType = 'ignition_duration';
+            
+    Alert? existing;
+    for (var a in alertList) {
+      final t = a.type?.toLowerCase();
+      final bool isMatch = (t == 'ignition_duration' || t == 'ignition');
+      if (isMatch) {
+        existing = a;
+        break;
+      }
+    }
+        
+    if (existing != null) {
+      // Toggle existing alert on the server
+      Map<String, String> requestBody = {
+        'id': existing.id.toString(),
+        'active': turnOn ? "true" : "false"
+      };
+      try {
+        final resp = await APIService.activateAlert(requestBody);
+        if (resp.statusCode == 200) {
+          _showSnackBar(turnOn ? 'Alert activated' : 'Alert deactivated');
+          await activePrefs.setBool('auto_alert_$alertKey', turnOn);
+        } else {
+          _showSnackBar('Failed to update alert', isError: true);
+        }
+      } catch (e) {
+        _showSnackBar('Error: $e', isError: true);
+      }
+      await getAlerts();
+    } else {
+      if (turnOn) {
+        // Create new alert on the server
+        if (devicesList.isEmpty) {
+          setState(() => isLoading = false);
+          _showSnackBar('No devices available to assign alert', isError: true);
+          return;
+        }
+        
+        final String nameVal = 'Engine ON / OFF';
+        final String name = Uri.encodeComponent(nameVal);
+        final String devices = devicesList.map((d) => 'devices[]=${d.id}').join('&');
+        final String paramVal = '0';
+        final String request = '&name=$name&type=$targetType&$targetType=$paramVal&$devices&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1';
+        
+        try {
+          final resp = await APIService.addAlert(request);
+          if (resp.statusCode == 200) {
+            _showSnackBar('Alert created successfully');
+            await activePrefs.setBool('auto_alert_$alertKey', turnOn);
+          } else {
+            _showSnackBar('Failed to create alert', isError: true);
+          }
+        } catch (e) {
+          _showSnackBar('Error: $e', isError: true);
+        }
+        await getAlerts();
+      } else {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
+  Widget _buildAutoAlertCard({
+    required IconData icon,
+    required String label,
+    required String desc,
+    required String alertKey,
+  }) {
+    bool isEnabled = false;
+
+    if (alertKey == 'idle' || alertKey == 'offline') {
+      isEnabled = prefs?.getBool('auto_alert_$alertKey') ?? true;
+    } else {
+      Alert? existing;
+      for (var a in alertList) {
+        final t = a.type?.toLowerCase();
+        final bool isMatch = (t == 'ignition_duration' || t == 'ignition');
+        if (isMatch) {
+          existing = a;
+          break;
+        }
+      }
+      isEnabled = existing != null && existing.active.toString() == "1";
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 5),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _primaryRed.withValues(alpha: 0.15), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: _primaryRed.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: _primaryRed, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
+                  ),
+                  Text(
+                    desc,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: _primaryRed.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'AUTO',
+                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: _primaryRed, letterSpacing: 0.5),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Transform.scale(
+              scale: 0.8,
+              child: Switch(
+                value: isEnabled,
+                activeColor: _primaryRed,
+                activeTrackColor: _primaryRed.withValues(alpha: 0.2),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onChanged: (bool value) {
+                  toggleAutoAlert(alertKey, value);
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -638,39 +983,39 @@ class _AlertListPageState extends State<AlertListPage> {
     final bool isActive = alert.active.toString() == "1";
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 5),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
             // Icon
             Container(
-              width: 48,
-              height: 48,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: isActive
                     ? _primaryRed.withValues(alpha: 0.1)
                     : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 _getAlertTypeIcon(alert.type ?? ""),
                 color: isActive ? _primaryRed : _greyText,
-                size: 24,
+                size: 18,
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
 
             // Content
             Expanded(
@@ -680,58 +1025,43 @@ class _AlertListPageState extends State<AlertListPage> {
                   Text(
                     alert.name ?? 'Unnamed Alert',
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 3),
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: _primaryRed.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(3),
                         ),
                         child: Text(
                           _formatAlertType(alert.type ?? ""),
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 9,
                             color: _primaryRed,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      // Parameter detail tag
                       if (_getAlertParamDetail(alert) != null) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: Text(
-                            _getAlertParamDetail(alert)!,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: _greyText,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _getAlertParamDetail(alert)!,
+                          style: TextStyle(fontSize: 10, color: _greyText),
                         ),
-                        const SizedBox(width: 6),
                       ],
-                      Icon(Icons.directions_car, size: 12, color: _greyText),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
+                      Icon(Icons.directions_car, size: 11, color: _greyText),
+                      const SizedBox(width: 2),
                       Text(
-                        '${alert.devices?.length ?? 0} devices',
-                        style: TextStyle(fontSize: 11, color: _greyText),
+                        '${alert.devices?.length ?? 0}',
+                        style: TextStyle(fontSize: 10, color: _greyText),
                       ),
                     ],
                   ),
@@ -740,27 +1070,25 @@ class _AlertListPageState extends State<AlertListPage> {
             ),
 
             // Actions
-            Column(
+            Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Transform.scale(
-                  scale: 0.85,
+                  scale: 0.75,
                   child: Switch(
                     value: isActive,
                     onChanged: (value) {
                       value ? activateAlert(alert) : removeAlert(alert);
                     },
-                    activeThumbColor: _primaryRed,
+                    activeColor: _primaryRed,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
-                  onPressed: () => deleteAlert(alert.id!),
-                  icon: Icon(Icons.delete_outline,
-                      color: Colors.red.shade400, size: 20),
+                GestureDetector(
+                  onTap: () => deleteAlert(alert.id!),
+                  child: Icon(Icons.delete_outline, color: Colors.red.shade300, size: 18),
                 ),
+                const SizedBox(width: 4),
               ],
             ),
           ],

@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:smart_lock/firebase_options.dart';
 import 'package:smart_lock/services/model/event.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ─── Background plugin singletons (initialized once, reused on every message) ─
 FlutterLocalNotificationsPlugin? _bgPlugin;
@@ -54,8 +55,33 @@ Future<void> _showBackgroundNotification(RemoteMessage message) async {
     final String body = message.notification?.body ??
         message.data['body'] as String? ??
         'You have a new message';
+
+    if (!await _shouldShowNotification(body)) {
+      return;
+    }
+
     final String emoji = _getEmojiForMessage(body);
     final String channelId = _getChannelIdForMessage(body);
+
+    // Create the channel dynamically in the background to guarantee delivery on Android 8.0+
+    if (Platform.isAndroid) {
+      final androidPlugin = _bgPlugin!.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      if (androidPlugin != null) {
+        await androidPlugin.createNotificationChannel(
+          AndroidNotificationChannel(
+            channelId,
+            _getChannelName(channelId),
+            description: _getChannelDescription(channelId),
+            importance: Importance.max,
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            ledColor: const Color(0xFFFF0000),
+          ),
+        );
+      }
+    }
 
     await _bgPlugin!.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
@@ -90,6 +116,57 @@ void onDidReceiveBackgroundNotificationResponse(NotificationResponse response) {
   // Handle background notification tap if needed
 }
 
+Future<bool> _shouldShowNotification(String body) async {
+  final lower = body.toLowerCase();
+  SharedPreferences? prefs;
+  try {
+    prefs = await SharedPreferences.getInstance();
+  } catch (_) {}
+  if (prefs == null) return true;
+
+  // 1. Engine / Ignition
+  if (lower.contains('ignition') || lower.contains('engine')) {
+    return prefs.getBool('auto_alert_engine') ?? true;
+  }
+
+  // 2. Idle
+  if (lower.contains('idle')) {
+    return prefs.getBool('auto_alert_idle') ?? true;
+  }
+
+  // 3. Offline / Online
+  if (lower.contains('offline') || lower.contains('online')) {
+    return prefs.getBool('auto_alert_offline') ?? true;
+  }
+
+  // 4. Custom server alerts (overspeed, geofence, fuel, sos, etc.)
+  final activeServerAlerts = prefs.getStringList('active_server_alerts');
+  if (activeServerAlerts != null) {
+    String detectedType = '';
+    if (lower.contains('speed')) {
+      detectedType = 'overspeed';
+    } else if (lower.contains('geofence')) {
+      if (activeServerAlerts.any((t) => t.contains('geofence'))) {
+        return true;
+      }
+    } else if (lower.contains('fuel')) {
+      detectedType = 'fuel_fill_theft';
+    } else if (lower.contains('sos')) {
+      detectedType = 'sos';
+    }
+
+    if (detectedType.isNotEmpty) {
+      final hasActiveAlert = activeServerAlerts.any((t) => t.toLowerCase() == detectedType);
+      if (!hasActiveAlert) {
+        debugPrint('[NotificationService] Blocking notification "$body" because alert type "$detectedType" is inactive/deleted on server.');
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 // ─── Helper Functions ────────────────────────────────────────────────────────
 String _getEmojiForMessage(String message) {
   final lower = message.toLowerCase();
@@ -114,7 +191,8 @@ String _getChannelIdForMessage(String message) {
       lower.contains('speed') ||
       lower.contains('fuel') ||
       lower.contains('power') ||
-      lower.contains('battery')) {
+      lower.contains('battery') ||
+      lower.contains('geofence')) {   // ← geofence এখন alert channel এ
     return 'alert_channel_v1';
   }
   return 'event_channel_v1';
@@ -361,6 +439,10 @@ class NotificationService {
     required String body,
     Map<String, dynamic>? data,
   }) async {
+    if (!await _shouldShowNotification(body)) {
+      return;
+    }
+
     final String emoji = _getEmojiForMessage(body);
     final String channelId = _getChannelIdForMessage(body);
 

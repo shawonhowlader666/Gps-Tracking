@@ -5,6 +5,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:smart_lock/config.dart';
 import 'package:smart_lock/screens/server_maintenance_screen.dart';
 import 'package:smart_lock/services/model/login.dart';
@@ -138,36 +140,99 @@ class _SplashScreenPageState extends State<SplashScreenPage>
 
   Future<void> _fetchFromFirestore() async {
     final String serverType = _prefs.getString('serverType') ?? 'free';
+    final PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    final String packageName = packageInfo.packageName;
 
+    // 1. Try package-specific configuration document
     final doc = await FirebaseFirestore.instance
         .collection('configs')
-        .doc('urls')
+        .doc(packageName)
         .get();
 
-    if (!doc.exists) return;
+    if (doc.exists && doc.data() != null) {
+      final data = doc.data() as Map<String, dynamic>;
+      
+      APP_NAME = data['app_name'] as String? ?? APP_NAME;
+      APP_VERSION = data['version'] as String? ?? '1.0.0';
+      
+      final support = data['support'] as Map<String, dynamic>? ?? {};
+      WHATS_APP = support['whatsapp'] as String? ?? '';
+      PHONE_NO = support['phone'] as String? ?? '';
+      EMAIL = support['email'] as String? ?? '';
+      
+      final settings = data['settings'] as Map<String, dynamic>? ?? {};
+      SHOW_ADS = (settings['show_ads'] as bool? ?? false) && serverType == 'free';
+      adsFrequency = settings['ads_frequency'] as int? ?? 30;
+      
+      if (data['servers'] != null) {
+        SERVER_URL = data['servers'] as List;
+      }
+      
+      final policies = data['policies'] as Map<String, dynamic>? ?? {};
+      TERMS_AND_CONDITIONS = policies['terms'] as String? ?? TERMS_AND_CONDITIONS;
+      PRIVACY_POLICY = policies['privacy'] as String? ?? PRIVACY_POLICY;
 
-    final data = doc.data() as Map<String, dynamic>;
-    final spytrackConfig = data['spytrack'] as Map<String, dynamic>;
+      // Custom payment numbers
+      final payment = data['payment'] as Map<String, dynamic>? ?? {};
+      bkashNumber = payment['bkash'] as String? ?? '';
+      nagadNumber = payment['nagad'] as String? ?? '';
+      rocketNumber = payment['rocket'] as String? ?? '';
 
-    SERVER_URL = spytrackConfig['url'] as List;
-    SHOW_ADS =
-        (spytrackConfig['ads'] as bool? ?? false) && serverType == 'free';
-    WHATS_APP = spytrackConfig['whatsapp'] as String? ?? '';
-    PHONE_NO = spytrackConfig['phone'] as String? ?? '';
-    EMAIL = spytrackConfig['email'] as String? ?? '';
-    adsFrequency = spytrackConfig['adsfrequency'] as int? ?? 3;
-    APP_VERSION = spytrackConfig['version'] as String? ?? '1.0.0';
-    BANNER_IMAGE = spytrackConfig['banners'] as List<dynamic>? ?? [];
-    fuelData = spytrackConfig['fuelData'];
+      // System controls
+      final maintenance = data['maintenance'] as Map<String, dynamic>? ?? {};
+      globalMaintenanceEnabled = maintenance['enabled'] as bool? ?? false;
+      globalMaintenanceMessage = maintenance['message'] as String? ?? '';
+
+      final forceUpdate = data['force_update'] as Map<String, dynamic>? ?? {};
+      forceUpdateEnabled = forceUpdate['enabled'] as bool? ?? false;
+      forceUpdateVersion = forceUpdate['version'] as String? ?? '';
+      forceUpdateUrl = forceUpdate['url'] as String? ?? '';
+      forceUpdateMessage = forceUpdate['message'] as String? ?? '';
+    } else {
+      // 2. Fallback to legacy configs/urls/spytrack document
+      final fallbackDoc = await FirebaseFirestore.instance
+          .collection('configs')
+          .doc('urls')
+          .get();
+
+      if (fallbackDoc.exists && fallbackDoc.data() != null) {
+        final fallbackData = fallbackDoc.data() as Map<String, dynamic>;
+        final spytrackConfig = fallbackData['spytrack'] as Map<String, dynamic>? ?? {};
+
+        SERVER_URL = spytrackConfig['url'] as List? ?? [];
+        SHOW_ADS = (spytrackConfig['ads'] as bool? ?? false) && serverType == 'free';
+        WHATS_APP = spytrackConfig['whatsapp'] as String? ?? '';
+        PHONE_NO = spytrackConfig['phone'] as String? ?? '';
+        EMAIL = spytrackConfig['email'] as String? ?? '';
+        adsFrequency = spytrackConfig['adsfrequency'] as int? ?? 3;
+        APP_VERSION = spytrackConfig['version'] as String? ?? '1.0.0';
+        BANNER_IMAGE = spytrackConfig['banners'] as List<dynamic>? ?? [];
+        fuelData = spytrackConfig['fuelData'] as Map<String, dynamic>? ?? {};
+      }
+    }
 
     // Cache timestamp so we skip Firestore on next launch within TTL
     await _prefs.setInt(
         'config_last_fetch', DateTime.now().millisecondsSinceEpoch);
 
     _applyMaintenanceCheck();
+    _applyForceUpdateCheck();
   }
 
   void _applyMaintenanceCheck() {
+    if (globalMaintenanceEnabled && globalMaintenanceMessage.isNotEmpty && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => ServerMaintenanceScreen(message: globalMaintenanceMessage),
+          ),
+          (route) => false,
+        );
+      });
+      return;
+    }
+
     final String? currentServerUrl = UserRepository.getServerUrl();
     for (final server in SERVER_URL) {
       if (server['url'] == currentServerUrl) {
@@ -187,6 +252,60 @@ class _SplashScreenPageState extends State<SplashScreenPage>
         break;
       }
     }
+  }
+
+  void _applyForceUpdateCheck() {
+    if (forceUpdateEnabled && forceUpdateVersion.isNotEmpty && mounted) {
+      PackageInfo.fromPlatform().then((packageInfo) {
+        final currentVersion = packageInfo.version;
+        if (_isVersionLower(currentVersion, forceUpdateVersion)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => PopScope(
+                canPop: false,
+                child: AlertDialog(
+                  title: const Text('Update Required'),
+                  content: Text(forceUpdateMessage.isNotEmpty 
+                      ? forceUpdateMessage 
+                      : 'A new version of the app is available. Please update to continue.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () async {
+                        if (forceUpdateUrl.isNotEmpty) {
+                          final uri = Uri.parse(forceUpdateUrl);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
+                        }
+                      },
+                      child: const Text('Update Now'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          });
+        }
+      });
+    }
+  }
+
+  bool _isVersionLower(String current, String required) {
+    try {
+      final currentParts = current.split('.').map(int.parse).toList();
+      final requiredParts = required.split('.').map(int.parse).toList();
+      for (var i = 0; i < requiredParts.length; i++) {
+        if (i >= currentParts.length) return true;
+        if (currentParts[i] < requiredParts[i]) return true;
+        if (currentParts[i] > requiredParts[i]) return false;
+      }
+    } catch (_) {
+      return current != required;
+    }
+    return false;
   }
 
   // ─── Login check ──────────────────────────────────────────────────────────
@@ -231,7 +350,14 @@ class _SplashScreenPageState extends State<SplashScreenPage>
       final String? token = await FirebaseMessaging.instance.getToken();
       if (token != null && token.isNotEmpty) {
         await APIService.getUserData();
-        await APIService.activateFCM(token);
+        final response = await APIService.activateFCM(token);
+        if (response.statusCode == 200) {
+          debugPrint("FCM token activated successfully");
+        } else {
+          debugPrint("FCM server activation failed: ${response.statusCode}");
+        }
+      } else {
+        debugPrint("FCM Token is empty");
       }
     } catch (e) {
       debugPrint('FCM token update error: $e');

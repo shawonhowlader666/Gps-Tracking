@@ -46,10 +46,13 @@ class _CustomReportTabState extends State<CustomReportTab>
   @override
   void initState() {
     super.initState();
-    if (widget.presetPeriod != null) {
-      _applyPreset(widget.presetPeriod!);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _generateReport());
-    }
+    // Auto-generate for default last 7 days on first open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.presetPeriod != null) {
+        _applyPreset(widget.presetPeriod!);
+      }
+      _generateReport();
+    });
   }
 
   void _applyPreset(String preset) {
@@ -83,9 +86,12 @@ class _CustomReportTabState extends State<CustomReportTab>
         _endDate = now;
         break;
     }
+    // Auto-generate report when preset is tapped
+    _generateReport();
   }
 
-  Future<void> _generateReport() async {
+  Future<void> _generateReport({bool forceRefresh = false}) async {
+    if (_isLoading) return; // prevent double-tap
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -97,7 +103,7 @@ class _CustomReportTabState extends State<CustomReportTab>
         period: ReportPeriod.custom,
         customStart: _startDate,
         customEnd: _endDate,
-        forceRefresh: true,
+        forceRefresh: forceRefresh,
       );
       setState(() {
         _reportData = report;
@@ -148,15 +154,13 @@ class _CustomReportTabState extends State<CustomReportTab>
         const SizedBox(height: 20),
         _buildDateRangeCard(),
         const SizedBox(height: 20),
-        _buildGenerateButton(),
-        const SizedBox(height: 20),
+        // Show Generate/Refresh button only when not auto-loading
+        if (!_isLoading)
+          _buildGenerateButton(),
+        if (_isLoading) const SizedBox(height: 8),
+        const SizedBox(height: 12),
         if (_isLoading)
-          const SizedBox(
-            height: 200,
-            child: Center(
-                child:
-                    CircularProgressIndicator(color: _red, strokeWidth: 2.5)),
-          )
+          _buildSkeletonLoading()
         else if (_errorMessage != null)
           _buildErrorState()
         else if (_reportData != null && _reportData!.isNotEmpty)
@@ -191,10 +195,7 @@ class _CustomReportTabState extends State<CustomReportTab>
   Widget _buildPresetChip(_Preset preset) {
     final isActive = _activePreset == preset.key;
     return GestureDetector(
-      onTap: () {
-        _applyPreset(preset.key);
-        setState(() {});
-      },
+      onTap: _isLoading ? null : () => _applyPreset(preset.key),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -311,49 +312,69 @@ class _CustomReportTabState extends State<CustomReportTab>
   }
 
   Widget _buildGenerateButton() {
+    // Show as Refresh when results already visible
+    final hasResult = _reportData != null && _reportData!.isNotEmpty;
     return SizedBox(
       width: double.infinity,
       height: 52,
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _generateReport,
+        onPressed: _isLoading ? null : () => _generateReport(forceRefresh: true),
         style: ElevatedButton.styleFrom(
-          backgroundColor: _red,
-          foregroundColor: Colors.white,
+          backgroundColor: hasResult ? Colors.grey[100] : _red,
+          foregroundColor: hasResult ? _red : Colors.white,
           disabledBackgroundColor: _red.withValues(alpha: 0.5),
           elevation: 0,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          shadowColor: _red.withValues(alpha: 0.4),
         ),
-        child: _isLoading
-            ? Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Generating...',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.analytics_rounded, size: 20),
-                  SizedBox(width: 10),
-                  Text(
-                    'Generate Report',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(hasResult ? Icons.refresh_rounded : Icons.analytics_rounded,
+                size: 20),
+            const SizedBox(width: 10),
+            Text(
+              hasResult ? 'Refresh' : 'Generate Report',
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSkeletonLoading() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Column(
+        children: List.generate(
+          5,
+          (i) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              children: [
+                _SkeletonBox(width: 36, height: 36, radius: 9),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: _SkeletonBox(
+                        width: double.infinity, height: 14, radius: 6)),
+                const SizedBox(width: 20),
+                _SkeletonBox(width: 70, height: 14, radius: 6),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -589,6 +610,53 @@ class _ResultRow extends StatelessWidget {
         ),
         if (!last) Divider(height: 1, color: Colors.grey[100]),
       ],
+    );
+  }
+}
+
+class _SkeletonBox extends StatefulWidget {
+  final double width;
+  final double height;
+  final double radius;
+  const _SkeletonBox(
+      {required this.width, required this.height, required this.radius});
+
+  @override
+  State<_SkeletonBox> createState() => _SkeletonBoxState();
+}
+
+class _SkeletonBoxState extends State<_SkeletonBox>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
+    _anim = Tween(begin: 0.3, end: 0.85).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: Colors.grey.withValues(alpha: _anim.value),
+          borderRadius: BorderRadius.circular(widget.radius),
+        ),
+      ),
     );
   }
 }

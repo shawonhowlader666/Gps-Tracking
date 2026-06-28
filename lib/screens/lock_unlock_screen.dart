@@ -1,11 +1,16 @@
 // ignore_for_file: file_names
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/material.dart' as m;
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:smart_lock/screens/data_controller/data_controller.dart';
 import 'package:smart_lock/services/api_service.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
+import 'package:smart_lock/util/util.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LockUnlockScreen extends StatefulWidget {
   final DeviceItem device;
@@ -26,6 +31,27 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   bool _isLocked = true;
   bool _isEngineOn = false;
   bool _isLoading = false;
+  String _debugCommandsText = "Loading GPRS commands...";
+
+  // Selected tracker protocol
+  String _selectedProtocol = 'SinoTrack';
+
+  void _loadSelectedProtocol() {
+    final devId = widget.device.id;
+    if (devId != null) {
+      final saved = GetStorage().read<String>('protocol_$devId');
+      if (saved != null) {
+        _selectedProtocol = saved;
+      }
+    }
+  }
+
+  void _saveSelectedProtocol(String protocol) {
+    final devId = widget.device.id;
+    if (devId != null) {
+      GetStorage().write('protocol_$devId', protocol);
+    }
+  }
 
   // SOS
   final TextEditingController _sosController = TextEditingController();
@@ -106,6 +132,23 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     );
 
     _resolveInitialLockState();
+    _loadSelectedProtocol();
+    
+    APIService.getSavedCommands(widget.device.id.toString()).then((res) {
+      if (res != null) {
+        setState(() {
+          _debugCommandsText = res.body;
+        });
+      } else {
+        setState(() {
+          _debugCommandsText = "Error: Null response from server";
+        });
+      }
+    }).catchError((err) {
+      setState(() {
+        _debugCommandsText = "Error loading: $err";
+      });
+    });
   }
 
   @override
@@ -119,25 +162,55 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
   void _resolveInitialLockState() {
     _isEngineOn = _checkEngineStatus(widget.device);
+    _isLocked = _checkLockStatus(widget.device);
+  }
 
-    final devId = widget.device.id;
+  bool _checkLockStatus(DeviceItem d) {
+    final devId = d.id;
     if (devId != null) {
       final lockOverride = DataController.getLocalLockOverride(devId);
       if (lockOverride != null) {
-        _isLocked =
-            ['locked', '1', 'true'].contains(lockOverride.toLowerCase().trim());
-        return;
+        return ['locked', '1', 'true', 'on'].contains(lockOverride.toLowerCase().trim());
       }
     }
 
-    final lockStatus =
-        widget.device.deviceData?.lockStatus?.toLowerCase().trim();
+    // 1. Check lockStatus field
+    final lockStatus = d.deviceData?.lockStatus?.toLowerCase().trim();
     if (lockStatus != null && lockStatus.isNotEmpty) {
-      _isLocked =
-          lockStatus == 'locked' || lockStatus == '1' || lockStatus == 'true';
-    } else {
-      _isLocked = !_isEngineOn;
+      return lockStatus == 'locked' || lockStatus == '1' || lockStatus == 'true' || lockStatus == 'on';
     }
+
+    // 2. Check custom sensors for "lock" / "block" / "relay" / "immobilizer"
+    if (d.sensors != null) {
+      for (var sensor in d.sensors!) {
+        try {
+          if (sensor is! Map) continue;
+          final sensorMap = Map<String, dynamic>.from(sensor);
+          final type = (sensorMap['type'] ?? '').toString().toLowerCase();
+          final name = (sensorMap['name'] ?? '').toString().toLowerCase();
+          final value = sensorMap['value'];
+          
+          if (type.contains('lock') || name.contains('lock') || 
+              type.contains('relay') || name.contains('relay') ||
+              type.contains('block') || name.contains('block') ||
+              type.contains('immobiliz') || name.contains('immobiliz')) {
+            if (value == null) continue;
+            if (value is bool) return value;
+            if (value is int) return value == 1;
+            if (value is String) {
+              final v = value.toLowerCase().trim();
+              if (['on', '1', 'true', 'locked', 'blocked', 'yes'].contains(v)) return true;
+              if (['off', '0', 'false', 'unlocked', 'unblocked', 'no'].contains(v)) return false;
+            }
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+
+    // Default fallback: Always assume UNLOCKED (false) if not explicitly locked!
+    return false;
   }
 
   bool _isDeviceOnline(DeviceItem d) {
@@ -219,6 +292,19 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     if (widget.device.deviceData != null) {
       widget.device.deviceData!.lockStatus = _isLocked ? 'locked' : 'unlocked';
     }
+    // Also sync the sensor value locally so the UI updates immediately!
+    if (widget.device.sensors != null) {
+      for (var sensor in widget.device.sensors!) {
+        try {
+          if (sensor is! Map) continue;
+          final name = (sensor['name'] ?? '').toString().toLowerCase();
+          final type = (sensor['type'] ?? '').toString().toLowerCase();
+          if (name.contains('lock') || type.contains('lock') || name.contains('relay') || type == 'relay') {
+            sensor['value'] = _isLocked ? 'On' : 'Off';
+          }
+        } catch (_) {}
+      }
+    }
     final traccar = widget.device.deviceData?.traccar;
     if (traccar != null) {
       final now = DateTime.now().toUtc().toIso8601String();
@@ -254,12 +340,31 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       // 9400000 = Cut off engine (Lock)
       // 9500000 = Restore engine (Unlock)
       final Map<String, String> requestBody = {
+        'id': '',
         'device_id': widget.device.id.toString(),
-        'type': 'gprs',
+        'type': 'custom',
         'command': lockAfter ? '9400000' : '9500000',
+        'data': lockAfter ? '9400000' : '9500000',
       };
       final res = await APIService.sendCommands(requestBody);
       if (res.statusCode == 200) {
+        Map<String, dynamic>? responseJson;
+        try {
+          responseJson = json.decode(res.body);
+        } catch (_) {}
+
+        if (responseJson != null && responseJson.containsKey('status') && responseJson['status'] == 0) {
+          final errMsg = responseJson['message'] ?? 'Failed to control engine';
+          Fluttertoast.showToast(
+            msg: '❌ $errMsg',
+            toastLength: Toast.LENGTH_LONG,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: _dangerColor,
+            textColor: Colors.white,
+          );
+          return;
+        }
+
         setState(() {
           _isLocked = lockAfter;
           _isEngineOn = !lockAfter;
@@ -308,62 +413,382 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     }
   }
 
-  Future<void> _sendCustomCommand(String commandType) async {
-    setState(() => _isLoading = true);
+  String _getCommandString(String commandType) {
+    if (commandType == 'accalm') {
+      if (_selectedProtocol == 'SinoTrack') return 'CALLSET,1#; ACCALM,ON,3,1#';
+      if (_selectedProtocol == 'Concox / Jimi') return 'CALL,ON#';
+      if (_selectedProtocol == 'Micodus') return 'CALLALM,ON#';
+      if (_selectedProtocol == 'Coban') return 'callalarm123456 on';
+    } else if (commandType == 'gmt') {
+      if (_selectedProtocol == 'SinoTrack') return 'ZONE,GMT+6#';
+      if (_selectedProtocol == 'Concox / Jimi') return 'GMT,E,6,0#';
+      if (_selectedProtocol == 'Micodus') return 'TIMEZONE,6#';
+      if (_selectedProtocol == 'Coban') return 'time zone123456 6';
+    } else if (commandType == 'reset') {
+      if (_selectedProtocol == 'SinoTrack') return 'RESET#';
+      if (_selectedProtocol == 'Concox / Jimi') return 'REBOOT#';
+      if (_selectedProtocol == 'Micodus') return 'RST#';
+      if (_selectedProtocol == 'Coban') return 'reset123456';
+    }
+    return '';
+  }
+
+  Future<void> _sendSMS(String number, String message) async {
+    final Uri smsUri = Uri(
+      scheme: 'sms',
+      path: number,
+      queryParameters: <String, String>{
+        'body': message,
+      },
+    );
     try {
-      Map<String, String> requestBody;
-      String friendlyName = commandType.toUpperCase();
-
-      if (commandType == 'accalm') {
-        requestBody = {
-          'device_id': widget.device.id.toString(),
-          'type': 'gprs',
-          'command': '8880000',
-        };
-        friendlyName = 'ACC Call Alarm Enable';
-      } else if (commandType == 'gmt') {
-        requestBody = {
-          'device_id': widget.device.id.toString(),
-          'type': 'gprs',
-          'command': 'zone0000 6',
-        };
-        friendlyName = 'GMT+6 Timezone';
-      } else if (commandType == 'reset') {
-        requestBody = {
-          'device_id': widget.device.id.toString(),
-          'type': 'gprs',
-          'command': 'RESET',
-        };
-        friendlyName = 'Device Restart';
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri);
       } else {
-        requestBody = {
-          'id': '',
-          'device_id': widget.device.id.toString(),
-          'type': commandType,
-        };
+        final fallbackUri = Uri.parse("sms:$number?body=${Uri.encodeComponent(message)}");
+        await launchUrl(fallbackUri);
       }
-
-      final res = await APIService.sendCommands(requestBody);
       Fluttertoast.showToast(
-        msg: res.statusCode == 200
-            ? '✅ Command "$friendlyName" sent'
-            : 'Command failed (${res.statusCode})',
-        toastLength: Toast.LENGTH_SHORT,
+        msg: "✉️ Opened SMS app. Please send the message to apply settings.",
+        toastLength: Toast.LENGTH_LONG,
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: res.statusCode == 200 ? _successColor : _dangerColor,
+        backgroundColor: _successColor,
         textColor: Colors.white,
       );
     } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'Connection error.',
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: _dangerColor,
-        textColor: Colors.white,
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      Fluttertoast.showToast(msg: "Could not launch SMS app: $e", backgroundColor: _dangerColor);
     }
+  }
+
+  void _showCommandMethodDialog({
+    required String command,
+    required String friendlyName,
+    required VoidCallback onGPRSTap,
+    required VoidCallback onServerSMSTap,
+  }) {
+    final simNumber = widget.device.deviceData?.simNumber;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: Colors.white,
+          title: Row(
+            children: [
+              const m.Icon(Icons.message_rounded, color: Colors.blue, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'Send $friendlyName',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Command String:',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  command,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace',
+                    color: Color(0xFF334155),
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Note: SinoTrack/H02 trackers do not support configuration commands over GPRS (Internet). They only support Engine Lock/Unlock. For SOS number and settings, please use SMS.',
+                style: TextStyle(fontSize: 11, height: 1.4, color: Color(0xFF475569)),
+              ),
+              if (simNumber == null || simNumber.isEmpty) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  '⚠️ Device SIM number is not configured in settings. You must configure the SIM number to send SMS commands.',
+                  style: TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                onGPRSTap();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE2E8F0),
+                foregroundColor: const Color(0xFF0F172A),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('GPRS (Free)'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                onServerSMSTap();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3B82F6),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Server SMS'),
+            ),
+            if (simNumber != null && simNumber.isNotEmpty)
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _sendSMS(simNumber, command);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _successColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Phone SMS'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _sendCustomCommand(String commandType) async {
+    final command = _getCommandString(commandType);
+    if (command.isEmpty) return;
+
+    String friendlyName = commandType.toUpperCase();
+    if (commandType == 'accalm') friendlyName = 'ACC Call Alarm';
+    if (commandType == 'gmt') friendlyName = 'GMT+6 Timezone';
+    if (commandType == 'reset') friendlyName = 'Device Restart';
+
+    final onGprsTap = () async {
+      setState(() => _isLoading = true);
+      try {
+        if (commandType == 'accalm' && _selectedProtocol == 'SinoTrack') {
+          final res1 = await APIService.sendCommands({
+            'id': '',
+            'device_id': widget.device.id.toString(),
+            'type': 'custom',
+            'command': 'CALLSET,1#',
+            'data': 'CALLSET,1#',
+          });
+          if (res1.statusCode != 200) {
+            throw Exception('CALLSET failed: ${res1.statusCode}');
+          }
+          Map<String, dynamic>? res1Json;
+          try { res1Json = json.decode(res1.body); } catch(_) {}
+          if (res1Json != null && res1Json['status'] == 0) {
+            throw Exception(res1Json['message'] ?? 'CALLSET rejected by server');
+          }
+
+          await Future.delayed(const Duration(milliseconds: 600));
+
+          final res2 = await APIService.sendCommands({
+            'id': '',
+            'device_id': widget.device.id.toString(),
+            'type': 'custom',
+            'command': 'ACCALM,ON,3,1#',
+            'data': 'ACCALM,ON,3,1#',
+          });
+          
+          Map<String, dynamic>? res2Json;
+          try { res2Json = json.decode(res2.body); } catch(_) {}
+          final success = res2.statusCode == 200 && (res2Json == null || res2Json['status'] != 0);
+          final msg = success ? '✅ ACC Call Alarm Enabled' : (res2Json?['message'] ?? 'ACCALM failed');
+          Fluttertoast.showToast(
+            msg: msg,
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: success ? _successColor : _dangerColor,
+            textColor: Colors.white,
+          );
+          return;
+        }
+
+        final Map<String, String> requestBody = {
+          'id': '',
+          'device_id': widget.device.id.toString(),
+          'type': 'custom',
+          'command': command,
+          'data': command,
+        };
+        final res = await APIService.sendCommands(requestBody);
+        if (res.statusCode == 200) {
+          Map<String, dynamic>? responseJson;
+          try {
+            responseJson = json.decode(res.body);
+          } catch (_) {}
+
+          if (responseJson != null && responseJson.containsKey('status') && responseJson['status'] == 0) {
+            final errMsg = responseJson['message'] ?? 'Command rejected';
+            Fluttertoast.showToast(
+              msg: '❌ $errMsg',
+              toastLength: Toast.LENGTH_LONG,
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: _dangerColor,
+              textColor: Colors.white,
+            );
+            return;
+          }
+
+          Fluttertoast.showToast(
+            msg: '✅ Command "$friendlyName" sent',
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: _successColor,
+            textColor: Colors.white,
+          );
+        } else {
+          Fluttertoast.showToast(
+            msg: 'Command failed (${res.statusCode})',
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: _dangerColor,
+            textColor: Colors.white,
+          );
+        }
+      } catch (e) {
+        Fluttertoast.showToast(
+          msg: 'Error: $e',
+          toastLength: Toast.LENGTH_LONG,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: _dangerColor,
+          textColor: Colors.white,
+        );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    };
+
+    final onServerSMSTap = () async {
+      setState(() => _isLoading = true);
+      try {
+        if (commandType == 'accalm' && _selectedProtocol == 'SinoTrack') {
+          final res1 = await APIService.sendCommands({
+            'id': '',
+            'device_id': widget.device.id.toString(),
+            'type': 'sms',
+            'command': 'CALLSET,1#',
+            'data': 'CALLSET,1#',
+          });
+          if (res1.statusCode != 200) {
+            throw Exception('CALLSET SMS failed: ${res1.statusCode}');
+          }
+          Map<String, dynamic>? res1Json;
+          try { res1Json = json.decode(res1.body); } catch(_) {}
+          if (res1Json != null && res1Json['status'] == 0) {
+            throw Exception(res1Json['message'] ?? 'CALLSET SMS rejected by server');
+          }
+
+          await Future.delayed(const Duration(milliseconds: 600));
+
+          final res2 = await APIService.sendCommands({
+            'id': '',
+            'device_id': widget.device.id.toString(),
+            'type': 'sms',
+            'command': 'ACCALM,ON,3,1#',
+            'data': 'ACCALM,ON,3,1#',
+          });
+          
+          Map<String, dynamic>? res2Json;
+          try { res2Json = json.decode(res2.body); } catch(_) {}
+          final success = res2.statusCode == 200 && (res2Json == null || res2Json['status'] != 0);
+          final msg = success ? '✅ Server SMS: ACC Call Alarm Enabled' : (res2Json?['message'] ?? 'ACCALM SMS failed');
+          Fluttertoast.showToast(
+            msg: msg,
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: success ? _successColor : _dangerColor,
+            textColor: Colors.white,
+          );
+          return;
+        }
+
+        final Map<String, String> requestBody = {
+          'id': '',
+          'device_id': widget.device.id.toString(),
+          'type': 'sms',
+          'command': command,
+          'data': command,
+        };
+        final res = await APIService.sendCommands(requestBody);
+        if (res.statusCode == 200) {
+          Map<String, dynamic>? responseJson;
+          try {
+            responseJson = json.decode(res.body);
+          } catch (_) {}
+
+          if (responseJson != null && responseJson.containsKey('status') && responseJson['status'] == 0) {
+            final errMsg = responseJson['message'] ?? 'SMS Command rejected';
+            Fluttertoast.showToast(
+              msg: '❌ $errMsg',
+              toastLength: Toast.LENGTH_LONG,
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: _dangerColor,
+              textColor: Colors.white,
+            );
+            return;
+          }
+
+          Fluttertoast.showToast(
+            msg: '✅ Server SMS: "$friendlyName" sent',
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: _successColor,
+            textColor: Colors.white,
+          );
+        } else {
+          Fluttertoast.showToast(
+            msg: 'SMS Command failed (${res.statusCode})',
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: _dangerColor,
+            textColor: Colors.white,
+          );
+        }
+      } catch (e) {
+        Fluttertoast.showToast(
+          msg: 'Error: $e',
+          toastLength: Toast.LENGTH_LONG,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: _dangerColor,
+          textColor: Colors.white,
+        );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    };
+
+    _showCommandMethodDialog(
+      command: command,
+      friendlyName: friendlyName,
+      onGPRSTap: onGprsTap,
+      onServerSMSTap: onServerSMSTap,
+    );
   }
 
   Future<void> _sendSOS() async {
@@ -382,75 +807,153 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       return;
     }
 
-    // Clean number: remove "+", spaces, dashes, parentheses
     var cleanNumber = number.replaceAll(RegExp(r'[^0-9]'), '');
-
-    // Bangladesh country code handling: if starting with 880 (13 digits), strip "88" to make it 11-digit local format
     if (cleanNumber.startsWith('880') && cleanNumber.length == 13) {
       cleanNumber = cleanNumber.substring(2);
     }
 
-    final isOnline = _isDeviceOnline(widget.device);
-    if (!isOnline) {
-      Fluttertoast.showToast(
-        msg: '⚠️ Device is offline. GPRS commands will not be delivered.',
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: _warningColor,
-        textColor: Colors.white,
-      );
+    String command = '';
+    if (_selectedProtocol == 'SinoTrack' || _selectedProtocol == 'Concox / Jimi' || _selectedProtocol == 'Micodus') {
+      command = 'SOS,A,${cleanNumber}#';
+    } else if (_selectedProtocol == 'Coban') {
+      command = 'admin123456 ${cleanNumber}';
     }
 
-    setState(() => _isLoading = true);
-    try {
-      final Map<String, String> setAdminBody = {
-        'device_id': widget.device.id.toString(),
-        'type': 'gprs',
-        'command': '${cleanNumber}0000 1',
-      };
-      final res = await APIService.sendCommands(setAdminBody);
+    if (command.isEmpty) return;
 
-      if (res.statusCode == 200) {
-        final Map<String, String> smsModeBody = {
-          'device_id': widget.device.id.toString(),
-          'type': 'gprs',
-          'command': '1510000',
-        };
-        await APIService.sendCommands(smsModeBody);
-
-        final Map<String, String> disableAccCallBody = {
-          'device_id': widget.device.id.toString(),
-          'type': 'gprs',
-          'command': '8890000',
-        };
-        await APIService.sendCommands(disableAccCallBody);
-
+    final onGprsTap = () async {
+      final isOnline = _isDeviceOnline(widget.device);
+      if (!isOnline) {
         Fluttertoast.showToast(
-          msg: '🆘 SOS Set (Calls Disabled / SMS Mode)',
-          toastLength: Toast.LENGTH_SHORT,
+          msg: '⚠️ Device is offline. GPRS commands will not be delivered.',
+          toastLength: Toast.LENGTH_LONG,
           gravity: ToastGravity.BOTTOM,
-          backgroundColor: _successColor,
+          backgroundColor: _warningColor,
           textColor: Colors.white,
         );
-      } else {
+      }
+
+      setState(() => _isLoading = true);
+      try {
+        final Map<String, String> setAdminBody = {
+          'id': '',
+          'device_id': widget.device.id.toString(),
+          'type': 'custom',
+          'command': command,
+          'data': command,
+        };
+        final res = await APIService.sendCommands(setAdminBody);
+
+        if (res.statusCode == 200) {
+          Map<String, dynamic>? responseJson;
+          try {
+            responseJson = json.decode(res.body);
+          } catch (_) {}
+
+          if (responseJson != null && responseJson.containsKey('status') && responseJson['status'] == 0) {
+            final errMsg = responseJson['message'] ?? 'SOS configuration rejected';
+            Fluttertoast.showToast(
+              msg: '❌ $errMsg',
+              toastLength: Toast.LENGTH_LONG,
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: _dangerColor,
+              textColor: Colors.white,
+            );
+            return;
+          }
+
+          Fluttertoast.showToast(
+            msg: '🆘 SOS Number Configured: $command',
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: _successColor,
+            textColor: Colors.white,
+          );
+        } else {
+          Fluttertoast.showToast(
+            msg: 'Failed to set SOS number (${res.statusCode})',
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: _dangerColor,
+            textColor: Colors.white,
+          );
+        }
+      } catch (e) {
         Fluttertoast.showToast(
-          msg: 'Failed to set SOS number (${res.statusCode})',
-          toastLength: Toast.LENGTH_SHORT,
+          msg: 'Connection error.',
           gravity: ToastGravity.BOTTOM,
           backgroundColor: _dangerColor,
           textColor: Colors.white,
         );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
       }
-    } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'Connection error.',
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: _dangerColor,
-        textColor: Colors.white,
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    };
+
+    final onServerSMSTap = () async {
+      setState(() => _isLoading = true);
+      try {
+        final Map<String, String> setAdminBody = {
+          'id': '',
+          'device_id': widget.device.id.toString(),
+          'type': 'sms',
+          'command': command,
+          'data': command,
+        };
+        final res = await APIService.sendCommands(setAdminBody);
+
+        if (res.statusCode == 200) {
+          Map<String, dynamic>? responseJson;
+          try {
+            responseJson = json.decode(res.body);
+          } catch (_) {}
+
+          if (responseJson != null && responseJson.containsKey('status') && responseJson['status'] == 0) {
+            final errMsg = responseJson['message'] ?? 'SOS SMS rejected';
+            Fluttertoast.showToast(
+              msg: '❌ $errMsg',
+              toastLength: Toast.LENGTH_LONG,
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: _dangerColor,
+              textColor: Colors.white,
+            );
+            return;
+          }
+
+          Fluttertoast.showToast(
+            msg: '🆘 Server SMS sent: $command',
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: _successColor,
+            textColor: Colors.white,
+          );
+        } else {
+          Fluttertoast.showToast(
+            msg: 'Failed to send Server SMS (${res.statusCode})',
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: _dangerColor,
+            textColor: Colors.white,
+          );
+        }
+      } catch (e) {
+        Fluttertoast.showToast(
+          msg: 'Connection error.',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: _dangerColor,
+          textColor: Colors.white,
+        );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    };
+
+    _showCommandMethodDialog(
+      command: command,
+      friendlyName: 'Configure SOS Number',
+      onGPRSTap: onGprsTap,
+      onServerSMSTap: onServerSMSTap,
+    );
   }
 
   @override
@@ -499,8 +1002,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                 padding: const EdgeInsets.fromLTRB(20, 110, 20, 30),
                 child: Column(
                   children: [
-                    _buildHUDStatusRing(),
-                    const SizedBox(height: 24),
                     _buildVehicleDashboard(),
                     const SizedBox(height: 28),
                     _buildCircularControlButtons(),
@@ -510,6 +1011,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                     _buildCustomCommandSection(),
                     const SizedBox(height: 28),
                     _buildSecurityCard(),
+                    _buildDebugCommandsCard(),
                   ],
                 ),
               ),
@@ -623,12 +1125,20 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
   Widget _buildVehicleDashboard() {
     final isOnline = _isDeviceOnline(widget.device);
+    final String statusStr = widget.device.iconColor?.toLowerCase() ?? 'red';
+    Color statusColor = _dangerColor;
+    if (statusStr == 'green') {
+      statusColor = _successColor;
+    } else if (statusStr == 'yellow') {
+      statusColor = _warningColor;
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
@@ -644,15 +1154,21 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFC0392B).withValues(alpha: 0.08),
+                  color: statusColor.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
-                child: const m.Icon(
-                  Icons.directions_car_filled_rounded,
-                  color: Color(0xFFC0392B),
-                  size: 20,
+                child: Center(
+                  child: Util.getVehicleIconWidget(
+                    widget.device.icon?.path,
+                    statusColor,
+                    size: 22,
+                    iconType: widget.device.icon?.type ?? widget.device.iconType,
+                    deviceName: widget.device.name,
+                    deviceId: widget.device.id,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -779,12 +1295,201 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   }) {
     final bool isActionStateMatched = (isLock == _isLocked);
 
-    // Color choices
-    final Color bgColor =
-        isActionStateMatched ? color : color.withValues(alpha: 0.15);
-    final Color textIconColor = isActionStateMatched ? Colors.white : color;
-    final Color borderCol =
-        isActionStateMatched ? color : color.withValues(alpha: 0.3);
+    // Build the exact visual button widget based on the user's uploaded images
+    Widget buttonWidget;
+
+    if (isLock) {
+      // ── RED BUTTON (LOCK ENGINE) ──
+      if (isActionStateMatched) {
+        // Active Red Button (Image 2 style: solid red background, thin white ring inside, white lock icon, soft red glow)
+        buttonWidget = Container(
+          width: 115,
+          height: 115,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color, // Solid red
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.55),
+                blurRadius: 15,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Container(
+            margin: const EdgeInsets.all(6.0), // Gap to the white ring
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white, // Thin white ring
+                width: 2.2,
+              ),
+            ),
+            child: Center(
+              child: m.Icon(
+                icon,
+                color: Colors.white, // White lock icon
+                size: 38,
+              ),
+            ),
+          ),
+        );
+      } else {
+        // Inactive Red Button (Translucent red background and red lock icon - bolder)
+        buttonWidget = Container(
+          width: 115,
+          height: 115,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color.withValues(alpha: 0.22), // More saturated translucent background
+            border: Border.all(
+              color: color.withValues(alpha: 0.55), // Bolder red outer border
+              width: 2.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Container(
+            margin: const EdgeInsets.all(6.0),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: color.withValues(alpha: 0.35), // Bolder inner ring
+                width: 1.5,
+              ),
+            ),
+            child: Center(
+              child: m.Icon(
+                icon,
+                color: color.withValues(alpha: 0.8), // Solid, rich red icon
+                size: 34,
+              ),
+            ),
+          ),
+        );
+      }
+    } else {
+      // ── GREEN BUTTON (UNLOCK ENGINE) ──
+      if (isActionStateMatched) {
+        // Active Green Button (Image 1 style: glossy green sphere with carbon-black border, white unlock icon, soft green glow)
+        buttonWidget = Container(
+          width: 115,
+          height: 115,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF151515), // Carbon black border base
+            border: Border.all(
+              color: const Color(0xFF2C2C2C),
+              width: 5.5, // Thick outer border
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: color.withValues(alpha: 0.5), // Green glow
+                blurRadius: 16,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: Stack(
+              children: [
+                // Glossy Green Sphere Gradient (radial offset)
+                Container(
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      center: Alignment(-0.3, -0.3),
+                      radius: 0.85,
+                      colors: [
+                        Color(0xFF86EFAC), // Bright neon green core
+                        Color(0xFF22C55E), // Vibrant green middle
+                        Color(0xFF15803D), // Deep dark green bottom-right
+                      ],
+                    ),
+                  ),
+                ),
+                // Glossy Crescent/Lens Highlight at the top-left
+                Positioned(
+                  top: 5,
+                  left: 9,
+                  child: Container(
+                    width: 65,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.55),
+                          Colors.white.withValues(alpha: 0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Icon in center
+                Center(
+                  child: m.Icon(
+                    icon,
+                    color: Colors.white,
+                    size: 38,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        // Inactive Green Button (Translucent green background and green lock icon - matches inactive red button)
+        buttonWidget = Container(
+          width: 115,
+          height: 115,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color.withValues(alpha: 0.22), // More saturated translucent background
+            border: Border.all(
+              color: color.withValues(alpha: 0.55), // Bolder green outer border
+              width: 2.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Container(
+            margin: const EdgeInsets.all(6.0),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: color.withValues(alpha: 0.35), // Bolder inner ring
+                width: 1.5,
+              ),
+            ),
+            child: Center(
+              child: m.Icon(
+                icon,
+                color: color.withValues(alpha: 0.8), // Solid, rich green icon
+                size: 34,
+              ),
+            ),
+          ),
+        );
+      }
+    }
 
     return GestureDetector(
       onTap: _isLoading || isActionStateMatched
@@ -797,37 +1502,16 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
             scale: isActionStateMatched
                 ? activeScale
                 : const AlwaysStoppedAnimation(1.0),
-            child: Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: bgColor,
-                border: Border.all(color: borderCol, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: m.Icon(
-                  icon,
-                  color: textIconColor,
-                  size: 36,
-                ),
-              ),
-            ),
+            child: buttonWidget,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(
             label,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
-              color: color,
+              letterSpacing: 0.8,
+              color: isActionStateMatched ? color : const Color(0xFF4B5563),
             ),
           ),
           const SizedBox(height: 2),
@@ -848,7 +1532,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
@@ -947,7 +1631,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
@@ -966,7 +1650,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
               ),
               const SizedBox(width: 8),
               const Text(
-                'SinoTrack Quick Commands',
+                'Quick Commands Config',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -974,6 +1658,49 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          // Tracker Brand/Protocol Selector Dropdown
+          const Text(
+            'Select Tracker Model/Protocol:',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedProtocol,
+                isExpanded: true,
+                icon: const m.Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
+                dropdownColor: Colors.white,
+                style: const TextStyle(color: Color(0xFF1E293B), fontSize: 13, fontWeight: m.FontWeight.w600),
+                items: ['SinoTrack', 'Concox / Jimi', 'Micodus', 'Coban']
+                    .map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+                onChanged: (newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _selectedProtocol = newValue;
+                      _saveSelectedProtocol(newValue);
+                    });
+                  }
+                },
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -1021,7 +1748,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
@@ -1052,6 +1779,40 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDebugCommandsCard() {
+    return Container(
+      margin: const EdgeInsets.only(top: 28),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'DIAGNOSTICS: SERVER GPRS COMMANDS',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _debugCommandsText,
+            style: const TextStyle(
+              fontSize: 10,
+              fontFamily: 'monospace',
+              color: Color(0xFF1E293B),
             ),
           ),
         ],

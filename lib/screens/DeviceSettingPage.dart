@@ -110,7 +110,7 @@ class _DeviceSettingPageState extends State<DeviceSettingPage> {
       }
     }
     if (isEngineOn || d.iconColor?.toLowerCase() == 'yellow') {
-      return const Color(0xFFF59E0B); // idle yellow
+      return const Color(0xFFFFD600); // idle yellow
     }
 
     return const Color(0xFFEF4444); // stop red

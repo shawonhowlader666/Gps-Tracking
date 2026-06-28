@@ -1,30 +1,28 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:smart_lock/main.dart';
+import 'package:smart_lock/services/model/event.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Event Model Tests', () {
+    test('Should clean ignition off/stop message to Engine Off', () {
+      final event1 = Event(message: 'Ignition off');
+      final event2 = Event(message: 'Engine stop detected');
+      expect(event1.message, 'Engine Off');
+      expect(event2.message, 'Engine Off');
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('Should clean ignition on message to Engine On', () {
+      final event = Event(message: 'Ignition on');
+      expect(event.message, 'Engine On');
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('Should clean power cut message to Power Disconnect', () {
+      final event = Event(message: 'Main power cut alarm');
+      expect(event.message, 'Power Disconnect');
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('Should keep other messages as is', () {
+      final event = Event(message: 'Over speed alert: 80 km/h');
+      expect(event.message, 'Over speed alert: 80 km/h');
+    });
   });
 }

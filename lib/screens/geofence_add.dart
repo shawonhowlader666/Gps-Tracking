@@ -59,6 +59,10 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
   static const double _minRadius = 50;
   static const double _maxRadius = 5000;
 
+  // Alarm settings
+  bool _alertOnEnter = true;
+  bool _alertOnExit  = true;
+
   @override
   void initState() {
     super.initState();
@@ -568,6 +572,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
           }),
           'radius': _radius.toString(),
           'coordinates': '',
+          'alerts_on_enter': _alertOnEnter ? '1' : '0',
+          'alerts_on_exit':  _alertOnExit  ? '1' : '0',
         };
       } else if (_geofenceType == 'polygon' && _polygonPoints.length >= 3) {
         final coordinates = _polygonPoints
@@ -580,6 +586,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
           'coordinates': json.encode(coordinates),
           'center': '',
           'radius': '',
+          'alerts_on_enter': _alertOnEnter ? '1' : '0',
+          'alerts_on_exit':  _alertOnExit  ? '1' : '0',
         };
       } else {
         _showToast('Please set a valid geofence area', Colors.orange);
@@ -1051,7 +1059,44 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
             ],
             const SizedBox(height: 10),
 
-            // Color selection & Submit button row
+            // ── Alarm toggles ──────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.notifications_active_outlined,
+                      size: 18, color: CustomColor.primary),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Alerts',
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  // Enter alert
+                  _buildAlarmToggle(
+                    label: 'Enter',
+                    icon: Icons.login,
+                    value: _alertOnEnter,
+                    onChanged: (v) => setState(() => _alertOnEnter = v),
+                  ),
+                  const SizedBox(width: 12),
+                  // Exit alert
+                  _buildAlarmToggle(
+                    label: 'Exit',
+                    icon: Icons.logout,
+                    value: _alertOnExit,
+                    onChanged: (v) => setState(() => _alertOnExit = v),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 // Color options
@@ -1132,6 +1177,45 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Compact toggle used for Enter / Exit alarm settings
+  Widget _buildAlarmToggle({
+    required String label,
+    required IconData icon,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon,
+              size: 15,
+              color: value ? CustomColor.primary : Colors.grey[400]),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: value ? CustomColor.primary : Colors.grey[400],
+            ),
+          ),
+          const SizedBox(width: 4),
+          Transform.scale(
+            scale: 0.75,
+            child: Switch(
+              value: value,
+              onChanged: onChanged,
+              activeColor: CustomColor.primary,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
       ),
     );
   }

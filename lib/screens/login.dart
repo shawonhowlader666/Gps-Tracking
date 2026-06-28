@@ -254,8 +254,14 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     try {
       final String? token = await FirebaseMessaging.instance.getToken();
       if (token != null && token.isNotEmpty) {
-        await APIService.activateFCM(token);
-        debugPrint('FCM token registered');
+        final response = await APIService.activateFCM(token);
+        if (response.statusCode == 200) {
+          debugPrint("FCM token activated successfully");
+        } else {
+          debugPrint("FCM server activation failed: ${response.statusCode}");
+        }
+      } else {
+        debugPrint("FCM Token is empty");
       }
     } catch (e) {
       debugPrint('FCM token error: $e');

@@ -81,7 +81,7 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
         _PayMethod(
           id: 'bkash',
           label: 'bKash',
-          number: PHONE_NO,
+          number: bkashNumber.isNotEmpty ? bkashNumber : PHONE_NO,
           color: _bkashColor,
           instruction:
               'bKash অ্যাপ খুলুন → Send Money → নম্বর দিন → Amount → PIN',
@@ -90,7 +90,7 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
         _PayMethod(
           id: 'nagad',
           label: 'Nagad',
-          number: PHONE_NO,
+          number: nagadNumber.isNotEmpty ? nagadNumber : PHONE_NO,
           color: _nagadColor,
           instruction:
               'Nagad অ্যাপ খুলুন → Send Money → নম্বর দিন → Amount → PIN',
@@ -99,7 +99,7 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
         _PayMethod(
           id: 'rocket',
           label: 'Rocket',
-          number: PHONE_NO,
+          number: rocketNumber.isNotEmpty ? rocketNumber : PHONE_NO,
           color: _rocketColor,
           instruction: 'Dial *322# → Send Money → নম্বর দিন → Amount → PIN',
           imagePath: 'assets/icons/rocket.png',

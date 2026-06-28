@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" class="no-js" itemscope itemtype="http://schema.org/WebSite">
+<head>
+    <title>SMART LOCK GPS</title>
+
+<base href="https://smartlockbd.com">
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="app-version" content="3.7.12">
+<meta name="app-build" content="202507150816427462">
+<meta name="csrf-token" content="WjGhhEXeM6XlibkrpS2x4mpgLrra4PPJ3wUevxVS">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="GPS Tracking System for Personal Use or Business">
+<link rel="shortcut icon" href="https://smartlockbd.com/images/favicon.ico?t=1756629214" type="image/x-icon">
+<link rel="stylesheet" href="https://smartlockbd.com/assets/css/light-blue.css?t=1752567405">
+
+    <script src="https://smartlockbd.com/assets/js/core.js?t=1752567406"></script>
+
+    
+    <style>
+        
+        
+                body.sign-in-layout { background-image: url( https://smartlockbd.com/images/background.png?t=1782160624 ); }
+        
+        
+                        body.sign-in-layout .panel-background { opacity: 1; }
+            </style>
+</head>
+
+<!--[if IE 8 ]><body class="ie8 sign-in-layout"> <![endif]-->
+<!--

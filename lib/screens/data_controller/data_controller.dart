@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:intl/intl.dart';
 import 'package:smart_lock/services/model/device.dart';
 import 'package:smart_lock/services/model/device_item.dart';
 import 'package:smart_lock/services/model/event.dart';
@@ -17,6 +18,7 @@ class DataController extends GetxController {
       {}; // deviceId -> engineStatus
   static final Map<int, String> _localLockStatusOverrides =
       {}; // deviceId -> lockStatus
+
 
   static Future<void> loadOverrides() async {
     try {
@@ -40,7 +42,7 @@ class DataController extends GetxController {
         });
       }
     } catch (e) {
-      print('Error loading overrides: $e');
+      debugPrint('Error loading overrides: $e');
     }
   }
 
@@ -66,7 +68,7 @@ class DataController extends GetxController {
 
       await prefs.setString('local_status_overrides', json.encode(dataToSave));
     } catch (e) {
-      print('Error saving overrides: $e');
+      debugPrint('Error saving overrides: $e');
     }
   }
 
@@ -91,7 +93,7 @@ class DataController extends GetxController {
         controller.applyOverridesAndRefresh();
       }
     } catch (e) {
-      print('Error refreshing DataController overrides: $e');
+      debugPrint('Error refreshing DataController overrides: $e');
     }
   }
 
@@ -107,7 +109,7 @@ class DataController extends GetxController {
         controller.applyOverridesAndRefresh();
       }
     } catch (e) {
-      print('Error refreshing DataController overrides: $e');
+      debugPrint('Error refreshing DataController overrides: $e');
     }
   }
 
@@ -142,10 +144,12 @@ class DataController extends GetxController {
     if (status is int) return status == 1;
     if (status is String) {
       final s = status.toLowerCase().trim();
-      if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s))
+      if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s)) {
         return true;
-      if (['off', '0', 'false', 'ign off', 'engine off', 'acc off'].contains(s))
+      }
+      if (['off', '0', 'false', 'ign off', 'engine off', 'acc off'].contains(s)) {
         return false;
+      }
     }
     return null;
   }
@@ -170,12 +174,23 @@ class DataController extends GetxController {
   RxBool isSearchVisible = false.obs;
   RxInt expandedIndex = (-1).obs;
 
-  // Other data
+  // ── Events: দুটো source — local (app-generated) + server (WOX API) ────────
+  // localEvents: engine on/off, overspeed, offline, geofence — locally detect করা
+  // events: merged final list (local + server, deduplicated, newest first)
+  RxList<Event> localEvents = <Event>[].obs;
   RxList<Event> events = <Event>[].obs;
   var counter = 0.obs;
   var markers = <Marker>{}.obs;
 
-  // For tracking previous events
+  // ── Change-detection state (for local alert triggers) ─────────────────────
+  final Map<int, bool> _prevEngineStatus = {};
+  final Map<int, String> _prevOnlineStatus = {};
+  final Map<int, bool> _prevIdleStatus = {};     // true = idle (engine on, speed=0)
+  final Map<int, bool> _prevMovingStatus = {};   // true = moving (speed > 0)
+  final Map<int, DateTime> _lastOverspeedTime = {};
+  final Map<int, bool> _prevSOSStatus = {};
+
+  // Server event ID tracking (for new-event notifications)
   final List<int> _previousEventIds = [];
 
   // Notification service
@@ -185,6 +200,7 @@ class DataController extends GetxController {
   Future<void> onInit() async {
     super.onInit();
     await loadOverrides();
+    await _loadLocalEvents(); // ← local events load করো — app restart হলেও থাকবে
     updateDevices();
   }
 
@@ -232,6 +248,8 @@ class DataController extends GetxController {
         isLoading.value = false;
         _updateStatusCounters();
         _reapplyCurrentFilter();
+        // ← device data update হলে local alerts check করো
+        await _checkLocalAlerts(onlyDevices);
       }
     } catch (e) {
       isLoading.value = false;
@@ -365,26 +383,250 @@ class DataController extends GetxController {
     }
   }
 
-  void getEvents() async {
+  // ── Local Events Persistence ──────────────────────────────────────────────
+
+  Future<void> _loadLocalEvents() async {
+    try {
+      final prefs = UserRepository.prefs ?? await SharedPreferences.getInstance();
+      final String? stored = prefs.getString('smart_lock_local_events');
+      if (stored != null && stored.isNotEmpty) {
+        final List<dynamic> decoded = json.decode(stored);
+        final List<Event> loaded = decoded
+            .map((e) => Event.fromJson(e as Map<String, dynamic>))
+            .toList();
+        localEvents.value = loaded;
+        debugPrint('[LocalEvents] Loaded ${loaded.length} local events from storage');
+      }
+    } catch (e) {
+      debugPrint('[LocalEvents] Error loading: $e');
+    }
+  }
+
+  void _saveAllLocalEvents() {
+    try {
+      final prefs = UserRepository.prefs;
+      if (prefs == null) return;
+      final List<Map<String, dynamic>> jsonList = localEvents.map((e) => {
+        'id': e.id,
+        'message': e.message,
+        'latitude': e.latitude,
+        'longitude': e.longitude,
+        'device_name': e.device_name,
+        'time': e.time,
+        'speed': e.speed,
+      }).toList();
+      prefs.setString('smart_lock_local_events', json.encode(jsonList));
+    } catch (e) {
+      debugPrint('[LocalEvents] Error saving: $e');
+    }
+  }
+
+  void _createAndSaveLocalEvent({required String message, required DeviceItem device}) {
+    final event = Event(
+      id: DateTime.now().millisecondsSinceEpoch, // large timestamp → never collides with server IDs
+      message: message,
+      device_name: device.name,
+      latitude: device.lat,
+      longitude: device.lng,
+    )
+      ..speed = device.speed
+      ..time = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+
+    localEvents.insert(0, event);
+    if (localEvents.length > 200) localEvents.removeLast(); // max 200 local events
+    _saveAllLocalEvents();
+    _mergeAndUpdateEvents(null); // events list refresh
+  }
+
+  void deleteLocalEvent(dynamic id) {
+    localEvents.removeWhere((e) => e.id == id);
+    _saveAllLocalEvents();
+    _mergeAndUpdateEvents(null);
+  }
+
+  void clearLocalEvents() {
+    localEvents.clear();
+    _saveAllLocalEvents();
+    _mergeAndUpdateEvents(null);
+  }
+
+  // ── Local Alert Detection: always-on auto-tracking ──────────────────────────
+  Future<void> _checkLocalAlerts(List<DeviceItem> deviceItems) async {
+    try {
+      final prefs = UserRepository.prefs ?? await SharedPreferences.getInstance();
+      final bool engineEnabled = prefs.getBool('auto_alert_engine') ?? true;
+      final bool idleEnabled = prefs.getBool('auto_alert_idle') ?? true;
+      final bool offlineEnabled = prefs.getBool('auto_alert_offline') ?? true;
+
+      for (var device in deviceItems) {
+        if (device.id == null) continue;
+        final devId = device.id!;
+        final double speed = double.tryParse(device.speed?.toString() ?? '0') ?? 0.0;
+        final String currentColor = device.iconColor ?? 'green';
+
+        // ─ 1. Engine On/Off ──────────────────────────────────────────────────
+        final bool currentEngine =
+            device.engineStatus == true ||
+            device.engineStatus == 1 ||
+            device.engineStatus.toString().toLowerCase() == 'true' ||
+            device.engineStatus.toString() == '1';
+
+        if (!_prevEngineStatus.containsKey(devId)) {
+          // First-load: just initialize the state to prevent startup lag and event flooding
+          _prevEngineStatus[devId] = currentEngine;
+        } else if (currentEngine != _prevEngineStatus[devId]!) {
+          if (engineEnabled) {
+            final String msg =
+                currentEngine ? 'Engine turned ON' : 'Engine turned OFF';
+            _notificationService.showLocalNotification(
+              id: devId * 10 + 1,
+              title: '🔑 Engine: ${device.name}',
+              body: msg,
+              channelId: 'alert_channel_v1',
+            );
+            _createAndSaveLocalEvent(message: msg, device: device);
+          }
+          _prevEngineStatus[devId] = currentEngine;
+        }
+
+        // ─ 2. Idle detection (engine ON + speed = 0) ─────────────────────────
+        final bool isCurrentlyIdle = currentEngine && speed <= 1.0;
+        if (_prevIdleStatus.containsKey(devId)) {
+          final wasIdle = _prevIdleStatus[devId]!;
+          if (isCurrentlyIdle && !wasIdle) {
+            if (idleEnabled) {
+              // Just became idle
+              const String msg = 'Vehicle is now IDLE — Engine ON, not moving';
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 6,
+                title: '🅿️ Idle: ${device.name}',
+                body: msg,
+              );
+              _createAndSaveLocalEvent(message: msg, device: device);
+            }
+          }
+        }
+        _prevIdleStatus[devId] = isCurrentlyIdle;
+
+        // ─ 4. Offline / Back Online ───────────────────────────────────────────
+        if (_prevOnlineStatus.containsKey(devId)) {
+          final prev = _prevOnlineStatus[devId]!;
+          if (currentColor == 'red' && prev != 'red') {
+            if (offlineEnabled) {
+              const String msg = 'Vehicle went offline';
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 4,
+                title: '❌ Offline: ${device.name}',
+                body: msg,
+              );
+              _createAndSaveLocalEvent(message: msg, device: device);
+            }
+          } else if (currentColor != 'red' && prev == 'red') {
+            if (offlineEnabled) {
+              const String msg = 'Vehicle is back online';
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 5,
+                title: '✅ Online: ${device.name}',
+                body: msg,
+              );
+              _createAndSaveLocalEvent(message: msg, device: device);
+            }
+          }
+        }
+        _prevOnlineStatus[devId] = currentColor;
+      }
+    } catch (e) {
+      debugPrint('[LocalAlerts] Error: $e');
+    }
+  }
+
+
+  // ── getEvents: server events fetch + merge with local ─────────────────────
+
+  Future<void> getEvents() async {
     try {
       isEventLoading.value = true;
-
       final eventsResponse = await APIService.getEventList();
+      debugPrint('[Events] Server returned: ${eventsResponse?.length ?? 0} events');
 
-      debugPrint('[Events] API returned: ${eventsResponse?.length ?? 'null'} events');
-
-      if (eventsResponse != null && eventsResponse.isNotEmpty) {
-        _checkForNewEvents(eventsResponse);
-        events.assignAll(eventsResponse);
-      } else {
-        events.clear();
+      if (eventsResponse != null) {
+        _checkForNewEvents(eventsResponse); // push notification for new ones
       }
+      // merge করো — null হলেও local events দেখাবে
+      _mergeAndUpdateEvents(eventsResponse);
     } catch (e, stack) {
-      debugPrint('[Events] Error fetching events: $e');
-      debugPrint('[Events] Stack: $stack');
-      events.clear();
+      debugPrint('[Events] Error fetching: $e\n$stack');
+      // ❌ events.clear() করা যাবে না — existing list রাখো
+      _mergeAndUpdateEvents(null); // শুধু local events দেখাও
     } finally {
       isEventLoading.value = false;
+    }
+  }
+
+  // ── Merge: local + server, deduplicate by ID, sort newest first ───────────
+
+  void _mergeAndUpdateEvents(List<Event>? serverEvents) {
+    final merged = <Event>[];
+
+    // ─ local events (app-generated alerts) — সবচেয়ে high priority ─────────
+    merged.addAll(localEvents);
+
+    // ─ server events — duplicate বাদ দাও ────────────────────────────────────
+    if (serverEvents != null) {
+      // local event এর IDs collect করো (timestamp-based, > 1.7 trillion)
+      final localIds = Set<dynamic>.from(
+          localEvents.where((e) => e.id != null).map((e) => e.id));
+
+      for (final serverEvent in serverEvents) {
+        // ID দিয়ে duplicate check
+        if (serverEvent.id != null && localIds.contains(serverEvent.id)) {
+          continue; // same ID → skip
+        }
+        // Message + DeviceName + same minute → duplicate check
+        final isDuplicate = localEvents.any((local) =>
+            local.message == serverEvent.message &&
+            local.device_name == serverEvent.device_name &&
+            _isSameMinute(local.time, serverEvent.time));
+        if (!isDuplicate) {
+          merged.add(serverEvent);
+        }
+      }
+    }
+
+    // ─ newest first sort ─────────────────────────────────────────────────────
+    merged.sort(
+        (a, b) => _parseEventTime(b.time).compareTo(_parseEventTime(a.time)));
+
+    events.value = merged;
+  }
+
+  bool _isSameMinute(String? t1, String? t2) {
+    if (t1 == null || t2 == null) return false;
+    try {
+      final d1 = _parseEventTime(t1);
+      final d2 = _parseEventTime(t2);
+      return d1.year == d2.year &&
+          d1.month == d2.month &&
+          d1.day == d2.day &&
+          d1.hour == d2.hour &&
+          d1.minute == d2.minute;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  DateTime _parseEventTime(String? timeStr) {
+    if (timeStr == null || timeStr.isEmpty) {
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    try {
+      return DateTime.parse(timeStr);
+    } catch (_) {
+      try {
+        return DateFormat('yyyy-MM-dd HH:mm:ss').parse(timeStr);
+      } catch (_) {
+        return DateTime.fromMillisecondsSinceEpoch(0);
+      }
     }
   }
 

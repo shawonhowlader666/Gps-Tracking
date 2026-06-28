@@ -163,15 +163,51 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
   }
 
   bool _isUnlocked(DeviceItem d) {
-    final status = d.engineStatus;
-    if (status == null) return false;
-    if (status is bool) return status;
-    if (status is int) return status == 1;
-    if (status is String) {
-      final v = status.toLowerCase().trim();
-      return ['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(v);
+    // 1. DataController local override
+    final devId = d.id;
+    if (devId != null) {
+      final lockOverride = DataController.getLocalLockOverride(devId);
+      if (lockOverride != null) {
+        return !['locked', '1', 'true']
+            .contains(lockOverride.toLowerCase().trim());
+      }
     }
-    return false;
+
+    // 2. deviceData.lockStatus
+    final lockStatus = d.deviceData?.lockStatus?.toLowerCase().trim();
+    if (lockStatus != null && lockStatus.isNotEmpty) {
+      return !['locked', '1', 'true'].contains(lockStatus);
+    }
+
+    // 3. Check custom sensors for "lock" / "block" / "relay" / "immobilizer"
+    if (d.sensors != null) {
+      for (var sensor in d.sensors!) {
+        try {
+          if (sensor is! Map) continue;
+          final sensorMap = Map<String, dynamic>.from(sensor);
+          final type = (sensorMap['type'] ?? '').toString().toLowerCase();
+          final name = (sensorMap['name'] ?? '').toString().toLowerCase();
+          final value = sensorMap['value'];
+          
+          if (type.contains('lock') || name.contains('lock') || 
+              type.contains('relay') || name.contains('relay') ||
+              type.contains('block') || name.contains('block') ||
+              type.contains('immobiliz') || name.contains('immobiliz')) {
+            if (value == null) continue;
+            if (value is bool) return !value; // If value is true (locked), return false (not unlocked)
+            if (value is int) return value != 1;
+            if (value is String) {
+              final v = value.toLowerCase().trim();
+              if (['on', '1', 'true', 'locked', 'blocked', 'yes'].contains(v)) return false; // Locked = not unlocked
+              if (['off', '0', 'false', 'unlocked', 'unblocked', 'no'].contains(v)) return true; // Unlocked = unlocked
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Default fallback: Always assume UNLOCKED (true) if not explicitly locked!
+    return true;
   }
 
   String _getLockStatus(DeviceItem d) => _isUnlocked(d) ? 'Unlocked' : 'Locked';

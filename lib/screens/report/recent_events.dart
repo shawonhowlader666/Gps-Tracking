@@ -12,7 +12,22 @@ class EventsPage extends StatefulWidget {
 }
 
 class _EventsPageState extends State<EventsPage> {
-  final DataController controller = Get.put(DataController());
+  // Industry practice: Get.find() — existing singleton reuse
+  // Get.put() never here — it can create a new empty instance
+  DataController get controller => Get.find<DataController>();
+
+  @override
+  void initState() {
+    super.initState();
+    // Screen open হলে fresh fetch করো — কিন্তু existing events সাথে সাথে show হবে
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.getEvents();
+    });
+  }
+
+  Future<void> _onRefresh() async {
+    await controller.getEvents();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,10 +35,19 @@ class _EventsPageState extends State<EventsPage> {
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: _buildAppBar(),
       body: Obx(() {
-        if (controller.events.isEmpty) {
-          return _buildEmptyState();
+        final isLoading = controller.isEventLoading.value;
+        final hasEvents = controller.events.isNotEmpty;
+
+        // Loading state — show shimmer/spinner
+        if (isLoading && !hasEvents) {
+          return _buildLoadingState();
         }
-        return _buildEventsList();
+
+        return RefreshIndicator(
+          onRefresh: _onRefresh,
+          color: const Color(0xFFC0392B),
+          child: hasEvents ? _buildEventsList() : _buildEmptyState(),
+        );
       }),
     );
   }
@@ -183,25 +207,74 @@ class _EventsPageState extends State<EventsPage> {
     );
   }
 
+  Widget _buildLoadingState() {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      itemCount: 5,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Container(
+          height: 88,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFEEEEEE)),
+          ),
+          child: Row(
+            children: [
+              const SizedBox(width: 12),
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                        height: 14, width: 120, color: Colors.grey[200]),
+                    const SizedBox(height: 8),
+                    Container(
+                        height: 12, width: 200, color: Colors.grey[100]),
+                    const SizedBox(height: 6),
+                    Container(
+                        height: 10, width: 80, color: Colors.grey[100]),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 100,
-            height: 100,
+        Container(
+            width: 90,
+            height: 90,
             decoration: BoxDecoration(
               color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.notifications_none_rounded,
-              size: 50,
+              size: 46,
               color: Color(0xFF6C63FF),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Text(
             'noEvents'.tr,
             style: const TextStyle(
@@ -213,10 +286,21 @@ class _EventsPageState extends State<EventsPage> {
           const SizedBox(height: 8),
           Text(
             'You\'re all caught up!',
-            style: TextStyle(
-              fontSize: 15,
-              color: Colors.grey[500],
-            ),
+            style: TextStyle(fontSize: 15, color: Colors.grey[500]),
+          ),
+          const SizedBox(height: 24),
+          // Pull down to refresh hint
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.arrow_downward_rounded,
+                  size: 16, color: Colors.grey[400]),
+              const SizedBox(width: 6),
+              Text(
+                'Pull down to refresh',
+                style: TextStyle(fontSize: 13, color: Colors.grey[400]),
+              ),
+            ],
           ),
         ],
       ),

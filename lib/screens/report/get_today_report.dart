@@ -1,35 +1,37 @@
-import 'dart:io';
-import 'dart:typed_data';
+// lib/screens/report/get_today_report.dart
+//
+// Industry-level report service using GPSWox get_history API directly.
+// No PDF generation — raw GPS positions → computed stats, instant loading.
+
+import 'dart:convert';
+import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:smart_lock/services/api_service.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'package:smart_lock/storage/user_repository.dart';
 
-// Report Period Enum
-enum ReportPeriod {
-  today,
-  yesterday,
-  thisWeek,
-  thisMonth,
-  custom,
-}
+// ─── Period enum ──────────────────────────────────────────────────────────────
+enum ReportPeriod { today, yesterday, thisWeek, thisMonth, custom }
 
+// ─── Report Data Model ────────────────────────────────────────────────────────
 class TodayReportData {
-  String? device;
-  String? routeStart;
-  String? routeEnd;
-  String? routeLength;
-  String? moveDuration;
-  String? stopDuration;
-  String? topSpeed;
-  String? averageSpeed;
-  String? overspeedCount;
-  String? engineHours;
-  String? engineWork;
-  String? engineIdle;
-  String? odometer;
-  String? fuelConsumption;
+  final String? device;
+  final String? routeStart;
+  final String? routeEnd;
+  final String? routeLength;
+  final String? moveDuration;
+  final String? stopDuration;
+  final String? topSpeed;
+  final String? averageSpeed;
+  final String? overspeedCount;
+  final String? engineHours;
+  final String? engineWork;
+  final String? engineIdle;
+  final String? odometer;
+  final String? fuelConsumption;
+  final int? totalPoints;
 
-  TodayReportData({
+  const TodayReportData({
     this.device,
     this.routeStart,
     this.routeEnd,
@@ -44,116 +46,84 @@ class TodayReportData {
     this.engineIdle,
     this.odometer,
     this.fuelConsumption,
+    this.totalPoints,
   });
 
   bool get isEmpty =>
-      (routeLength == null || routeLength!.isEmpty) &&
+      (routeLength == null || routeLength!.isEmpty || routeLength == '0 km') &&
       (moveDuration == null || moveDuration!.isEmpty) &&
-      (stopDuration == null || stopDuration!.isEmpty) &&
-      (topSpeed == null || topSpeed!.isEmpty) &&
-      (engineHours == null || engineHours!.isEmpty);
+      (topSpeed == null || topSpeed!.isEmpty);
 
   bool get isNotEmpty => !isEmpty;
 
-  Map<String, dynamic> toJson() {
-    return {
-      'device': device,
-      'routeStart': routeStart,
-      'routeEnd': routeEnd,
-      'routeLength': routeLength,
-      'moveDuration': moveDuration,
-      'stopDuration': stopDuration,
-      'topSpeed': topSpeed,
-      'averageSpeed': averageSpeed,
-      'overspeedCount': overspeedCount,
-      'engineHours': engineHours,
-      'engineWork': engineWork,
-      'engineIdle': engineIdle,
-      'odometer': odometer,
-      'fuelConsumption': fuelConsumption,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'routeLength': routeLength,
+        'moveDuration': moveDuration,
+        'stopDuration': stopDuration,
+        'topSpeed': topSpeed,
+        'averageSpeed': averageSpeed,
+        'overspeedCount': overspeedCount,
+        'engineHours': engineHours,
+        'fuelConsumption': fuelConsumption,
+      };
 
-  factory TodayReportData.fromJson(Map<String, dynamic> json) {
-    return TodayReportData(
-      device: json['device'],
-      routeStart: json['routeStart'],
-      routeEnd: json['routeEnd'],
-      routeLength: json['routeLength'],
-      moveDuration: json['moveDuration'],
-      stopDuration: json['stopDuration'],
-      topSpeed: json['topSpeed'],
-      averageSpeed: json['averageSpeed'],
-      overspeedCount: json['overspeedCount'],
-      engineHours: json['engineHours'],
-      engineWork: json['engineWork'],
-      engineIdle: json['engineIdle'],
-      odometer: json['odometer'],
-      fuelConsumption: json['fuelConsumption'],
-    );
-  }
+  factory TodayReportData.fromJson(Map<String, dynamic> json) =>
+      TodayReportData(
+        routeLength: json['routeLength'],
+        moveDuration: json['moveDuration'],
+        stopDuration: json['stopDuration'],
+        topSpeed: json['topSpeed'],
+        averageSpeed: json['averageSpeed'],
+        overspeedCount: json['overspeedCount'],
+        engineHours: json['engineHours'],
+        fuelConsumption: json['fuelConsumption'],
+      );
 
   TodayReportData copyWith({
-    String? device,
-    String? routeStart,
-    String? routeEnd,
     String? routeLength,
     String? moveDuration,
     String? stopDuration,
     String? topSpeed,
     String? averageSpeed,
     String? overspeedCount,
-    String? engineHours,
-    String? engineWork,
-    String? engineIdle,
-    String? odometer,
-    String? fuelConsumption,
-  }) {
-    return TodayReportData(
-      device: device ?? this.device,
-      routeStart: routeStart ?? this.routeStart,
-      routeEnd: routeEnd ?? this.routeEnd,
-      routeLength: routeLength ?? this.routeLength,
-      moveDuration: moveDuration ?? this.moveDuration,
-      stopDuration: stopDuration ?? this.stopDuration,
-      topSpeed: topSpeed ?? this.topSpeed,
-      averageSpeed: averageSpeed ?? this.averageSpeed,
-      overspeedCount: overspeedCount ?? this.overspeedCount,
-      engineHours: engineHours ?? this.engineHours,
-      engineWork: engineWork ?? this.engineWork,
-      engineIdle: engineIdle ?? this.engineIdle,
-      odometer: odometer ?? this.odometer,
-      fuelConsumption: fuelConsumption ?? this.fuelConsumption,
-    );
-  }
-
-  @override
-  String toString() {
-    return 'TodayReportData(\n'
-        '  device: $device,\n'
-        '  routeStart: $routeStart,\n'
-        '  routeEnd: $routeEnd,\n'
-        '  routeLength: $routeLength,\n'
-        '  moveDuration: $moveDuration,\n'
-        '  stopDuration: $stopDuration,\n'
-        '  topSpeed: $topSpeed,\n'
-        '  averageSpeed: $averageSpeed,\n'
-        '  engineHours: $engineHours,\n'
-        '  engineWork: $engineWork,\n'
-        '  engineIdle: $engineIdle,\n'
-        '  overspeedCount: $overspeedCount,\n'
-        '  odometer: $odometer,\n'
-        '  fuelConsumption: $fuelConsumption\n'
-        ')';
-  }
+    String? routeStart,
+    String? routeEnd,
+  }) =>
+      TodayReportData(
+        device: device,
+        routeStart: routeStart ?? this.routeStart,
+        routeEnd: routeEnd ?? this.routeEnd,
+        routeLength: routeLength ?? this.routeLength,
+        moveDuration: moveDuration ?? this.moveDuration,
+        stopDuration: stopDuration ?? this.stopDuration,
+        topSpeed: topSpeed ?? this.topSpeed,
+        averageSpeed: averageSpeed ?? this.averageSpeed,
+        overspeedCount: overspeedCount ?? this.overspeedCount,
+        engineHours: engineHours,
+        fuelConsumption: fuelConsumption,
+        totalPoints: totalPoints,
+      );
 }
 
-class ReportService {
-  static final HttpClient _httpClient = HttpClient();
+// ─── Cache Entry ──────────────────────────────────────────────────────────────
+class _CacheEntry {
+  final TodayReportData data;
+  final DateTime fetchedAt;
+  _CacheEntry(this.data, this.fetchedAt);
 
-  static final Map<String, TodayReportData> _cache = {};
-  static DateTime? _lastCacheTime;
-  static const int _cacheDurationSeconds = 30;
+  bool get isValid =>
+      DateTime.now().difference(fetchedAt).inMinutes < 30;
+}
+
+// ─── Report Service ───────────────────────────────────────────────────────────
+class ReportService {
+  // In-memory cache keyed by "deviceId_fromDate_toDate"
+  static final Map<String, _CacheEntry> _cache = {};
+
+  // In-flight request deduplication
+  static final Map<String, Future<TodayReportData>> _inFlight = {};
+
+  // ── Public API ──────────────────────────────────────────────────────────────
 
   static Future<TodayReportData> getReportForPeriod({
     required int deviceId,
@@ -161,296 +131,402 @@ class ReportService {
     DateTime? customStart,
     DateTime? customEnd,
     bool forceRefresh = false,
-  }) async {
-    final dates = _getDateRangeForPeriod(period, customStart, customEnd);
+  }) {
+    final range = _dateRange(period, customStart, customEnd);
     return getTodayReportDataWithDates(
       deviceId: deviceId,
-      fromDate: dates['from']!,
-      toDate: dates['to']!,
+      fromDate: range.$1,
+      toDate: range.$2,
       forceRefresh: forceRefresh,
     );
   }
 
-  static Map<String, DateTime> _getDateRangeForPeriod(
-    ReportPeriod period,
-    DateTime? customStart,
-    DateTime? customEnd,
-  ) {
-    final now = DateTime.now();
-    DateTime from, to;
-
-    switch (period) {
-      case ReportPeriod.today:
-        from = DateTime(now.year, now.month, now.day);
-        to = DateTime(now.year, now.month, now.day, 23, 59, 59);
-        break;
-
-      case ReportPeriod.yesterday:
-        final yesterday = now.subtract(const Duration(days: 1));
-        from = DateTime(yesterday.year, yesterday.month, yesterday.day);
-        to = DateTime(
-            yesterday.year, yesterday.month, yesterday.day, 23, 59, 59);
-        break;
-
-      case ReportPeriod.thisWeek:
-        final monday = now.subtract(Duration(days: now.weekday - 1));
-        from = DateTime(monday.year, monday.month, monday.day);
-        to = DateTime(now.year, now.month, now.day, 23, 59, 59);
-        break;
-
-      case ReportPeriod.thisMonth:
-        from = DateTime(now.year, now.month, 1);
-        to = DateTime(now.year, now.month, now.day, 23, 59, 59);
-        break;
-
-      case ReportPeriod.custom:
-        from = customStart ?? DateTime(now.year, now.month, now.day);
-        to = customEnd ?? DateTime(now.year, now.month, now.day, 23, 59, 59);
-        break;
-    }
-
-    return {'from': from, 'to': to};
-  }
+  static Future<TodayReportData> getTodayReportData({
+    required int deviceId,
+    bool forceRefresh = false,
+  }) =>
+      getReportForPeriod(
+        deviceId: deviceId,
+        period: ReportPeriod.today,
+        forceRefresh: forceRefresh,
+      );
 
   static Future<TodayReportData> getTodayReportDataWithDates({
     required int deviceId,
     required DateTime fromDate,
     required DateTime toDate,
     bool forceRefresh = false,
-  }) async {
-    final cacheKey =
-        'device_${deviceId}_${_formatDate(fromDate)}_${_formatDate(toDate)}';
+  }) {
+    final key =
+        '${deviceId}_${_fmt(fromDate)}_${_fmt(toDate)}';
 
-    if (!forceRefresh &&
-        _cache.containsKey(cacheKey) &&
-        _lastCacheTime != null &&
-        DateTime.now().difference(_lastCacheTime!).inSeconds <
-            _cacheDurationSeconds) {
-      return _cache[cacheKey]!;
+    // 1. Serve from cache if valid
+    if (!forceRefresh) {
+      final cached = _cache[key];
+      if (cached != null && cached.isValid) return Future.value(cached.data);
     }
 
-    try {
-      final fromDateStr = _formatDate(fromDate);
-      final toDateStr = _formatDate(toDate.add(const Duration(days: 1)));
+    // 2. Request deduplication — return the ongoing future if one exists
+    if (_inFlight.containsKey(key)) return _inFlight[key]!;
 
-      final reportResponse = await APIService.getReport(
-        deviceId.toString(),
-        fromDateStr,
-        toDateStr,
-        1,
-      );
-
-      if (reportResponse == null || reportResponse.url == null) {
-        return TodayReportData();
-      }
-
-      final pdfFile = await _downloadPdf(reportResponse.url!);
-      if (pdfFile == null) return TodayReportData();
-
-      final text = await _extractText(pdfFile.path);
-      if (text == null || text.isEmpty) return TodayReportData();
-
-      final data = _parseMultiLineText(text);
-
-      _cache[cacheKey] = data;
-      _lastCacheTime = DateTime.now();
-
+    final future = _fetch(deviceId, fromDate, toDate).then((data) {
+      _cache[key] = _CacheEntry(data, DateTime.now());
+      _inFlight.remove(key);
       return data;
-    } catch (e) {
-      return TodayReportData();
-    }
+    }).catchError((e) {
+      _inFlight.remove(key);
+      return const TodayReportData();
+    });
+
+    _inFlight[key] = future;
+    return future;
   }
 
-  static Future<TodayReportData> getTodayReportData({
-    required int deviceId,
-    bool forceRefresh = false,
-  }) async {
-    return getReportForPeriod(
-      deviceId: deviceId,
-      period: ReportPeriod.today,
-      forceRefresh: forceRefresh,
-    );
-  }
-
-  static String _formatDate(DateTime date) {
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    return "${date.year}-$m-$d";
-  }
-
-  static Future<File?> _downloadPdf(String url) async {
+  // ── Core fetch via get_history API ─────────────────────────────────────────
+  static Future<TodayReportData> _fetch(
+    int deviceId,
+    DateTime from,
+    DateTime to,
+  ) async {
     try {
-      String cleanUrl = Uri.decodeFull(url);
-      cleanUrl = cleanUrl.replaceAll('%5B0%5D', '[]');
-      cleanUrl = cleanUrl.replaceAll('[0]', '[]');
-      cleanUrl = cleanUrl.replaceAll('send_to_email[]=', 'send_to_email=');
+      final serverUrl = APIService.serverURL;
+      final hash = UserRepository.getHash();
+      final lang = UserRepository.getLanguage() ?? 'en';
 
-      final request = await _httpClient.getUrl(Uri.parse(cleanUrl));
-      final response = await request.close();
+      if (serverUrl == null || hash == null) return const TodayReportData();
 
-      if (response.statusCode != 200) return null;
+      final fromDate = _fmt(from);           // yyyy-MM-dd
+      final fromTime = _fmtTime(from);       // HH:mm:ss
+      final toDate   = _fmt(to);
+      final toTime   = _fmtTime(to);
 
-      final bytes = await response.fold<List<int>>(
-        <int>[],
-        (prev, element) => prev..addAll(element),
+      final uri = Uri.parse(
+        '$serverUrl/api/get_history'
+        '?user_api_hash=$hash'
+        '&lang=$lang'
+        '&from_date=$fromDate'
+        '&from_time=$fromTime'
+        '&to_date=$toDate'
+        '&to_time=$toTime'
+        '&device_id=$deviceId',
       );
 
-      if (bytes.isEmpty) return null;
+      debugPrint('[Report] GET $uri');
 
-      final tempDir = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file = File('${tempDir.path}/report_$timestamp.pdf');
-      await file.writeAsBytes(bytes);
+      final response = await http
+          .get(uri, headers: APIService.headers)
+          .timeout(const Duration(seconds: 20));
 
-      return file;
-    } catch (e) {
-      return null;
-    }
-  }
+      debugPrint('[Report] Status ${response.statusCode}, '
+          'body length ${response.body.length}');
 
-  static Future<String?> _extractText(String path) async {
-    try {
-      final file = File(path);
-      if (!await file.exists()) return null;
-
-      final bytes = await file.readAsBytes();
-      final document = PdfDocument(inputBytes: Uint8List.fromList(bytes));
-      final extractor = PdfTextExtractor(document);
-
-      String text = '';
-      for (int i = 0; i < document.pages.count; i++) {
-        final pageText =
-            extractor.extractText(startPageIndex: i, endPageIndex: i);
-        text += pageText ?? '';
-        text += '\n';
+      if (response.statusCode != 200 || response.body.isEmpty) {
+        return const TodayReportData();
       }
 
-      document.dispose();
+      final body = response.body.replaceAll('﻿', '');
+      final decoded = json.decode(body);
 
-      try {
-        await file.delete();
-      } catch (_) {}
-
-      return text;
+      return _compute(decoded);
     } catch (e) {
-      return null;
+      debugPrint('[Report] Error: $e');
+      return const TodayReportData();
     }
   }
 
-  static TodayReportData _parseMultiLineText(String text) {
-    final data = TodayReportData();
+  // ── Parse & compute stats from the API response ────────────────────────────
+  // GPSWox get_history confirmed structure (from playback.dart):
+  // {
+  //   "distance_sum": "25.50 km",  ← already has unit
+  //   "top_speed": "75 kph",       ← already has unit
+  //   "move_duration": "2h 15m",
+  //   "stop_duration": "45m",
+  //   "items": [                   ← trip segments
+  //     { "time":..., "top_speed":..., "average_speed":...,
+  //       "items": [               ← nested GPS points
+  //         { "latitude":..., "longitude":..., "speed":..., "course":..., "raw_time":... }
+  //       ]
+  //     }
+  //   ]
+  // }
+  static TodayReportData _compute(dynamic decoded) {
+    String? routeLength;
+    String? moveDuration;
+    String? stopDuration;
+    String? topSpeed;
+    String? averageSpeed;
+    String? fuelConsumption;
+    String? routeStart;
+    String? routeEnd;
+    int? totalPoints;
 
-    final lines = text
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
+    if (decoded is! Map) return const TodayReportData();
 
-    final keyMap = <String, void Function(String)>{
-      'device:': (v) => data.device = v,
-      'route start:': (v) => data.routeStart = v,
-      'route end:': (v) => data.routeEnd = v,
-      'route length:': (v) => data.routeLength = v,
-      'move duration:': (v) => data.moveDuration = v,
-      'stop duration:': (v) => data.stopDuration = v,
-      'top speed:': (v) => data.topSpeed = v,
-      'average speed:': (v) => data.averageSpeed = v,
-      'overspeed count:': (v) => data.overspeedCount = v,
-      'engine hours:': (v) => data.engineHours = v,
-      'engine work:': (v) => data.engineWork = v,
-      'engine idle:': (v) => data.engineIdle = v,
-      'odometer:': (v) => data.odometer = v,
-      'fuel consumption:': (v) => data.fuelConsumption = v,
-    };
+    // --- Top-level server pre-computed fields (already have units) ---
+    final distSum = decoded['distance_sum'];
+    if (distSum != null && distSum.toString().trim().isNotEmpty) {
+      routeLength = distSum.toString().trim();
+    }
 
-    for (int i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      final lowerLine = line.toLowerCase();
+    final tSpeed = decoded['top_speed'];
+    if (tSpeed != null && tSpeed.toString().trim().isNotEmpty) {
+      // normalize: "75 kph" → "75 km/h"
+      topSpeed = tSpeed.toString().trim().replaceAll('kph', 'km/h');
+    }
 
-      for (final entry in keyMap.entries) {
-        final key = entry.key;
-        final setter = entry.value;
+    final moveDur = decoded['move_duration'];
+    if (moveDur != null && moveDur.toString().trim().isNotEmpty) {
+      moveDuration = moveDur.toString().trim();
+    }
 
-        if (lowerLine == key || lowerLine.endsWith(key)) {
-          String value = '';
+    final stopDur = decoded['stop_duration'];
+    if (stopDur != null && stopDur.toString().trim().isNotEmpty) {
+      stopDuration = stopDur.toString().trim();
+    }
 
-          if (lowerLine != key && line.toLowerCase().contains(key)) {
-            final idx = lowerLine.indexOf(key);
-            value = line.substring(idx + key.length).trim();
+    final fuel = decoded['fuel_consumption'];
+    if (fuel != null && fuel.toString().trim().isNotEmpty) {
+      fuelConsumption = fuel.toString().trim();
+    }
+
+    // --- Flatten nested GPS positions from trip segments ---
+    // Structure: items[trip].items[gps_point] { latitude, longitude, speed }
+    final segments = decoded['items'];
+    if (segments is List && segments.isNotEmpty) {
+      final allPositions = <Map<String, dynamic>>[];
+
+      for (final segment in segments) {
+        if (segment is! Map) continue;
+
+        // Collect per-segment average_speed for averaging
+        final segAvgSpeed = segment['average_speed'];
+
+        final innerItems = segment['items'];
+        if (innerItems is List) {
+          for (final pt in innerItems) {
+            if (pt is Map && pt['latitude'] != null) {
+              final pos = Map<String, dynamic>.from(pt);
+              // Inject segment-level average speed if missing
+              if (segAvgSpeed != null) pos['_seg_avg_speed'] = segAvgSpeed;
+              allPositions.add(pos);
+            }
           }
+        }
+      }
 
-          if (value.isEmpty && i + 1 < lines.length) {
-            final nextLine = lines[i + 1];
-            final isNextLineKey = keyMap.keys.any(
-              (k) =>
-                  nextLine.toLowerCase() == k ||
-                  nextLine.toLowerCase().endsWith(k),
-            );
-            if (!isNextLineKey) value = nextLine;
+      totalPoints = allPositions.length;
+
+      if (allPositions.isNotEmpty) {
+        // Distance from positions if server didn't give it
+        if (routeLength == null || routeLength == '0' || routeLength == '0 km') {
+          routeLength = _calcDistance(allPositions);
+        }
+
+        // Top speed from positions if server didn't give it
+        if (topSpeed == null) {
+          final top = _calcTopSpeed(allPositions);
+          if (top > 0) topSpeed = '${top.toStringAsFixed(0)} km/h';
+        }
+
+        // Average speed — use segment average_speed values
+        double avgSum = 0;
+        int avgCount = 0;
+        for (final segment in segments) {
+          if (segment is! Map) continue;
+          final sa = double.tryParse(
+              segment['average_speed']?.toString() ?? '');
+          if (sa != null && sa > 0) {
+            avgSum += sa;
+            avgCount++;
           }
+        }
+        if (avgCount > 0) {
+          averageSpeed ??= '${(avgSum / avgCount).toStringAsFixed(0)} km/h';
+        } else {
+          final avg = _calcAvgSpeed(allPositions);
+          if (avg > 0) averageSpeed ??= '${avg.toStringAsFixed(0)} km/h';
+        }
 
-          if (value.isNotEmpty) setter(value);
-          break;
+
+        // Move duration from positions if server didn't give it
+        moveDuration ??= _calcMoveDuration(allPositions);
+
+        // Route start = first GPS point, route end = last GPS point
+        final first = allPositions.first;
+        final last = allPositions.last;
+        final sLat = first['latitude']?.toString().trim();
+        final sLng = first['longitude']?.toString().trim();
+        final eLat = last['latitude']?.toString().trim();
+        final eLng = last['longitude']?.toString().trim();
+
+        if (sLat != null && sLng != null && sLat.isNotEmpty) {
+          routeStart = '$sLat, $sLng';
+        }
+        if (eLat != null && eLng != null && eLat.isNotEmpty) {
+          routeEnd = '$eLat, $eLng';
         }
       }
     }
 
-    if (data.isEmpty) _parseAlternative(text, data);
-
-    return data;
+    return TodayReportData(
+      routeLength: routeLength,
+      moveDuration: moveDuration,
+      stopDuration: stopDuration,
+      topSpeed: topSpeed,
+      averageSpeed: averageSpeed,
+      fuelConsumption: fuelConsumption,
+      routeStart: routeStart,
+      routeEnd: routeEnd,
+      totalPoints: totalPoints,
+    );
   }
 
-  static void _parseAlternative(String text, TodayReportData data) {
-    final patterns = <String, void Function(String)>{
-      r'Route\s+length[:\s]+([0-9.]+\s*(?:Km|km|KM|mi|Mi))': (v) =>
-          data.routeLength = v,
-      r'Move\s+duration[:\s]+([0-9hms\s:]+)': (v) => data.moveDuration = v,
-      r'Stop\s+duration[:\s]+([0-9hms\s:]+)': (v) => data.stopDuration = v,
-      r'Top\s+speed[:\s]+([0-9.]+\s*(?:kph|km/h|Kph|mph))': (v) =>
-          data.topSpeed = v,
-      r'Average\s+speed[:\s]+([0-9.]+\s*(?:kph|km/h|Kph|mph))': (v) =>
-          data.averageSpeed = v,
-      r'Overspeed\s+count[:\s]+([0-9]+)': (v) => data.overspeedCount = v,
-      r'Engine\s+hours[:\s]+([0-9hms\s:]+)': (v) => data.engineHours = v,
-      r'Engine\s+work[:\s]+([0-9hms\s:]+)': (v) => data.engineWork = v,
-      r'Engine\s+idle[:\s]+([0-9hms\s:]+)': (v) => data.engineIdle = v,
-      r'Odometer[:\s]+([0-9.]+\s*(?:Km|km|KM|mi|Mi)?)': (v) =>
-          data.odometer = v,
-      r'Fuel\s+consumption[:\s]+([0-9.]+\s*(?:L|l|gal)?)': (v) =>
-          data.fuelConsumption = v,
-    };
+  // ── Local calculation helpers ───────────────────────────────────────────────
 
-    final normalizedText =
-        text.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ');
+  /// Haversine distance from flattened GPS positions
+  /// Field names: 'latitude', 'longitude' (confirmed from PlayBackRoute model)
+  static String _calcDistance(List<Map<String, dynamic>> pts) {
+    double totalKm = 0;
+    for (int i = 1; i < pts.length; i++) {
+      final lat1 = double.tryParse(pts[i - 1]['latitude']?.toString() ?? '') ?? 0;
+      final lng1 = double.tryParse(pts[i - 1]['longitude']?.toString() ?? '') ?? 0;
+      final lat2 = double.tryParse(pts[i]['latitude']?.toString() ?? '') ?? 0;
+      final lng2 = double.tryParse(pts[i]['longitude']?.toString() ?? '') ?? 0;
+      if (lat1 != 0 && lng1 != 0) totalKm += _haversine(lat1, lng1, lat2, lng2);
+    }
+    return '${totalKm.toStringAsFixed(2)} km';
+  }
 
-    for (final entry in patterns.entries) {
-      final regex = RegExp(entry.key, caseSensitive: false);
-      final match = regex.firstMatch(normalizedText);
-      if (match != null && match.group(1) != null) {
-        entry.value(match.group(1)!.trim());
+  static double _haversine(double lat1, double lng1, double lat2, double lng2) {
+    const r = 6371.0;
+    final dLat = _rad(lat2 - lat1);
+    final dLng = _rad(lng2 - lng1);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_rad(lat1)) *
+            math.cos(_rad(lat2)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  }
+
+  static double _rad(double deg) => deg * math.pi / 180;
+
+  static double _calcTopSpeed(List<Map<String, dynamic>> pts) {
+    double top = 0;
+    for (final p in pts) {
+      final s = double.tryParse(p['speed']?.toString() ?? '') ?? 0;
+      if (s > top) top = s;
+    }
+    return top;
+  }
+
+  static double _calcAvgSpeed(List<Map<String, dynamic>> pts) {
+    if (pts.isEmpty) return 0;
+    double sum = 0;
+    int count = 0;
+    for (final p in pts) {
+      final s = double.tryParse(p['speed']?.toString() ?? '') ?? 0;
+      if (s > 0) {
+        sum += s;
+        count++;
       }
+    }
+    return count > 0 ? sum / count : 0;
+  }
+
+  static String? _calcMoveDuration(List<Map<String, dynamic>> pts) {
+    int moveSecs = 0;
+    for (int i = 1; i < pts.length; i++) {
+      final speed = double.tryParse(pts[i]['speed']?.toString() ?? '') ?? 0;
+      if (speed > 2) {
+        // 'raw_time' is confirmed GPS point field; 'time' as fallback
+        final t1 = _parseTime(pts[i - 1]['raw_time']?.toString()
+            ?? pts[i - 1]['time']?.toString());
+        final t2 = _parseTime(pts[i]['raw_time']?.toString()
+            ?? pts[i]['time']?.toString());
+        if (t1 != null && t2 != null) {
+          final diff = t2.difference(t1).inSeconds.abs();
+          if (diff < 3600) moveSecs += diff;
+        }
+      }
+    }
+    if (moveSecs == 0) return null;
+    return _formatDuration(moveSecs);
+  }
+
+  static DateTime? _parseTime(String? s) {
+    if (s == null || s.isEmpty) return null;
+    try {
+      return DateTime.parse(s);
+    } catch (_) {
+      return null;
     }
   }
 
-  static void clearCache() {
-    _cache.clear();
-    _lastCacheTime = null;
+  static String _formatDuration(int totalSecs) {
+    final h = totalSecs ~/ 3600;
+    final m = (totalSecs % 3600) ~/ 60;
+    final s = totalSecs % 60;
+    if (h > 0) return '${h}h ${m}m ${s}s';
+    if (m > 0) return '${m}m ${s}s';
+    return '${s}s';
   }
 
-  static void clearCacheForDevice(int deviceId) {
-    _cache.removeWhere((key, value) => key.startsWith('device_$deviceId'));
+  // ── Date helpers ────────────────────────────────────────────────────────────
+  static (DateTime, DateTime) _dateRange(
+    ReportPeriod period,
+    DateTime? customStart,
+    DateTime? customEnd,
+  ) {
+    final now = DateTime.now();
+    switch (period) {
+      case ReportPeriod.today:
+        return (
+          DateTime(now.year, now.month, now.day),
+          DateTime(now.year, now.month, now.day, 23, 59, 59),
+        );
+      case ReportPeriod.yesterday:
+        final y = now.subtract(const Duration(days: 1));
+        return (
+          DateTime(y.year, y.month, y.day),
+          DateTime(y.year, y.month, y.day, 23, 59, 59),
+        );
+      case ReportPeriod.thisWeek:
+        final mon = now.subtract(Duration(days: now.weekday - 1));
+        return (
+          DateTime(mon.year, mon.month, mon.day),
+          DateTime(now.year, now.month, now.day, 23, 59, 59),
+        );
+      case ReportPeriod.thisMonth:
+        return (
+          DateTime(now.year, now.month, 1),
+          DateTime(now.year, now.month, now.day, 23, 59, 59),
+        );
+      case ReportPeriod.custom:
+        return (
+          customStart ?? DateTime(now.year, now.month, now.day),
+          customEnd ?? DateTime(now.year, now.month, now.day, 23, 59, 59),
+        );
+    }
   }
 
-  static Map<String, dynamic> getCacheStatus() {
-    return {
-      'cacheSize': _cache.length,
-      'lastCacheTime': _lastCacheTime?.toIso8601String(),
-      'cachedKeys': _cache.keys.toList(),
-    };
-  }
+  static String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  static void dispose() {
-    _httpClient.close();
-    clearCache();
-  }
+  static String _fmtTime(DateTime d) =>
+      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}:${d.second.toString().padLeft(2, '0')}';
+
+  // ── Cache management ────────────────────────────────────────────────────────
+  static void clearCache() => _cache.clear();
+
+  static void clearCacheForDevice(int deviceId) =>
+      _cache.removeWhere((k, _) => k.startsWith('${deviceId}_'));
+
+  static Map<String, dynamic> getCacheStatus() => {
+        'size': _cache.length,
+        'keys': _cache.keys.toList(),
+        'inFlight': _inFlight.keys.toList(),
+      };
+
+  static void dispose() => clearCache();
 }

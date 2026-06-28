@@ -11,7 +11,9 @@ class Geofence extends Object {
   String? type;
   dynamic radius;
   dynamic center;
-  List<dynamic>? devices; // Add this field
+  List<dynamic>? devices;
+  dynamic alerts_on_enter;
+  dynamic alerts_on_exit;
 
   Geofence({
     this.id,
@@ -26,7 +28,9 @@ class Geofence extends Object {
     this.type,
     this.radius,
     this.center,
-    this.devices, // Add this
+    this.devices,
+    this.alerts_on_enter,
+    this.alerts_on_exit,
   });
 
   Geofence.fromJson(Map<String, dynamic> json) {
@@ -42,7 +46,9 @@ class Geofence extends Object {
     type = json["type"];
     radius = json["radius"];
     center = json["center"];
-    devices = json["devices"]; // Add this
+    devices = json["devices"];
+    alerts_on_enter = json["alerts_on_enter"];
+    alerts_on_exit  = json["alerts_on_exit"];
   }
 
   Map<String, dynamic> toJson() => {
@@ -58,6 +64,8 @@ class Geofence extends Object {
         'type': type,
         'radius': radius,
         'center': center,
-        'devices': devices, // Add this
+        'devices': devices,
+        'alerts_on_enter': alerts_on_enter,
+        'alerts_on_exit': alerts_on_exit,
       };
 }

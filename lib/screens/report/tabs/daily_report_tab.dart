@@ -39,7 +39,7 @@ class _DailyReportTabState extends State<DailyReportTab>
     _loadReport();
   }
 
-  Future<void> _loadReport() async {
+  Future<void> _loadReport({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -62,7 +62,7 @@ class _DailyReportTabState extends State<DailyReportTab>
           59,
           59,
         ),
-        forceRefresh: true,
+        forceRefresh: forceRefresh,
       );
 
       setState(() {
@@ -104,7 +104,7 @@ class _DailyReportTabState extends State<DailyReportTab>
     super.build(context);
 
     return RefreshIndicator(
-      onRefresh: _loadReport,
+      onRefresh: () => _loadReport(forceRefresh: true),
       color: _red,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),

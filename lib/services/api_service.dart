@@ -265,54 +265,45 @@ class APIService {
       final hash = UserRepository.getHash() ?? '';
       final language = UserRepository.getLanguage() ?? 'en';
 
-      // Gpswox requires from_date & to_date — without them it returns empty
+      // Last 7 days — today-only misses most events
       final now = DateTime.now();
-      final dateStr =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      final fromDate = '$dateStr 00:00:00';
-      final toDate = '$dateStr 23:59:59';
+      final from = now.subtract(const Duration(days: 7));
+      final fromDate =
+          '${from.year}-${from.month.toString().padLeft(2, '0')}-${from.day.toString().padLeft(2, '0')} 00:00:00';
+      final toDate =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} 23:59:59';
 
-      final uri = Uri.parse(
-        '$serverURL/api/get_events'
-        '?user_api_hash=${Uri.encodeComponent(hash)}'
-        '&lang=$language'
-        '&from_date=${Uri.encodeComponent(fromDate)}'
-        '&to_date=${Uri.encodeComponent(toDate)}',
-      );
+      // Direct string concat — Uri.encodeComponent encodes ":" → "%3A" breaking GPSWox server
+      final url =
+          '$serverURL/api/get_events?user_api_hash=$hash&lang=$language&from_date=$fromDate&to_date=$toDate';
+
+      debugPrint('[Events] URL: $url');
 
       final response = await http
-          .get(uri, headers: headers)
+          .get(Uri.parse(url), headers: headers)
           .timeout(const Duration(seconds: 30));
 
-      debugPrint('[Events] URL: $uri');
       debugPrint('[Events] Status: ${response.statusCode}');
       if (response.body.length > 10) {
         debugPrint('[Events] Body (500): ${response.body.substring(0, response.body.length.clamp(0, 500))}');
       }
 
       if (response.statusCode == 200) {
-        final decoded = json.decode(response.body.replaceAll('﻿', ''));
+        final decoded = json.decode(response.body.replaceAll('\uFEFF', '').replaceAll('﻿', ''));
 
         Iterable? list;
 
-        // Gpswox standard format: {"items": {"data": [...]}}
-        if (decoded is Map &&
-            decoded['items'] is Map &&
-            decoded['items']['data'] is List) {
+        // GPSWox standard: {"items": {"data": [...]}}
+        if (decoded is Map && decoded['items'] is Map && decoded['items']['data'] is List) {
           list = decoded['items']['data'] as List;
-        }
-        // Fallback: {"data": [...]}
-        else if (decoded is Map && decoded['data'] is List) {
+        } else if (decoded is Map && decoded['data'] is List) {
           list = decoded['data'] as List;
-        }
-        // Fallback: direct array
-        else if (decoded is List) {
+        } else if (decoded is List) {
           list = decoded;
         }
 
         if (list != null && list.isNotEmpty) {
           debugPrint('[Events] Parsed ${list.length} events');
-          // EventHistory has richer fields; convert to Event for the UI
           final events = list.map((model) {
             final h = EventHistory.fromJson(model as Map<String, dynamic>);
             return Event(
@@ -326,8 +317,7 @@ class APIService {
           return events.obs;
         }
 
-        debugPrint('[Events] Empty/unparseable response. Keys: '
-            '${decoded is Map ? decoded.keys.toList() : "(not a map)"}');
+        debugPrint('[Events] Empty. Keys: ${decoded is Map ? decoded.keys.toList() : "(not a map)"}');
       }
       return null;
     } on SocketException catch (e) {
@@ -340,10 +330,11 @@ class APIService {
       debugPrint('[Events] Bad JSON: $e');
       return null;
     } catch (e) {
-      debugPrint('[Events] Unexpected error: $e');
+      debugPrint('[Events] Unexpected: $e');
       return null;
     }
   }
+
 
   static Future<http.Response> getGeocoder(lat, lng) async {
     headers['content-type'] =
@@ -566,10 +557,12 @@ class APIService {
   static Future<http.Response> addAlert(String request) async {
     headers['content-type'] =
         "application/x-www-form-urlencoded; charset=UTF-8";
+    final bodyContent = request.startsWith('&') ? request.substring(1) : request;
     final response = await http.post(
         Uri.parse(
-            "$serverURL/api/add_alert?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}$request"),
-        headers: headers);
+            "$serverURL/api/add_alert?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"),
+        headers: headers,
+        body: bodyContent);
     return response;
   }
 

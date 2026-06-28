@@ -48,7 +48,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
     _loadMonthlyReport();
   }
 
-  Future<void> _loadMonthlyReport() async {
+  Future<void> _loadMonthlyReport({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
       _isLoadingDaily = false;
@@ -70,7 +70,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
         period: ReportPeriod.custom,
         customStart: firstDay,
         customEnd: effectiveLastDay,
-        forceRefresh: true,
+        forceRefresh: forceRefresh,
       );
 
       setState(() {
@@ -79,7 +79,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
         _isLoadingDaily = true;
       });
 
-      await _loadDailyReportsFast(effectiveLastDay);
+      await _loadDailyReportsFast(effectiveLastDay, forceRefresh: forceRefresh);
     } catch (_) {
       setState(() {
         _isLoading = false;
@@ -89,9 +89,9 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
     }
   }
 
-  Future<void> _loadDailyReportsFast(DateTime effectiveLastDay) async {
+  Future<void> _loadDailyReportsFast(DateTime effectiveLastDay,
+      {bool forceRefresh = false}) async {
     final today = DateTime.now();
-    final dailyReports = <DayReport>[];
     final datesToLoad = <DateTime>[];
 
     for (int day = effectiveLastDay.day; day >= 1; day--) {
@@ -100,33 +100,39 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
     }
 
     _totalDays = datesToLoad.length;
+    const batchSize = 8; // 8 parallel per batch → fewer round-trips
 
-    final futures = datesToLoad.map((date) => _loadSingleDay(date));
-    final results = await Future.wait(futures);
+    for (int i = 0; i < datesToLoad.length; i += batchSize) {
+      final batchEnd = (i + batchSize).clamp(0, datesToLoad.length);
+      final batch = datesToLoad.sublist(i, batchEnd);
 
-    for (int i = 0; i < results.length; i++) {
-      if (results[i] != null) dailyReports.add(results[i]!);
-      _loadedDays = i + 1;
-      if (i % 5 == 0 && mounted) {
-        setState(() => _dailyReports = List.from(dailyReports));
-      }
+      final results = await Future.wait(
+        batch.map((d) => _loadSingleDay(d, forceRefresh: forceRefresh)),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        for (final r in results) {
+          if (r != null) _dailyReports.add(r);
+        }
+        _loadedDays = (i + batchSize).clamp(0, datesToLoad.length);
+      });
     }
 
     if (mounted) {
-      setState(() {
-        _isLoadingDaily = false;
-        _dailyReports = dailyReports;
-      });
+      setState(() => _isLoadingDaily = false);
     }
   }
 
-  Future<DayReport?> _loadSingleDay(DateTime date) async {
+  Future<DayReport?> _loadSingleDay(DateTime date,
+      {bool forceRefresh = false}) async {
     try {
       final dayReport = await ReportService.getReportForPeriod(
         deviceId: widget.deviceId,
         period: ReportPeriod.custom,
         customStart: date,
         customEnd: DateTime(date.year, date.month, date.day, 23, 59, 59),
+        forceRefresh: forceRefresh,
       );
       if (dayReport.isNotEmpty) return DayReport(date: date, data: dayReport);
     } catch (_) {}
@@ -138,7 +144,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
       _selectedMonth =
           DateTime(_selectedMonth.year, _selectedMonth.month + delta, 1);
     });
-    _loadMonthlyReport();
+    _loadMonthlyReport(); // uses cache if same month loaded before
   }
 
   void _openPlayback(DateTime date) {
@@ -164,7 +170,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
         _selectedMonth.year == now.year && _selectedMonth.month == now.month;
 
     return RefreshIndicator(
-      onRefresh: _loadMonthlyReport,
+      onRefresh: () => _loadMonthlyReport(forceRefresh: true),
       color: _red,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),

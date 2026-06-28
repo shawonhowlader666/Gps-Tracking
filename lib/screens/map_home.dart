@@ -41,7 +41,7 @@ class _MapPageState extends State<MapPage> {
   GoogleMapController? mapController;
   Set<Marker> _markers = <Marker>{};
   final Map<int, String> _lastDeviceStates = {};
-  int _currentMarkerSize = 38;
+  int _currentMarkerSize = 42;
   MapType _currentMapType = MapType.normal;
   final bool _trafficEnabled = false;
   int _selectedDeviceId = 0;

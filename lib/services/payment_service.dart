@@ -7,7 +7,7 @@ import 'package:smart_lock/storage/user_repository.dart';
 import 'package:http/http.dart' as http;
 
 class PaymentService {
-  static const String baseUrl = "https://billing.smartlockbd.com/api";
+  static const String baseUrl = "https://billing.orbitgps.com.bd/api";
   static const Duration timeoutDuration = Duration(seconds: 30);
   static String? _token;
   static bool _isLoggingIn = false;
@@ -16,13 +16,18 @@ class PaymentService {
   static Future<bool> login() async {
     if (_isLoggingIn) {
       await Future.delayed(const Duration(milliseconds: 500));
-      return _token != null;
+      if (_token == null) {
+        throw const HttpException("Already logging in, but no token acquired yet.");
+      }
+      return true;
     }
     _isLoggingIn = true;
     try {
       final email = UserRepository.getEmail();
       final password = UserRepository.getPassword();
-      if (email == null || password == null) return false;
+      if (email == null || password == null) {
+        throw const HttpException("User email or password is not saved in preferences.");
+      }
 
       final response = await http
           .post(
@@ -40,7 +45,7 @@ class PaymentService {
         _token = jsonDecode(response.body)['token'];
         return true;
       }
-      return false;
+      throw HttpException("Billing Auth Failed (Status: ${response.statusCode}, Response: ${response.body})");
     } on TimeoutException {
       rethrow;
     } on SocketException {
@@ -68,7 +73,7 @@ class PaymentService {
 
   /// Generic GET with auto-retry on 401
   static Future<Map<String, dynamic>?> _getJson(String path) async {
-    if (!await _ensureLoggedIn()) return null;
+    await _ensureLoggedIn();
 
     var response = await http
         .get(
@@ -79,7 +84,7 @@ class PaymentService {
 
     if (response.statusCode == 401) {
       _token = null;
-      if (!await login()) return null;
+      await login();
       response = await http
           .get(
             Uri.parse("$baseUrl$path"),
@@ -89,13 +94,13 @@ class PaymentService {
     }
 
     if (response.statusCode == 200) return jsonDecode(response.body);
-    return null;
+    throw HttpException("Server Error (Status: ${response.statusCode}, Response: ${response.body})");
   }
 
   /// Generic POST with auto-retry on 401
   static Future<Map<String, dynamic>?> _postJson(String path,
       {Map<String, dynamic>? body}) async {
-    if (!await _ensureLoggedIn()) return null;
+    await _ensureLoggedIn();
 
     var response = await http
         .post(
@@ -107,7 +112,7 @@ class PaymentService {
 
     if (response.statusCode == 401) {
       _token = null;
-      if (!await login()) return null;
+      await login();
       response = await http
           .post(
             Uri.parse("$baseUrl$path"),
@@ -118,7 +123,7 @@ class PaymentService {
     }
 
     if (response.statusCode == 200) return jsonDecode(response.body);
-    return null;
+    throw HttpException("Server Error (Status: ${response.statusCode}, Response: ${response.body})");
   }
 
   /// Get payment statistics

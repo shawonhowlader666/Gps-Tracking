@@ -487,7 +487,7 @@ class Util {
       dynamic deviceId}) {
     final String? localAssetPath = getLocalMappedAsset(imagePath,
         iconType: iconType, deviceName: deviceName, deviceId: deviceId);
-    return "${imagePath}_${size}_${statusColor ?? 'default'}_${iconType ?? 'default'}_${deviceName ?? 'default'}_${deviceId ?? 'default'}_${localAssetPath ?? 'default'}_v7";
+    return "${imagePath}_${size}_${statusColor ?? 'default'}_${iconType ?? 'default'}_${deviceName ?? 'default'}_${deviceId ?? 'default'}_${localAssetPath ?? 'default'}_v17";
   }
 
   static BitmapDescriptor? getCachedMarkerIcon(String imagePath, int size,
@@ -504,13 +504,11 @@ class Util {
   }
 
   static Future<BitmapDescriptor> getMarkerIcon(String imagePath,
-      {int size = 38,
+      {int size = 48,
       String? statusColor,
       String? iconType,
       String? deviceName,
       dynamic deviceId}) async {
-    final String? localAssetPath = getLocalMappedAsset(imagePath,
-        iconType: iconType, deviceName: deviceName, deviceId: deviceId);
     final String cacheKey = _getCacheKey(imagePath, size,
         statusColor: statusColor,
         iconType: iconType,
@@ -519,23 +517,46 @@ class Util {
     if (_markerIconCache.containsKey(cacheKey)) {
       return _markerIconCache[cacheKey]!;
     }
+    final int physicalSize = size;
+
     try {
-      // Check if we have a local mapped PNG
-      if (localAssetPath != null) {
-        debugPrint(
-            "getMarkerIcon local asset path matched: '$localAssetPath' for '$imagePath', deviceId: '$deviceId'");
+
+      // Check if we have a local custom icon preference set
+      if (deviceId != null) {
+        final String? localCustomAsset = UserRepository.prefs
+            ?.getString("custom_icon_path_${deviceId.toString()}");
+        if (localCustomAsset != null && localCustomAsset.isNotEmpty) {
+          final tintColor = _getColorFromStatus(statusColor, imagePath);
+          final Uint8List? bytes =
+              await getTintedBytesFromAsset(localCustomAsset, physicalSize, tintColor);
+          if (bytes != null) {
+            final descriptor = BitmapDescriptor.bytes(bytes);
+            _markerIconCache[cacheKey] = descriptor;
+            return descriptor;
+          }
+        }
+      }
+
+      // Check if it's a bike/scooter and use local asset mapping
+      final String path =
+          "${imagePath.toLowerCase()} ${iconType?.toLowerCase() ?? ''} ${deviceName?.toLowerCase() ?? ''}"
+              .trim();
+      final bool isBike = path.contains('motorcycle') ||
+          path.contains('bike') ||
+          path.contains('scooter') ||
+          path.contains('scotty');
+
+      if (isBike) {
+        final String localAsset = (path.contains('scotty') || path.contains('scooter'))
+            ? 'assets/images/scotty_toprunning.png'
+            : 'assets/images/bike_toprunning.png';
         final tintColor = _getColorFromStatus(statusColor, imagePath);
         final Uint8List? bytes =
-            await getTintedBytesFromAsset(localAssetPath, size, tintColor);
+            await getTintedBytesFromAsset(localAsset, physicalSize, tintColor);
         if (bytes != null) {
           final descriptor = BitmapDescriptor.bytes(bytes);
           _markerIconCache[cacheKey] = descriptor;
-          debugPrint(
-              "getMarkerIcon LOADED local asset: '$localAssetPath' size: $size tint: $tintColor");
           return descriptor;
-        } else {
-          debugPrint(
-              "getMarkerIcon FAILED to load tinted bytes for local asset: '$localAssetPath'");
         }
       }
 
@@ -545,9 +566,12 @@ class Util {
           await DefaultCacheManager().getSingleFile(imageUrl);
       final Uint8List bytes = await imageFile.readAsBytes();
 
+      // Since server icons have no transparent margins, scale down the target size to 50% of requested size
+      final int adjustedSize = (size * 0.5).toInt();
+
       // Resize image using instantiateImageCodec
       final ui.Codec codec =
-          await ui.instantiateImageCodec(bytes, targetWidth: size);
+          await ui.instantiateImageCodec(bytes, targetWidth: adjustedSize);
       final ui.FrameInfo fi = await codec.getNextFrame();
       final Uint8List resizedBytes =
           (await fi.image.toByteData(format: ui.ImageByteFormat.png))!
@@ -558,17 +582,29 @@ class Util {
       _markerIconCache[cacheKey] = descriptor;
       return descriptor;
     } catch (e) {
-      debugPrint("Failed to fetch server icon: $e. Returning default marker.");
+      debugPrint("Failed to fetch server icon: $e. Using default car icon.");
+      // Fallback: use local car_toprunning.png with status tinting
+      try {
+        final tintColor = _getColorFromStatus(statusColor, imagePath);
+        final Uint8List? fallbackBytes = await getTintedBytesFromAsset(
+            'assets/images/car_toprunning.png', physicalSize, tintColor);
+        if (fallbackBytes != null) {
+          final fallback = BitmapDescriptor.bytes(fallbackBytes);
+          _markerIconCache[cacheKey] = fallback;
+          return fallback;
+        }
+      } catch (_) {}
       return BitmapDescriptor.defaultMarker;
     }
   }
 
   static String? getLocalMappedAsset(String? imagePath,
       {String? iconType, String? deviceName, dynamic deviceId}) {
+    // Always return at least the default car icon
     if (imagePath == null &&
         iconType == null &&
         deviceName == null &&
-        deviceId == null) return null;
+        deviceId == null) return 'assets/images/car_toprunning.png';
 
     if (deviceId != null) {
       final String? savedAsset = UserRepository.prefs
@@ -635,32 +671,32 @@ class Util {
       if (path.contains('6877e65ea4be98.96057559') ||
           path.contains('6877e65ea4be98.96057559_online') ||
           path.contains('6877e65ea4be98.96057559_offline')) {
-        result = 'assets/images/car_green.png';
+        result = 'assets/images/car_toprunning.png';
       } else if (path.contains('6877e682a122d5.26467715')) {
         result = 'assets/images/suv_toprunning.png';
       } else if (path.contains('68919e188759f4.90604553_online') ||
           path.contains('68919e188759f4.90604553_offline') ||
           path.contains('68919e188759f4.90604553_ack')) {
-        result = 'assets/images/car_green.png';
+        result = 'assets/images/car_toprunning.png';
       } else if (path.contains('694676186e6877.76876067')) {
         result = 'assets/images/muv_toprunning.png';
       } else if (path.contains('694bd24618ce36.67143977')) {
         result = 'assets/images/pickup_toprunning.png';
       } else if (path.contains('697613f6c938a0.41043256')) {
-        result = 'assets/images/car_green.png';
+        result = 'assets/images/car_toprunning.png';
       } else if (path.contains('697d973eeaedd3.55855774')) {
         result = 'assets/images/bus_toprunning.png';
       } else if (path.contains('697daf738d1b75.34407076_online') ||
           path.contains('697daf738d1b75.34407076_offline') ||
           path.contains('697daf738d1b75.34407076_ack')) {
-        result = 'assets/images/car_green.png';
+        result = 'assets/images/car_toprunning.png';
       } else if (path.contains('697ddf3220bbe8.30991600')) {
         result = 'assets/images/ambulance_toprunning.png';
       } else if (path.contains('697de4afdb0ed9.71856605_online') ||
           path.contains('697de4afdb0ed9.71856605_offline') ||
           path.contains('697de4afdb0ed9.71856605_ack') ||
           path.contains('697de4afdb0ed9.71856605_engine')) {
-        result = 'assets/images/car_green.png';
+        result = 'assets/images/car_toprunning.png';
       } else if (path.contains('697de539b850a9.16646834_online') ||
           path.contains('697de539b850a9.16646834_offline') ||
           path.contains('697de539b850a9.16646834_ack') ||
@@ -677,35 +713,35 @@ class Util {
       } else if (path.contains('69a93ef4b3c047.72210671')) {
         result = 'assets/images/tempotvr_toprunning.png';
       } else if (path.contains('14.png')) {
-        result = 'assets/images/ambulance_toprunning.png';
+          result = 'assets/images/ambulance_toprunning.png';
       } else if (path.contains('3.png')) {
-        result = 'assets/images/bike_toprunning.png';
+          result = 'assets/images/bike_toprunning.png';
       } else if (path.contains('4.png')) {
-        result = 'assets/images/bus_toprunning.png';
+          result = 'assets/images/bus_toprunning.png';
       } else if (path.contains('2.png')) {
-        result = 'assets/images/car_green.png';
+          result = 'assets/images/car_toprunning.png';
       } else if (path.contains('13.png')) {
-        result = 'assets/images/crane_toprunning.png';
+          result = 'assets/images/crane_toprunning.png';
       } else if (path.contains('17.png')) {
-        result = 'assets/images/mixer_toprunning.png';
+          result = 'assets/images/mixer_toprunning.png';
       } else if (path.contains('12.png')) {
-        result = 'assets/images/pickup_toprunning.png';
+          result = 'assets/images/pickup_toprunning.png';
       } else if (path.contains('10.png')) {
-        result = 'assets/images/tanker_toprunning.png';
+          result = 'assets/images/tanker_toprunning.png';
       } else if (path.contains('7.png')) {
-        result = 'assets/images/tempotvr_toprunning.png';
+          result = 'assets/images/tempotvr_toprunning.png';
       } else if (path.contains('6.png')) {
-        result = 'assets/images/truck_toprunning.png';
+          result = 'assets/images/truck_toprunning.png';
       } else if (path.contains('car') ||
           path.contains('1.png') ||
           path.contains('5.png') ||
           path.contains('rotating/')) {
-        result = 'assets/images/car_green.png';
+        result = 'assets/images/car_toprunning.png';
       }
     }
 
     // Default fallback
-    result ??= 'assets/images/car_green.png';
+    result ??= 'assets/images/car_toprunning.png';
 
     debugPrint(
         "getLocalMappedAsset RESULT: '$result' for path: '$imagePath', iconType: '$iconType', deviceName: '$deviceName'");
@@ -713,33 +749,26 @@ class Util {
   }
 
   static ColorFilter getTintFilter(Color color) {
-    const double boost = 1.35;
-    final double r = ((color.red / 255.0) * boost).clamp(0.0, 1.0);
-    final double g = ((color.green / 255.0) * boost).clamp(0.0, 1.0);
-    final double b = ((color.blue / 255.0) * boost).clamp(0.0, 1.0);
+    final double r = color.red / 255.0;
+    final double g = color.green / 255.0;
+    final double b = color.blue / 255.0;
+
+    // High-boost duotone: luminance × 2.2 × target_color
+    // boost=2.2 → bright/medium pixels clamp to pure target color
+    //           → dark outlines stay proportionally dark
+    // Result: car body = pure yellow/red, outlines = dark yellow/red
+    const double boost = 2.2;
+
     return ColorFilter.matrix(<double>[
-      0.15 * r,
-      1.15 * r,
-      0.1 * r,
-      0,
-      0,
-      0.15 * g,
-      1.15 * g,
-      0.1 * g,
-      0,
-      0,
-      0.15 * b,
-      1.15 * b,
-      0.1 * b,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
+      0.299 * boost * r, 0.587 * boost * r, 0.114 * boost * r, 0, 0, // R
+      0.299 * boost * g, 0.587 * boost * g, 0.114 * boost * g, 0, 0, // G
+      0.299 * boost * b, 0.587 * boost * b, 0.114 * boost * b, 0, 0, // B
+      0,                 0,                 0,                 1, 0, // A
     ]);
   }
+
+
+
 
   static Future<Uint8List?> getTintedBytesFromAsset(
       String path, int width, Color tintColor) async {
@@ -773,7 +802,11 @@ class Util {
       final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
       final Canvas canvas = Canvas(pictureRecorder);
 
-      final paint = Paint()..colorFilter = getTintFilter(tintColor);
+      final bool isMoving = tintColor == const Color(0xFF22C55E);
+
+      // Moving: original car image (no tint)
+      // Non-moving: duotone tint — high boost so car body becomes pure target color
+      final paint = isMoving ? Paint() : (Paint()..colorFilter = getTintFilter(tintColor));
 
       canvas.drawImageRect(
         originalImage,
@@ -788,6 +821,7 @@ class Util {
       final ByteData? byteData =
           await tintedImage.toByteData(format: ui.ImageByteFormat.png);
       return byteData?.buffer.asUint8List();
+
     } catch (e) {
       debugPrint("Error tinting image $path: $e");
       return null;
@@ -807,18 +841,19 @@ class Util {
       }
     }
 
+    // ── Industry-standard GPSWox / Wialon color scheme ──────────────────────
     if (status == 'green' || status.contains('green')) {
-      return const Color(0xFF00C853); // Green for moving
+      return const Color(0xFF22C55E); // 🟢 Moving — vivid green
     } else if (status == 'yellow' || status.contains('yellow')) {
-      return const Color(0xFFFF9100); // Yellow/orange for idle
+      return const Color(0xFFFFD600); // 🟡 Idle (engine ON, no speed) — bright vivid yellow
     } else if (status == 'red' || status.contains('red')) {
-      return CustomColor.primary; // Red for stopped (brand red)
-    } else if (status == 'orange' ||
-        status.contains('orange') ||
-        status == 'expired') {
-      return const Color(0xFFF97316); // Orange for expired
+      return const Color(0xFFEF4444); // 🔴 Stopped (engine OFF, online) — red
+    } else if (status == 'grey' || status.contains('grey') || status.contains('gray')) {
+      return const Color(0xFFEF4444); // 🔴 Offline — red (no signal)
+    } else if (status == 'expired' || status.contains('expired') || status == 'orange') {
+      return const Color(0xFF94A3B8); // ⬜ Expired — silver/white-gray (desaturated)
     } else {
-      return const Color(0xFF475569); // Slate/gray for offline
+      return const Color(0xFF64748B); // Default fallback — dark gray
     }
   }
 
@@ -916,13 +951,18 @@ class Util {
   }
 
   static String getDeviceStatusColorStr(DeviceItem device) {
-    if (isExpired(device)) return "orange";
-    if (!isDeviceOnline(device)) return "grey";
+    // ── Industry-standard GPSWox / Wialon status logic ──────────────────────
+    // PRIORITY 1: Expired → silver/white-gray (desaturated, clearly expired)
+    if (isExpired(device)) return "expired";
 
+    // PRIORITY 2: Offline → red (matching server status)
+    if (!isDeviceOnline(device)) return "red";
+
+    // PRIORITY 3: Online statuses
     final speed = double.tryParse(device.speed.toString()) ?? 0;
-    if (speed > 0) return "green"; // Moving
-    if (isEngineOn(device)) return "yellow"; // Engine ON, speed == 0
-    return "red"; // Engine OFF, speed == 0
+    if (speed > 0) return "green";        // 🟢 Moving
+    if (isEngineOn(device)) return "yellow"; // 🟡 Idle (engine ON, speed = 0)
+    return "red";                          // 🔴 Stopped (engine OFF)
   }
 
   static Widget getVehicleIconWidget(String? imagePath, Color color,
@@ -930,48 +970,85 @@ class Util {
       String? iconType,
       String? deviceName,
       dynamic deviceId}) {
-    if (imagePath != null && imagePath.isNotEmpty) {
-      final String? localAsset = getLocalMappedAsset(imagePath,
-          iconType: iconType, deviceName: deviceName, deviceId: deviceId);
-      if (localAsset != null) {
-        return ColorFiltered(
-          colorFilter: getTintFilter(color),
-          child: Image.asset(
-            localAsset,
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
-          ),
-        );
-      }
+    // Moving (green) status — show original image as-is, no color filter
+    final bool isMoving = color == const Color(0xFF22C55E);
 
+    // 1. Check if the user set a custom icon locally in the app
+    if (deviceId != null) {
+      final String? savedAsset = UserRepository.prefs
+          ?.getString("custom_icon_path_${deviceId.toString()}");
+      if (savedAsset != null && savedAsset.isNotEmpty) {
+        final Widget img = Image.asset(
+          savedAsset,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+        return isMoving
+            ? img
+            : ColorFiltered(colorFilter: getTintFilter(color), child: img);
+      }
+    }
+
+    // 2. Check if it's a bike/scooter and use local asset mapping
+    final String path =
+        "${imagePath?.toLowerCase() ?? ''} ${iconType?.toLowerCase() ?? ''} ${deviceName?.toLowerCase() ?? ''}"
+            .trim();
+    final bool isBike = path.contains('motorcycle') ||
+        path.contains('bike') ||
+        path.contains('scooter') ||
+        path.contains('scotty');
+
+    if (isBike) {
+      final String localAsset = (path.contains('scotty') || path.contains('scooter'))
+          ? 'assets/images/scotty_toprunning.png'
+          : 'assets/images/bike_toprunning.png';
+      final Widget img = Image.asset(
+        localAsset,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+      );
+      return isMoving
+          ? img
+          : ColorFiltered(colorFilter: getTintFilter(color), child: img);
+    }
+
+    // 3. Fetch the server PNG image directly
+    if (imagePath != null && imagePath.isNotEmpty) {
       final String? serverUrl = UserRepository.getServerUrl();
       if (serverUrl != null && serverUrl.isNotEmpty) {
+        final Widget fallbackImg = Image.asset(
+          'assets/images/car_toprunning.png',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+        final Widget tintedFallback = isMoving
+            ? fallbackImg
+            : ColorFiltered(
+                colorFilter: getTintFilter(color), child: fallbackImg);
         return CachedNetworkImage(
           imageUrl: "$serverUrl/$imagePath",
           width: size,
           height: size,
           fit: BoxFit.contain,
-          placeholder: (context, url) => Icon(
-            Icons.directions_car,
-            color: color,
-            size: size * 0.7,
-          ),
-          errorWidget: (context, url, error) => Icon(
-            Icons.directions_car,
-            color: color,
-            size: size * 0.7,
-          ),
+          placeholder: (context, url) => tintedFallback,
+          errorWidget: (context, url, error) => tintedFallback,
         );
       }
     }
 
-    return Image.asset(
-      'assets/images/car_green.png',
+    // Ultimate fallback
+    final Widget fallback = Image.asset(
+      'assets/images/car_toprunning.png',
       width: size,
       height: size,
       fit: BoxFit.contain,
     );
+    return isMoving
+        ? fallback
+        : ColorFiltered(colorFilter: getTintFilter(color), child: fallback);
   }
 
   static Widget getChangeIconWidget(String? imagePath,
@@ -980,9 +1057,18 @@ class Util {
       String? deviceName,
       dynamic deviceId}) {
     if (imagePath != null && imagePath.isNotEmpty) {
-      final String? localAsset = getLocalMappedAsset(imagePath,
-          iconType: iconType, deviceName: deviceName, deviceId: deviceId);
-      if (localAsset != null) {
+      final String path =
+          "$imagePath ${iconType?.toLowerCase() ?? ''} ${deviceName?.toLowerCase() ?? ''}"
+              .trim();
+      final bool isBike = path.contains('motorcycle') ||
+          path.contains('bike') ||
+          path.contains('scooter') ||
+          path.contains('scotty');
+
+      if (isBike) {
+        final String localAsset = (path.contains('scotty') || path.contains('scooter'))
+            ? 'assets/images/scotty_toprunning.png'
+            : 'assets/images/bike_toprunning.png';
         return Image.asset(
           localAsset,
           width: size,
@@ -1013,7 +1099,7 @@ class Util {
     }
 
     return Image.asset(
-      'assets/images/car_green.png',
+      'assets/images/car_toprunning.png',
       width: size,
       height: size,
       fit: BoxFit.contain,

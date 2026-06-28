@@ -36,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _sliderTimer;
 
   final List<String> _sliderImages = [
+    'assets/images/banner4.png',
     'assets/images/banner1.png',
     'assets/images/banner2.png',
     'assets/images/banner3.png',
@@ -43,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ── DevicePage এর মতো same color ──
   static const Color _greenColor = Color(0xFF22C55E); // running
-  static const Color _yellowColor = Color(0xFFF59E0B); // idle
+  static const Color _yellowColor = Color(0xFFFFD600); // idle
   static const Color _redColor = Color(0xFFEF4444); // stop
   static const Color _greyColor = Color(0xFF9CA3AF); // offline
   static const Color _orangeColor = Color(0xFFF97316); // expired
@@ -295,7 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: [
         Obx(() => _buildAppBarIcon(
               Icons.notifications_outlined,
-              () {},
+              () => Navigator.pushNamed(context, '/event'),
               badge: dataController.events.length,
             )),
         const SizedBox(width: 12),
@@ -323,21 +324,19 @@ class _HomeScreenState extends State<HomeScreen> {
               right: -2,
               top: -2,
               child: Container(
-                padding: const EdgeInsets.all(2),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
                 constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: dangerColor,
-                  shape: BoxShape.circle,
-                  border: Border.fromBorderSide(
-                    BorderSide(color: Colors.white, width: 1.5),
-                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white, width: 1.5),
                 ),
                 child: Center(
                   child: Text(
                     badge > 99 ? '99+' : badge.toString(),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 9,
+                      fontSize: 8.5,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
