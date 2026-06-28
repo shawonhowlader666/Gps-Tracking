@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:gpspro/screens/lock_unlock_screen.dart';
 import 'package:gpspro/screens/playback.dart';
 import 'package:gpspro/screens/report/get_today_report.dart';
@@ -16,6 +17,7 @@ import 'package:gpspro/screens/street_view_screen.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/api_service.dart';
+import 'package:gpspro/services/road_snap_service.dart';
 import 'package:gpspro/theme/custom_color.dart';
 import 'package:gpspro/util/util.dart';
 import 'package:gpspro/widgets/scale_button.dart';
@@ -31,196 +33,227 @@ import 'common_method.dart';
 
 enum DeviceStatus { running, idle, stop, offline }
 
+// ==================== GPS KALMAN FILTER ====================
+class GpsKalmanFilter {
+  double _lat;
+  double _lng;
+  double _variance = -1;
+  int _lastTimestampMs = 0;
+  static const double _processNoise = 3.0;
+  static const double _gpsAccuracy = 10.0;
+
+  GpsKalmanFilter(this._lat, this._lng);
+
+  LatLng process(double lat, double lng) {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final dt = _lastTimestampMs > 0 ? (nowMs - _lastTimestampMs) / 1000.0 : 0.0;
+    _lastTimestampMs = nowMs;
+
+    if (_variance < 0) {
+      _lat = lat;
+      _lng = lng;
+      _variance = _gpsAccuracy * _gpsAccuracy;
+      return LatLng(_lat, _lng);
+    }
+
+    _variance += dt * _processNoise * _processNoise;
+    final K = _variance / (_variance + _gpsAccuracy * _gpsAccuracy);
+    _lat += K * (lat - _lat);
+    _lng += K * (lng - _lng);
+    _variance = (1 - K) * _variance;
+
+    return LatLng(_lat, _lng);
+  }
+}
+
 // ==================== ULTRA SMOOTH CAR ANIMATOR ====================
 class UltraSmoothCarAnimator {
   final TickerProvider vsync;
   final void Function(LatLng position, double bearing) onPositionUpdate;
 
   Ticker? _ticker;
+  bool _isDisposed = false;
 
-  // Current state
-  LatLng _currentPosition;
+  // --- Current animated state ---
+  LatLng _currentPos;
   double _currentBearing;
 
-  // Queue of pending positions and bearings to ensure no intermediate updates are skipped
-  final List<LatLng> _positionQueue = [];
-  final List<double> _bearingQueue = [];
+  // --- Target path ---
+  List<LatLng> _path = [];
+  List<double> _distances = [];
+  double _totalDistance = 0.0;
 
-  // Target state
-  LatLng? _targetPosition;
-  double _targetBearing = 0;
+  // --- Stable bearing ---
+  double _gpsBearing = 0.0;
+  bool _bearingInitialized = false;
 
-  // Animation state
-  bool _isRunning = false;
-  int _lastTickTime = 0;
+  // --- Animation progress ---
+  double _t = 1.0;
+  int _animStartMs = 0;
+  int _animDurationMs = 9200;
 
-  // Speed configuration (meters per second)
-  static const double _maxSpeed = 50.0; // 180 km/h base speed limit
-  static const double _minSpeed = 5.0; // ~18 km/h min speed
-  static const double _acceleration =
-      40.0; // m/s² acceleration for responsive updates
+  LatLng get currentPosition => _currentPos;
+  double get currentBearing => _currentBearing;
+  LatLng get targetPosition => _path.isNotEmpty ? _path.last : _currentPos;
 
-  double _currentSpeed = 0;
+  List<LatLng> getTraveledPath() {
+    if (_isDisposed || _path.isEmpty) return [];
+    if (_t >= 1.0) return _path;
 
-  // Bearing interpolation
-  static const double _bearingSpeed =
-      360.0; // degrees per second (fast turning)
+    final easedT = _t * _t * (3 - 2 * _t);
+    final targetD = _totalDistance * easedT;
+
+    int idx = 0;
+    while (idx < _path.length - 2 && _distances[idx + 1] < targetD) {
+      idx++;
+    }
+    return [..._path.sublist(0, idx + 1), _currentPos];
+  }
 
   UltraSmoothCarAnimator({
     required this.vsync,
     required this.onPositionUpdate,
     required LatLng initialPosition,
     double initialBearing = 0,
-  })  : _currentPosition = initialPosition,
+  })  : _currentPos = initialPosition,
         _currentBearing = initialBearing {
-    _ticker = vsync.createTicker(_onTick);
+    _path = [initialPosition];
+    _distances = [0.0];
+    _totalDistance = 0.0;
+    _gpsBearing = initialBearing;
+    _ticker = vsync.createTicker(_onTick)..start();
   }
 
-  LatLng get currentPosition => _currentPosition;
-  double get currentBearing => _currentBearing;
-  LatLng get targetPosition => _targetPosition ?? _currentPosition;
+  void moveToPath(List<LatLng> path, double gpsBearing, {int? expectedIntervalMs}) {
+    if (_isDisposed || path.isEmpty) return;
 
-  void moveTo(LatLng target, double bearing) {
-    _positionQueue.add(target);
-    _bearingQueue.add(bearing);
+    final fullPath = [_currentPos, ...path];
 
-    // Keep queue bounded to at most 10 elements to prevent excessive backlog
-    if (_positionQueue.length > 10) {
-      _positionQueue.removeRange(0, _positionQueue.length - 10);
-      _bearingQueue.removeRange(0, _bearingQueue.length - 10);
+    final dists = List<double>.filled(fullPath.length, 0.0);
+    for (int i = 1; i < fullPath.length; i++) {
+      dists[i] = dists[i - 1] + RoadSnapService.distanceMeters(fullPath[i - 1], fullPath[i]);
     }
+    final totalDist = dists.last;
 
-    if (!_isRunning) {
-      _isRunning = true;
-      _lastTickTime = DateTime.now().millisecondsSinceEpoch;
-      _ticker?.start();
-    }
-  }
-
-  void _onTick(Duration elapsed) {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final elapsedMs = now - _lastTickTime;
-    if (elapsedMs < 33) return; // Throttle to ~30fps
-
-    if (_targetPosition == null) {
-      if (_positionQueue.isNotEmpty) {
-        _targetPosition = _positionQueue.removeAt(0);
-        _targetBearing = _bearingQueue.removeAt(0);
+    if (totalDist >= 5.0) {
+      if (!_bearingInitialized) {
+        _gpsBearing = gpsBearing;
+        _bearingInitialized = true;
       } else {
-        _stop();
-        return;
+        final diff = (((gpsBearing - _gpsBearing) % 360) + 360) % 360;
+        final normalized = diff > 180 ? diff - 360 : diff;
+        if (normalized.abs() <= 150) {
+          _gpsBearing = gpsBearing;
+        }
       }
+      _currentBearing = _gpsBearing;
     }
 
-    final deltaTime = elapsedMs / 1000.0; // seconds
-    _lastTickTime = now;
+    _path = fullPath;
+    _distances = dists;
+    _totalDistance = totalDist;
 
-    // Clamp delta time to prevent jumps
-    final dt = deltaTime.clamp(0.001, 0.1);
+    _animDurationMs = ((expectedIntervalMs ?? 8000) * 0.92).round();
+    _animStartMs = DateTime.now().millisecondsSinceEpoch;
+    _t = 0.0;
+  }
 
-    // Calculate distance to target
-    final distance = _calculateDistance(_currentPosition, _targetPosition!);
+  void teleportTo(LatLng position, double bearing) {
+    if (_isDisposed) return;
+    _currentPos = position;
+    _currentBearing = bearing;
+    _path = [position];
+    _distances = [0.0];
+    _totalDistance = 0.0;
+    _t = 1.0;
+    _gpsBearing = bearing;
+    onPositionUpdate(position, bearing);
+  }
 
-    if (distance < 0.5) {
-      // Very close to target, snap to it
-      _currentPosition = _targetPosition!;
-      _currentBearing = _normalizeBearing(_targetBearing);
-      onPositionUpdate(_currentPosition, _currentBearing);
-      _targetPosition = null;
+  double _calculateBearing(LatLng start, LatLng end) {
+    final lat1 = start.latitude * m.pi / 180;
+    final lon1 = start.longitude * m.pi / 180;
+    final lat2 = end.latitude * m.pi / 180;
+    final lon2 = end.longitude * m.pi / 180;
 
-      // If no more items in queue, reset speed and stop
-      if (_positionQueue.isEmpty) {
-        _currentSpeed = 0;
-        _stop();
-      }
-      return;
-    }
+    final dLon = lon2 - lon1;
 
-    // Dynamic speed cap multiplier based on queue backlog to catch up quickly
-    double speedCap = _maxSpeed;
-    if (_positionQueue.length > 1) {
-      speedCap = _maxSpeed * _positionQueue.length.toDouble();
-    }
+    final y = m.sin(dLon) * m.cos(lat2);
+    final x = m.cos(lat1) * m.sin(lat2) -
+        m.sin(lat1) * m.cos(lat2) * m.cos(dLon);
 
-    // Calculate target speed based on distance (slow down when approaching final target)
-    double targetSpeed;
-    if (_positionQueue.isEmpty && distance < 10) {
-      targetSpeed = _minSpeed;
-    } else if (_positionQueue.isEmpty && distance < 50) {
-      targetSpeed = _minSpeed + (distance - 10) / 40 * (speedCap - _minSpeed);
-    } else {
-      targetSpeed = speedCap;
-    }
-
-    // Smooth acceleration/deceleration
-    if (_currentSpeed < targetSpeed) {
-      _currentSpeed = m.min(_currentSpeed + _acceleration * dt, targetSpeed);
-    } else {
-      _currentSpeed = m.max(_currentSpeed - _acceleration * dt, targetSpeed);
-    }
-
-    // Calculate movement this frame
-    final moveDistance = _currentSpeed * dt;
-    final moveRatio = (moveDistance / distance).clamp(0.0, 1.0);
-
-    // Interpolate position
-    final newLat = _currentPosition.latitude +
-        (_targetPosition!.latitude - _currentPosition.latitude) * moveRatio;
-    final newLng = _currentPosition.longitude +
-        (_targetPosition!.longitude - _currentPosition.longitude) * moveRatio;
-
-    _currentPosition = LatLng(newLat, newLng);
-
-    // Smooth bearing interpolation
-    _currentBearing = _interpolateBearing(
-      _currentBearing,
-      _targetBearing,
-      _bearingSpeed * dt,
-    );
-
-    onPositionUpdate(_currentPosition, _currentBearing);
+    final radians = m.atan2(y, x);
+    return ((radians * 180 / m.pi) + 360) % 360;
   }
 
   double _interpolateBearing(double from, double to, double maxDelta) {
-    from = _normalizeBearing(from);
-    to = _normalizeBearing(to);
+    from = from % 360;
+    to = to % 360;
 
     double diff = to - from;
     if (diff > 180) diff -= 360;
     if (diff < -180) diff += 360;
 
     if (diff.abs() <= maxDelta) {
-      return _normalizeBearing(to);
+      return to;
+    }
+    return (from + diff.sign * maxDelta) % 360;
+  }
+
+  void _onTick(Duration elapsed) {
+    if (_isDisposed) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _t = _animDurationMs > 0
+        ? ((now - _animStartMs) / _animDurationMs).clamp(0.0, 1.0)
+        : 1.0;
+
+    final easedT = _t * _t * (3 - 2 * _t);
+
+    if (_totalDistance < 0.5 || _path.length < 2) {
+      onPositionUpdate(_currentPos, _currentBearing);
+      return;
     }
 
-    return _normalizeBearing(from + diff.sign * maxDelta);
+    final targetD = _totalDistance * easedT;
+    int idx = 0;
+    while (idx < _path.length - 2 && _distances[idx + 1] < targetD) {
+      idx++;
+    }
+
+    final segLen = _distances[idx + 1] - _distances[idx];
+    final segRatio = segLen > 0 ? (targetD - _distances[idx]) / segLen : 0.0;
+    _currentPos = _lerpLatLng(_path[idx], _path[idx + 1], segRatio);
+
+    // Only update bearing if the segment is long enough (prevents spinning on tiny GPS drift segments)
+    if (segLen > 2.0) {
+      final segmentBearing = _calculateBearing(_path[idx], _path[idx + 1]);
+      
+      // Calculate absolute difference between the segment bearing and the physical GPS heading
+      double diff = (segmentBearing - _gpsBearing).abs();
+      if (diff > 180.0) diff = 360.0 - diff;
+      
+      // Follow the road segment direction so the car always faces forward along the road
+      final targetB = segmentBearing;
+      
+      _currentBearing = _interpolateBearing(_currentBearing, targetB, 6.0);
+    }
+
+    onPositionUpdate(_currentPos, _currentBearing);
   }
 
-  double _normalizeBearing(double bearing) {
-    bearing = bearing % 360;
-    return bearing < 0 ? bearing + 360 : bearing;
-  }
-
-  double _calculateDistance(LatLng a, LatLng b) {
-    const R = 6371000.0;
-    final lat1 = a.latitude * m.pi / 180;
-    final lat2 = b.latitude * m.pi / 180;
-    final dLat = (b.latitude - a.latitude) * m.pi / 180;
-    final dLon = (b.longitude - a.longitude) * m.pi / 180;
-    final x = m.sin(dLat / 2) * m.sin(dLat / 2) +
-        m.cos(lat1) * m.cos(lat2) * m.sin(dLon / 2) * m.sin(dLon / 2);
-    return R * 2 * m.atan2(m.sqrt(x), m.sqrt(1 - x));
-  }
-
-  void _stop() {
-    _isRunning = false;
-    _ticker?.stop();
-  }
+  static LatLng _lerpLatLng(LatLng a, LatLng b, double t) => LatLng(
+        a.latitude + (b.latitude - a.latitude) * t,
+        a.longitude + (b.longitude - a.longitude) * t,
+      );
 
   void dispose() {
+    _isDisposed = true;
     _ticker?.stop();
     _ticker?.dispose();
+    _ticker = null;
   }
+}
 }
 
 // ==================== MAIN WIDGET ====================
@@ -247,7 +280,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   GoogleMapController? _mapController;
   bool _isMapCreated = false;
   MapType _currentMapType = MapType.normal;
-  double _currentZoom = 15.5;
+  double _currentZoom = 18.5;
   int _currentMarkerSize = 38;
   bool _trafficEnabled = false;
   bool _followVehicle = true;
@@ -279,6 +312,22 @@ class _TrackDeviceState extends State<TrackDevicePage>
   UltraSmoothCarAnimator? _carAnimator;
   BitmapDescriptor? _markerIcon;
   bool _isMarkerReady = false;
+  bool _isCodeMovingCamera = false;
+  String? _lastLocalIconPath;
+  late GpsKalmanFilter _kalman;
+  int _lastUpdateTimestamp = 0;
+  int _currentUpdateId = 0;
+  String? _lastIconPath;
+  String? _lastStatusColor;
+  String? _lastIconType;
+  String? _lastDeviceName;
+  int? _lastDeviceId;
+  LatLng? _lastRawGpsPoint;
+  LatLng? _lastSnappedPos;
+
+  LatLng? _userLocationForDistance;
+  List<LatLng> _distanceRoutePoints = [];
+  bool _showingUserDistance = false;
 
   // POLYLINE
   final List<LatLng> _polylinePoints = [];
@@ -298,6 +347,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   bool _hasDeviceChanged(DeviceItem? a, DeviceItem b) {
     if (a == null) return true;
+    final currentLocalPath = UserRepository.prefs?.getString("custom_icon_path_${b.id}");
+    if (_lastLocalIconPath != currentLocalPath) {
+      return true;
+    }
     return a.lat != b.lat ||
         a.lng != b.lng ||
         a.speed != b.speed ||
@@ -306,13 +359,19 @@ class _TrackDeviceState extends State<TrackDevicePage>
         a.engineStatus != b.engineStatus ||
         a.stopDuration != b.stopDuration ||
         a.totalDistance != b.totalDistance ||
-        a.power != b.power;
+        a.power != b.power ||
+        a.icon?.path != b.icon?.path ||
+        a.icon?.type != b.icon?.type ||
+        a.iconColor != b.iconColor;
   }
 
   @override
   void initState() {
     super.initState();
     device = widget.device;
+    if (widget.device != null) {
+      _lastLocalIconPath = UserRepository.prefs?.getString("custom_icon_path_${widget.device!.id}");
+    }
 
     final DataController controller = Get.put(DataController());
     _onlyDevicesSubscription = controller.onlyDevices.listen((devices) {
@@ -320,6 +379,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
         for (var element in devices) {
           if (element.id == widget.id) {
             if (_hasDeviceChanged(device, element)) {
+              _lastLocalIconPath = UserRepository.prefs?.getString("custom_icon_path_${element.id}");
               setState(() {
                 device = element;
               });
@@ -338,16 +398,19 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   Future<void> _initializeAll() async {
     // Initialize position first
-    final initialPos = _getInitialPosition();
-    _fetchAddressForCoordinates(initialPos.latitude, initialPos.longitude);
+    final rawInitialPos = _getInitialPosition();
+    _fetchAddressForCoordinates(rawInitialPos.latitude, rawInitialPos.longitude);
     final initialBearing =
         double.tryParse(device?.course?.toString() ?? '0') ?? 0;
 
-    // Initialize animator
+    // Initialize Kalman filter
+    _kalman = GpsKalmanFilter(rawInitialPos.latitude, rawInitialPos.longitude);
+
+    // Initialize animator instantly using raw position to avoid waiting for network
     _carAnimator = UltraSmoothCarAnimator(
       vsync: this,
       onPositionUpdate: _onCarPositionUpdate,
-      initialPosition: initialPos,
+      initialPosition: rawInitialPos,
       initialBearing: initialBearing,
     );
 
@@ -355,7 +418,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
     await _loadMarkerIcon();
 
     // Add initial polyline point
-    _polylinePoints.add(initialPos);
+    _polylinePoints.add(rawInitialPos);
+    _lastRawGpsPoint = rawInitialPos;
+    _lastSnappedPos = rawInitialPos;
 
     // Update map
     _updateMapMarker();
@@ -363,6 +428,21 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     // Start data fetching
     _startDataTimer();
+
+    // Snap starting point in the background asynchronously to prevent delays
+    RoadSnapService.snapSingleLivePoint(rawInitialPos).then((snappedPos) {
+      if (mounted && !_isDisposed && _carAnimator != null) {
+        _carAnimator!.teleportTo(snappedPos, initialBearing);
+        _lastSnappedPos = snappedPos;
+        
+        // Re-align starting polyline point to snapped road coordinate
+        if (_polylinePoints.isNotEmpty && _polylinePoints.first == rawInitialPos) {
+          _polylinePoints[0] = snappedPos;
+        }
+        _updateMapMarker();
+        _updateMapPolyline();
+      }
+    });
   }
 
   LatLng _getInitialPosition() {
@@ -385,13 +465,22 @@ class _TrackDeviceState extends State<TrackDevicePage>
       _isMarkerReady = true;
       return;
     }
+    final statusColor = Util.getDeviceStatusColorStr(device!);
+    final iconType = device?.icon?.type ?? device?.iconType;
+
+    // Cache current properties to prevent redundant reloads
+    _lastIconPath = device!.icon!.path;
+    _lastStatusColor = statusColor;
+    _lastIconType = iconType;
+    _lastDeviceName = device!.name;
+    _lastDeviceId = device!.id;
 
     try {
       final path = device!.icon!.path!;
       _markerIcon = await Util.getMarkerIcon(path,
           size: _currentMarkerSize,
-          statusColor: device?.iconColor,
-          iconType: device?.icon?.type ?? device?.iconType,
+          statusColor: statusColor,
+          iconType: iconType,
           deviceName: device?.name,
           deviceId: device?.id);
 
@@ -629,7 +718,67 @@ class _TrackDeviceState extends State<TrackDevicePage>
     return null;
   }
 
+  /// Returns true if the engine/ignition is ON for the given device.
+  /// Logic is identical to home_screen.dart and devices.dart for consistency.
+  bool _isEngineOn(DeviceItem d) {
+    // 1. If speed > 0, engine must be on
+    final speed = double.tryParse(d.speed.toString()) ?? 0;
+    if (speed > 0) return true;
+
+    // 2. Check engineStatus field directly
+    if (d.engineStatus != null) {
+      final status = d.engineStatus;
+      if (status is bool) return status;
+      if (status is int) return status == 1;
+      if (status is String) {
+        final s = status.toLowerCase().trim();
+        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s)) {
+          return true;
+        }
+        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off'].contains(s)) {
+          return false;
+        }
+      }
+    }
+
+    // 3. Check sensors for ignition / ACC status
+    if (d.sensors != null && d.sensors!.isNotEmpty) {
+      for (var sensor in d.sensors!) {
+        try {
+          final type = (sensor['type'] ?? '').toString().toLowerCase();
+          final name = (sensor['name'] ?? '').toString().toLowerCase();
+          final value = sensor['value'];
+
+          if (type == 'acc' ||
+              type == 'ignition' ||
+              type == 'engine' ||
+              name.contains('ignition') ||
+              name.contains('acc') ||
+              name.contains('engine')) {
+            if (value == null) continue;
+            if (value is bool) return value;
+            if (value is int) return value == 1;
+            if (value is String) {
+              final v = value.toLowerCase().trim();
+              if (['on', '1', 'true', 'ign on', 'acc on', 'engine on'].contains(v)) return true;
+              if (['off', '0', 'false', 'ign off', 'acc off', 'engine off'].contains(v)) return false;
+            }
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+
+    // 4. Fallback: iconColor yellow/green → engine considered on
+    final iconColor = d.iconColor?.toLowerCase().trim() ?? '';
+    if (iconColor == 'yellow' || iconColor == 'green') return true;
+
+    return false;
+  }
+
   String getEngineStatus() {
+    if (device == null) return 'Off';
     if (_isEngineOn(device!)) {
       return 'On';
     }
@@ -680,9 +829,6 @@ class _TrackDeviceState extends State<TrackDevicePage>
     String? bat =
         _getRawParameter('battery') ?? _getRawParameter('batterylevel');
     if (bat != null && bat.isNotEmpty) {
-      if (!bat.contains('%')) {
-        return "$bat%";
-      }
       return bat;
     }
     return '--';
@@ -753,52 +899,183 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   // ==================== SMOOTH MARKER UPDATE ====================
-  void updateMarker(DeviceItem element) {
-    if (_isDisposed || !_isMarkerReady || _carAnimator == null) return;
+  // ==================== SMOOTH MARKER UPDATE ====================
+  Future<void> updateMarker(DeviceItem element) async {
+    if (_isDisposed || _carAnimator == null) return;
 
-    final newPos = LatLng(
-      double.parse(element.lat.toString()),
-      double.parse(element.lng.toString()),
-    );
+    _currentUpdateId++;
+    final myUpdateId = _currentUpdateId;
 
-    // Fetch address and update raw polyline only if location actually changed
-    final bool locationChanged = _polylinePoints.isEmpty ||
-        _polylinePoints.last.latitude != newPos.latitude ||
-        _polylinePoints.last.longitude != newPos.longitude;
+    final double? rawLat = double.tryParse(element.lat?.toString() ?? '');
+    final double? rawLng = double.tryParse(element.lng?.toString() ?? '');
+    if (rawLat == null || rawLng == null) return;
 
-    if (locationChanged) {
-      _fetchAddressForCoordinates(newPos.latitude, newPos.longitude);
+    final gpsSpeed = double.tryParse(element.speed?.toString() ?? '0') ?? 0.0;
+    final gpsBearing = double.tryParse(element.course?.toString() ?? '0.0') ?? 0.0;
 
-      final lastTarget = _carAnimator!.targetPosition;
-      if (_polylinePoints.isEmpty ||
-          _calculateDistance(_polylinePoints.last, lastTarget) > 1.0) {
-        _polylinePoints.add(lastTarget);
-        if (_polylinePoints.length > _maxPolylinePoints) {
-          _polylinePoints.removeAt(0);
+    // ── Outlier Rejection (LBS Jump / GPS Drift Filter) ───────────────────
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (_lastRawGpsPoint != null && _lastUpdateTimestamp > 0) {
+      final double dtSeconds = (nowMs - _lastUpdateTimestamp) / 1000.0;
+      if (dtSeconds > 1.0) { // Only check if at least 1s elapsed
+        final double rawGpsDist = RoadSnapService.distanceMeters(_lastRawGpsPoint!, LatLng(rawLat, rawLng));
+        final double calculatedSpeedMps = rawGpsDist / dtSeconds;
+        final double reportedSpeedMps = gpsSpeed / 3.6;
+
+        // Reject if calculated speed is > 45 m/s (162 km/h) AND > 3.5x reported speed
+        if (calculatedSpeedMps > 45.0 && calculatedSpeedMps > 3.5 * reportedSpeedMps) {
+          _updateIconIfChanged(element);
+          return;
         }
       }
     }
 
-    final newBearing = double.tryParse(element.course.toString()) ?? 0.0;
+    // ── Step 1: Kalman filter ─────────────────────────────────────────────
+    final filteredPos = _kalman.process(rawLat, rawLng);
 
-    // Just set the target - animator handles smooth movement
-    _carAnimator!.moveTo(newPos, newBearing);
+    // ── Step 2: Freeze when stationary ───────────────────────────────────
+    if (gpsSpeed < 3.0) {
+      _updateIconIfChanged(element);
+      return;
+    }
+
+    // ── Step 3: Minimum distance gate ─────────────────────────────────────
+    // Check if the vehicle has actually moved at least 6 meters on the road.
+    final refPos = _lastSnappedPos ?? filteredPos;
+    final rawDist = RoadSnapService.distanceMeters(refPos, filteredPos);
+    if (rawDist < 6.0) {
+      _updateIconIfChanged(element);
+      return;
+    }
+
+    // ── Step 3.5: Jump Teleport Gate ──────────────────────────────────────
+    // If the distance is > 1500 meters, it represents a network wake-up delay or GPS teleport.
+    // Teleport the car instantly to the destination to prevent it from flying through buildings.
+    if (rawDist > 1500.0) {
+      final snappedTeleport = await RoadSnapService.snapSingleLivePoint(filteredPos);
+      if (_isDisposed || myUpdateId != _currentUpdateId) return;
+
+      _carAnimator!.teleportTo(snappedTeleport, gpsBearing);
+      
+      // Clear trail history to prevent drawing a straight line cutting through buildings
+      _polylinePoints.clear();
+      _polylinePoints.add(snappedTeleport);
+      
+      _lastRawGpsPoint = filteredPos;
+      _lastSnappedPos = snappedTeleport;
+      
+      // Center camera immediately on teleport to avoid off-screen vehicle
+      if (_followVehicle && _mapController != null) {
+        _isCodeMovingCamera = true;
+        _mapController!.moveCamera(CameraUpdate.newLatLng(snappedTeleport));
+      }
+
+      _updateIconIfChanged(element);
+      return;
+    }
+
+    // ── Step 4: Get Snapped Road Path ─────────────────────────────────────
+    // Snaps start and end coordinates directly via OSRM route network.
+    // This avoids snapping to side streets by analyzing the route trajectory.
+    List<LatLng> animPath;
+    LatLng snappedPos;
+
+    if (rawDist > 800.0) {
+      // Big jump: do not snap/route over streets to avoid winding paths.
+      // Just interpolate a straight line.
+      animPath = [refPos, filteredPos];
+      snappedPos = filteredPos;
+    } else {
+      // Normal movement: get OSRM road route. OSRM automatically snaps start/end to road.
+      animPath = await RoadSnapService.getRoutePath(refPos, filteredPos);
+      if (_isDisposed || myUpdateId != _currentUpdateId) return;
+
+      if (animPath.length == 2 && animPath[0] == refPos && animPath[1] == filteredPos) {
+        // OSRM route service returned straight fallback.
+        // Snap the destination point to the nearest road so the vehicle doesn't go off-road!
+        final snappedGoal = await RoadSnapService.snapSingleLivePoint(filteredPos);
+        if (_isDisposed || myUpdateId != _currentUpdateId) return;
+        animPath = [refPos, snappedGoal];
+        snappedPos = snappedGoal;
+      } else if (animPath.isNotEmpty) {
+        // Detect massive detours (e.g. flyover vs ground road snapping level mismatches)
+        double pathLength = 0.0;
+        for (int i = 1; i < animPath.length; i++) {
+          pathLength += RoadSnapService.distanceMeters(animPath[i - 1], animPath[i]);
+        }
+
+        if (pathLength > 3.5 * rawDist && pathLength > 60.0) {
+          // Snap directly to the nearest road point instead of driving the detour route
+          final snappedGoal = await RoadSnapService.snapSingleLivePoint(filteredPos);
+          if (_isDisposed || myUpdateId != _currentUpdateId) return;
+          animPath = [refPos, snappedGoal];
+          snappedPos = snappedGoal;
+        } else {
+          snappedPos = animPath.last;
+        }
+      } else {
+        // Ultimate fallback: snap destination point
+        final snappedGoal = await RoadSnapService.snapSingleLivePoint(filteredPos);
+        if (_isDisposed || myUpdateId != _currentUpdateId) return;
+        animPath = [refPos, snappedGoal];
+        snappedPos = snappedGoal;
+      }
+    }
+
+    // Fetch address for updated coordinates
+    _fetchAddressForCoordinates(snappedPos.latitude, snappedPos.longitude);
+
+    // ── Step 5: Dynamic Expected Interval ──────────────────────────────────
+    int expectedIntervalMs = 8000;
+    if (_lastUpdateTimestamp != 0) {
+      expectedIntervalMs = nowMs - _lastUpdateTimestamp;
+    }
+    _lastUpdateTimestamp = nowMs;
+    expectedIntervalMs = expectedIntervalMs.clamp(3000, 15000);
+
+    // ── Step 6: Commit previous traveled path to history ──────────────────
+    if (_carAnimator != null) {
+      final traveled = _carAnimator!.getTraveledPath();
+      if (traveled.isNotEmpty) {
+        _polylinePoints.addAll(traveled.sublist(1));
+      }
+    }
+    if (_polylinePoints.length > _maxPolylinePoints) {
+      _polylinePoints.removeRange(0, _polylinePoints.length - _maxPolylinePoints);
+    }
+
+    // ── Step 7: Update state ───────────────────────────────────────────────
+    _lastRawGpsPoint = filteredPos;
+    _lastSnappedPos = snappedPos;
+
+    // ── Step 8: Smooth animation along the road path ───────────────────────
+    _carAnimator!.moveToPath(
+      animPath,
+      gpsBearing,
+      expectedIntervalMs: expectedIntervalMs,
+    );
+    _updateIconIfChanged(element);
   }
+
+  int _lastMarkerUpdateMs = 0;
 
   void _onCarPositionUpdate(LatLng position, double bearing) {
     if (_isDisposed) return;
 
-    // Update marker position on map (runs at 60fps ticker speed)
-    _updateMapMarker();
-
-    // Dynamically update polyline trail in real-time
-    _updateMapPolyline();
+    // ── Marker & Polyline: throttle to 30fps ──────────────────────────────
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastMarkerUpdateMs >= 33) {
+      _lastMarkerUpdateMs = now;
+      _updateMapMarker();
+      _updateMapPolyline();
+    }
 
     // Smoothly follow the vehicle in real-time on every ticker update
     if (_followVehicle &&
         _isMapCreated &&
         _mapController != null &&
         !_userInteracting) {
+      _isCodeMovingCamera = true;
       _mapController!.moveCamera(
         CameraUpdate.newLatLng(position),
       );
@@ -808,8 +1085,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
   void _updateMapMarker() {
     if (_isDisposed || !_isMarkerReady || _carAnimator == null) return;
 
-    // Create marker
-    final marker = Marker(
+    final markers = <Marker>{};
+    markers.add(Marker(
       markerId: const MarkerId("vehicle"),
       position: _carAnimator!.currentPosition,
       rotation: _carAnimator!.currentBearing,
@@ -817,34 +1094,102 @@ class _TrackDeviceState extends State<TrackDevicePage>
       anchor: const Offset(0.5, 0.5),
       flat: true,
       zIndex: 2,
-    );
+    ));
 
-    // Update value notifier instead of rebuilding polyline
-    _markersNotifier.value = {marker};
+    if (_showingUserDistance && _userLocationForDistance != null) {
+      markers.add(Marker(
+        markerId: const MarkerId("user_location"),
+        position: _userLocationForDistance!,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        anchor: const Offset(0.5, 0.5),
+        zIndex: 3,
+      ));
+    }
+
+    _markersNotifier.value = markers;
   }
 
   void _updateMapPolyline() {
-    if (_isDisposed || _carAnimator == null) return;
+    if (_isDisposed || _carAnimator == null || _polylinePoints.isEmpty) return;
 
     // Draw the line up to the current animated position of the vehicle
     final points = List<LatLng>.from(_polylinePoints);
-    points.add(_carAnimator!.currentPosition);
+    if (_carAnimator != null) {
+      final traveled = _carAnimator!.getTraveledPath();
+      if (traveled.isNotEmpty) {
+        points.addAll(traveled.sublist(1));
+      }
+    }
 
     final trailColor = _getStatusColor();
+    final polylines = <Polyline>{};
 
-    // Create polyline
-    final polyline = Polyline(
+    polylines.add(Polyline(
       polylineId: const PolylineId("trail"),
       points: points,
       color: trailColor.withValues(alpha: 0.8),
-      width: 4,
+      width: 3, // Sleeker line width for a more premium look
       geodesic: true,
       startCap: Cap.roundCap,
       endCap: Cap.roundCap,
-    );
+    ));
 
-    // Update value notifier
-    _polylinesNotifier.value = {polyline};
+    if (_showingUserDistance && _distanceRoutePoints.isNotEmpty) {
+      polylines.add(Polyline(
+        polylineId: const PolylineId("user_distance_route"),
+        points: _distanceRoutePoints,
+        color: const Color(0xFF10B981), // Green color for distance route
+        width: 4,
+        geodesic: true,
+        jointType: JointType.round,
+        patterns: _distanceRoutePoints.length == 2
+            ? [PatternItem.dash(15), PatternItem.gap(10)]
+            : [],
+      ));
+    }
+
+    _polylinesNotifier.value = polylines;
+  }
+
+  void _updateIconIfChanged(DeviceItem element) async {
+    if (element.icon?.path == null) return;
+    final statusColor = Util.getDeviceStatusColorStr(element);
+    final iconType = element.icon?.type ?? element.iconType;
+
+    // Check if the icon appearance actually changed.
+    // This stops the marker from flashing/blinking on the map during every GPS update.
+    if (_markerIcon != null &&
+        _lastIconPath == element.icon!.path &&
+        _lastStatusColor == statusColor &&
+        _lastIconType == iconType &&
+        _lastDeviceName == element.name &&
+        _lastDeviceId == element.id) {
+      return;
+    }
+
+    _lastIconPath = element.icon!.path;
+    _lastStatusColor = statusColor;
+    _lastIconType = iconType;
+    _lastDeviceName = element.name;
+    _lastDeviceId = element.id;
+
+    try {
+      final icon = await Util.getMarkerIcon(
+        element.icon!.path!,
+        size: _currentMarkerSize,
+        statusColor: statusColor,
+        iconType: iconType,
+        deviceName: element.name,
+        deviceId: element.id,
+      );
+      if (!_isDisposed && icon != _markerIcon) {
+        _markerIcon = icon;
+        _isMarkerReady = true;
+        _updateMapMarker();
+      }
+    } catch (e) {
+      debugPrint("Error updating marker icon: $e");
+    }
   }
 
   double _calculateDistance(LatLng a, LatLng b) {
@@ -861,97 +1206,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
   // ==================== STATUS DETECTION ====================
   DeviceStatus _getDeviceStatus(DeviceItem? device) {
     if (device == null) return DeviceStatus.offline;
-
-    final isOnline = _isDeviceOnline(device);
-    if (!isOnline) return DeviceStatus.offline;
-
-    final speed = double.tryParse(device.speed?.toString() ?? '') ?? 0;
-    final isEngineOn = _isEngineOn(device);
-
-    if (speed > 0) return DeviceStatus.running;
-    return isEngineOn ? DeviceStatus.idle : DeviceStatus.stop;
-  }
-
-  bool _isDeviceOnline(DeviceItem device) {
-    final online = device.online?.toLowerCase().trim() ?? '';
-    if (online.contains('offline')) return false;
-    if (online.contains('online')) return true;
-
-    final iconColor = device.iconColor?.toLowerCase() ?? '';
-    if (iconColor == 'green' || iconColor == 'yellow') return true;
-
-    final speed = double.tryParse(device.speed?.toString() ?? '') ?? 0;
-    return speed > 0;
-  }
-
-  bool _isEngineOn(DeviceItem device) {
-    // 1. If speed > 0, engine must be on (telematics override for wiring/reporting issues)
-    final speed = double.tryParse(device.speed?.toString() ?? '') ?? 0;
-    if (speed > 0) {
-      return true;
+    final colorStr = Util.getDeviceStatusColorStr(device);
+    switch (colorStr) {
+      case 'green': return DeviceStatus.running;
+      case 'yellow': return DeviceStatus.idle;
+      case 'red': return DeviceStatus.stop;
+      default: return DeviceStatus.offline;
     }
-
-    // 2. Check engineStatus field directly
-    if (device.engineStatus != null) {
-      final status = device.engineStatus;
-      if (status is bool) return status;
-      if (status is int) return status == 1;
-      if (status is String) {
-        final s = status.toLowerCase().trim();
-        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s)) {
-          return true;
-        }
-        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
-            .contains(s)) {
-          return false;
-        }
-      }
-    }
-
-    // 3. Check sensors for ignition/ACC status
-    if (device.sensors != null && device.sensors!.isNotEmpty) {
-      for (var sensor in device.sensors!) {
-        try {
-          final type = (sensor['type'] ?? '').toString().toLowerCase();
-          final name = (sensor['name'] ?? '').toString().toLowerCase();
-          final value = sensor['value'];
-
-          if (type == 'acc' ||
-              type == 'ignition' ||
-              type == 'engine' ||
-              name.contains('ignition') ||
-              name.contains('acc') ||
-              name.contains('engine')) {
-            if (value == null) continue;
-
-            if (value is bool) return value;
-            if (value is int) return value == 1;
-            if (value is String) {
-              final v = value.toLowerCase().trim();
-              if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
-                  .contains(v)) {
-                return true;
-              }
-              if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
-                  .contains(v)) {
-                return false;
-              }
-            }
-          }
-        } catch (e) {
-          continue;
-        }
-      }
-    }
-
-    // 4. Fallback: Check iconColor as indicator
-    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
-    if (iconColor == 'yellow' || iconColor == 'green') {
-      return true;
-    }
-
-    // Default: engine is off
-    return false;
   }
 
   Color _getStatusColor() {
@@ -961,9 +1222,9 @@ class _TrackDeviceState extends State<TrackDevicePage>
       case DeviceStatus.idle:
         return _warningColor;
       case DeviceStatus.stop:
-        return _neutralColor;
-      case DeviceStatus.offline:
         return _dangerColor;
+      case DeviceStatus.offline:
+        return _neutralColor;
     }
   }
 
@@ -1056,19 +1317,25 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   // Camera auto centering timer removed as it is now centered in real-time on tick updates
 
-// Replace the _buildMap method
-  Widget _buildMap() {
-    return Listener(
-      onPointerDown: (_) {
-        _userInteracting = true;
-      },
-      child: ValueListenableBuilder<Set<Marker>>(
-        valueListenable: _markersNotifier,
-        builder: (context, markers, _) {
-          return ValueListenableBuilder<Set<Polyline>>(
-            valueListenable: _polylinesNotifier,
-            builder: (context, polylines, _) {
-              return GoogleMap(
+// Replace the _buildMap method  Widget _buildMap() {
+    return ValueListenableBuilder<Set<Marker>>(
+      valueListenable: _markersNotifier,
+      builder: (context, markers, _) {
+        return ValueListenableBuilder<Set<Polyline>>(
+          valueListenable: _polylinesNotifier,
+          builder: (context, polylines, _) {
+            return Listener(
+              onPointerDown: (_) {
+                _userInteracting = true;
+                _followVehicle = false;
+              },
+              onPointerUp: (_) {
+                _userInteracting = false;
+              },
+              onPointerCancel: (_) {
+                _userInteracting = false;
+              },
+              child: GoogleMap(
                 mapType: _currentMapType,
                 trafficEnabled: _trafficEnabled,
                 initialCameraPosition: CameraPosition(
@@ -1077,10 +1344,11 @@ class _TrackDeviceState extends State<TrackDevicePage>
                 ),
                 onCameraMove: (pos) {
                   _currentZoom = pos.zoom;
+                  if (_isCodeMovingCamera) {
+                    _isCodeMovingCamera = false; // Code-driven movement, ignore
+                  }
                 },
                 onCameraIdle: () {
-                  _userInteracting = false;
-
                   // Zoom-based marker sizing update
                   final int newSize = Util.getMarkerSizeForZoom(_currentZoom);
                   if (newSize != _currentMarkerSize) {
@@ -1124,12 +1392,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
                 zoomControlsEnabled: false,
                 buildingsEnabled: false,
                 indoorViewEnabled: false,
-              );
+              ),
+            );
             },
           );
         },
-      ),
-    );
+      );
   }
 
   // UPDATED: Map with camera move detection
@@ -1175,7 +1443,13 @@ class _TrackDeviceState extends State<TrackDevicePage>
           ),
           const SizedBox(height: 6),
           _MapButton(
-            icon: Icons.person,
+            icon: Icons.people_alt_outlined,
+            isWhiteVariant: true,
+            onTap: _showDistanceToVehicle,
+          ),
+          const SizedBox(height: 6),
+          _MapButton(
+            icon: Icons.headset_mic,
             isWhiteVariant: true,
             onTap: _callDevice,
           ),
@@ -1209,6 +1483,208 @@ class _TrackDeviceState extends State<TrackDevicePage>
       await launchUrl(Uri(scheme: 'tel', path: sim));
     } else {
       Get.snackbar('Error', 'Phone number not found',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red.withValues(alpha: 0.9),
+          colorText: Colors.white);
+    }
+  }
+
+  // ==================== DISTANCE TO VEHICLE ====================
+  Future<void> _showDistanceToVehicle() async {
+    if (_carAnimator == null) return;
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          Get.snackbar('Permission Denied', 'Location permission is required to calculate distance.',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.red.withValues(alpha: 0.9),
+              colorText: Colors.white);
+          return;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        Get.snackbar(
+            'Permission Denied', 'Enable location permission in settings.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.red.withValues(alpha: 0.9),
+            colorText: Colors.white);
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      final userLatLng = LatLng(position.latitude, position.longitude);
+      final vehicleLatLng = _carAnimator!.currentPosition;
+
+      final double distanceMeters = RoadSnapService.distanceMeters(userLatLng, vehicleLatLng);
+      String distanceStr;
+      if (distanceMeters >= 1000) {
+        distanceStr = '${(distanceMeters / 1000).toStringAsFixed(2)} km';
+      } else {
+        distanceStr = '${distanceMeters.toStringAsFixed(0)} meters';
+      }
+
+      final deviceName = device?.name ?? 'Vehicle';
+
+      // 1. Fetch route points using OSRM if distance is reasonably small (< 100 km)
+      List<LatLng> routePoints = [];
+      if (distanceMeters < 100000) {
+        try {
+          routePoints = await RoadSnapService.getRoutePath(userLatLng, vehicleLatLng);
+        } catch (e) {
+          debugPrint("OSRM routing error: $e");
+        }
+      }
+
+      if (routePoints.isEmpty) {
+        // Fallback: draw straight dashed line
+        routePoints = [userLatLng, vehicleLatLng];
+      }
+
+      // Update state to show user location and route polyline
+      setState(() {
+        _showingUserDistance = true;
+        _userLocationForDistance = userLatLng;
+        _distanceRoutePoints = routePoints;
+        _followVehicle = false; // Disable auto-centering on vehicle so we can fit bounds
+      });
+
+      _updateMapPolyline();
+      _updateMapMarker();
+
+      // Zoom out to show both points on the map
+      double minLat = m.min(userLatLng.latitude, vehicleLatLng.latitude);
+      double maxLat = m.max(userLatLng.latitude, vehicleLatLng.latitude);
+      double minLng = m.min(userLatLng.longitude, vehicleLatLng.longitude);
+      double maxLng = m.max(userLatLng.longitude, vehicleLatLng.longitude);
+
+      final bounds = LatLngBounds(
+        southwest: LatLng(minLat, minLng),
+        northeast: LatLng(maxLat, maxLng),
+      );
+
+      _isCodeMovingCamera = true;
+      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+
+      // Display the metrics in a premium bottom sheet modal
+      Get.bottomSheet(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 10,
+                spreadRadius: 2,
+              )
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Grab handle
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Row(
+                children: [
+                  const Icon(Icons.people_alt, color: CustomColor.primary, size: 24),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Distance to $deviceName',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Separation Distance:',
+                    style: TextStyle(fontSize: 15, color: Colors.grey),
+                  ),
+                  Text(
+                    distanceStr,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: CustomColor.primary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: Colors.grey[300]!),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        Get.back(); // Closes bottom sheet
+                      },
+                      child: const Text('Close Route', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _dangerColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        _navigate();
+                      },
+                      icon: const Icon(Icons.navigation_rounded, size: 18),
+                      label: const Text('Start Navigate', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        isDismissible: true,
+        enableDrag: true,
+      ).then((_) {
+        // When the bottom sheet is dismissed, clean up distance variables and resume tracking
+        setState(() {
+          _showingUserDistance = false;
+          _userLocationForDistance = null;
+          _distanceRoutePoints = [];
+          _followVehicle = true; // Resume centering on vehicle
+        });
+        _updateMapPolyline();
+        _updateMapMarker();
+        _centerOnVehicle();
+      });
+    } catch (e) {
+      Get.snackbar('Error', 'Could not get distance: $e',
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.red.withValues(alpha: 0.9),
           colorText: Colors.white);
@@ -1806,7 +2282,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   // ==================== REFERENCE DESIGN BOTTOM SHEET ====================
   Widget _buildBottomSheet() {
     return DraggableScrollableSheet(
-      initialChildSize: 0.32,
+      initialChildSize: 0.38,
       minChildSize: 0.08,
       maxChildSize: 0.55,
       builder: (context, scrollController) {
@@ -1833,7 +2309,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
               _buildInfoCardsRow(),
               const Divider(height: 1, color: Color(0xFFE5E7EB)),
               _buildActionButtons(),
-              const SizedBox(height: 8),
+              SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
             ],
           ),
         );
@@ -1896,17 +2372,18 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   // ── 4-column stat row ─────────────────────────────────────
   Widget _buildStatColumns() {
+    final status = _getDeviceStatus(device);
     final statusText = _getStatusText();
     final statusColor = _getStatusColor();
     final statColor = statusColor;
 
-    final engineVal = device != null ? getEngineStatus() : '--';
+    final isEngineOn = device != null ? getEngineStatus() == 'On' : false;
     String durationDisplay = '-';
     if (device != null) {
-      final status = _getDeviceStatus(device);
+      final statusVal = _getDeviceStatus(device);
       final sd = device!.stopDuration ?? '';
       
-      if (status == DeviceStatus.running) {
+      if (statusVal == DeviceStatus.running) {
         final movedAtStr = device!.deviceData?.traccar?.movedAt;
         if (movedAtStr != null && movedAtStr.isNotEmpty) {
           try {
@@ -1923,7 +2400,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
         } else {
           durationDisplay = '-';
         }
-      } else if ((status == DeviceStatus.idle || status == DeviceStatus.stop || status == DeviceStatus.offline) &&
+      } else if ((statusVal == DeviceStatus.idle || statusVal == DeviceStatus.stop || statusVal == DeviceStatus.offline) &&
           device!.movedTimestamp != null &&
           device!.movedTimestamp! > 0) {
         final int movedTime = device!.movedTimestamp!;
@@ -1946,7 +2423,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
           durationDisplay = sd.isNotEmpty ? Util.formatDurationString(sd) : Util.formatDuration(diff);
         }
       } else {
-        durationDisplay = (status != DeviceStatus.running && sd.isNotEmpty) ? Util.formatDurationString(sd) : '-';
+        durationDisplay = (statusVal != DeviceStatus.running && sd.isNotEmpty) ? Util.formatDurationString(sd) : '-';
       }
     }
     final totalKmDisplay =
@@ -1957,23 +2434,200 @@ class _TrackDeviceState extends State<TrackDevicePage>
             : '--';
     final batVal = getBatteryVoltage();
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Color(0xFFE5E7EB)),
-          bottom: BorderSide(color: Color(0xFFE5E7EB)),
+    String expiryStr = '--';
+    try {
+      final expiry = device?.deviceData?.expirationDate?.toString() ?? '';
+      if (expiry.isNotEmpty) {
+        final date = DateTime.tryParse(expiry);
+        if (date != null) {
+          expiryStr =
+              '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
+        }
+      }
+    } catch (_) {}
+
+    // Status styling helper
+    Color statusBgColor = const Color(0xFFE5E7EB);
+    if (status == DeviceStatus.running) {
+      statusBgColor = const Color(0xFFBBF7D0); // vibrant light green
+    } else if (status == DeviceStatus.idle) {
+      statusBgColor = const Color(0xFFFEF08A); // vibrant light yellow
+    } else if (status == DeviceStatus.stop) {
+      statusBgColor = const Color(0xFFFECACA); // vibrant light red
+    }
+
+    final engineBgColor = isEngineOn ? const Color(0xFFBBF7D0) : const Color(0xFFE5E7EB);
+    final batteryBgColor = const Color(0xFFBFDBFE); // vibrant light blue
+    const expiryBgColor = Color(0xFFE5E7EB); // clean light grey
+
+    Color getDarkerContrastColor(Color color) {
+      if (color == const Color(0xFF22C55E) || color == Colors.green || color == const Color(0xFF10B981) || color == _successColor) {
+        return const Color(0xFF15803D); // dark green
+      } else if (color == const Color(0xFFFFD600) || color == Colors.amber || color == const Color(0xFFEAB308) || color == const Color(0xFFFEF08A) || color == _warningColor) {
+        return const Color(0xFFA16207); // dark yellow/gold
+      } else if (color == const Color(0xFFEF4444) || color == Colors.red || color == const Color(0xFFDC2626) || color == _dangerColor) {
+        return const Color(0xFFB91C1C); // dark red
+      }
+      return color;
+    }
+
+    Widget buildCardItem({
+      required String label,
+      required Widget content,
+      required Color bgColor,
+    }) {
+      return Expanded(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: bgColor.withOpacity(1.0),
+              width: 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.28), // darker shadow
+                blurRadius: 3.5, // tight blur
+                spreadRadius: 0.5,
+                offset: const Offset(0, 2.5),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFF4B5563), // gray-600
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: content,
+              ),
+            ],
+          ),
         ),
-      ),
+      );
+    }
+
+    // Determine battery icon
+    IconData batteryIcon = Icons.battery_std;
+    try {
+      final numericBat = int.tryParse(batVal.replaceAll(RegExp(r'[^0-9]'), ''));
+      if (numericBat != null) {
+        if (numericBat > 85) {
+          batteryIcon = Icons.battery_full;
+        } else if (numericBat > 50) {
+          batteryIcon = Icons.battery_4_bar;
+        } else if (numericBat > 20) {
+          batteryIcon = Icons.battery_2_bar;
+        } else {
+          batteryIcon = Icons.battery_0_bar;
+        }
+      }
+    } catch (_) {}
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildStatCol(statusText, durationDisplay, statColor),
-          _buildStatSep(),
-          _buildStatCol('Acc', engineVal, const Color(0xFF0F172A)),
-          _buildStatSep(),
-          _buildStatCol('Today Km', totalKmDisplay, const Color(0xFF0F172A)),
-          _buildStatSep(),
-          _buildStatCol('Battery', batVal, const Color(0xFF0F172A)),
+          // Status Card
+          buildCardItem(
+            label: statusText,
+            bgColor: statusBgColor,
+            content: Text(
+              status == DeviceStatus.running
+                  ? '${double.tryParse(device?.speed?.toString() ?? '0')?.toInt() ?? 0} km/h'
+                  : durationDisplay,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: getDarkerContrastColor(statColor),
+              ),
+            ),
+          ),
+
+          // Engine Card
+          buildCardItem(
+            label: 'Engine',
+            bgColor: engineBgColor,
+            content: Text(
+              isEngineOn ? 'On' : 'Off',
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: isEngineOn ? const Color(0xFF15803D) : const Color(0xFF1F2937),
+              ),
+            ),
+          ),
+
+          // Battery Card
+          buildCardItem(
+            label: 'Battery',
+            bgColor: batteryBgColor,
+            content: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  batteryIcon,
+                  size: 13,
+                  color: const Color(0xFF1E3A8A), // dark blue contrast
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  batVal,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E3A8A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Expiry Card
+          buildCardItem(
+            label: 'Expired On',
+            bgColor: expiryBgColor,
+            content: Text(
+              expiryStr,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              softWrap: false,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1F2937),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -2087,14 +2741,24 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   Widget _buildInfoCard(
       IconData icon, String label, String value, Color iconColor) {
+    final bgCol = iconColor.withValues(alpha: 0.15);
+    final borderCol = iconColor.withValues(alpha: 0.35);
     return Container(
       constraints: const BoxConstraints(minWidth: 110),
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC), // neutral slate light bg
+        color: bgCol,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: const Color(0xFFE2E8F0), width: 1.2), // clean slate border
+        border: Border.all(color: borderCol, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28), // darker shadow
+            blurRadius: 3.5, // tight blur, won't spread too much
+            spreadRadius: 0.5,
+            offset: const Offset(0, 2.5),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2114,7 +2778,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
                 style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF64748B), // professional slate grey label
+                  color: Color(0xFF4B5563),
                 ),
               ),
               const SizedBox(height: 2),
@@ -2122,8 +2786,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
                 value,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF0F172A),
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF111827),
                 ),
               ),
             ],

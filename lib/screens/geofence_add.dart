@@ -148,6 +148,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                 ),
                 icon: markerIcon,
                 rotation: double.tryParse(device.course.toString()) ?? 0,
+                anchor: const Offset(0.5, 0.5),
+                flat: true,
                 onTap: () => _toggleDeviceSelection(device),
               ));
             } catch (e) {

@@ -9,7 +9,7 @@ import 'package:gpspro/storage/user_repository.dart';
 import 'package:http/http.dart' as http;
 
 class PaymentService {
-  static const String baseUrl = "http://167.86.78.162:8000/api";
+  static const String baseUrl = "https://billing.orbitgps.com.bd/api";
   static const Duration timeoutDuration = Duration(seconds: 30);
   static String? _token;
   static bool _isLoggingIn = false;

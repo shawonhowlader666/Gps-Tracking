@@ -786,7 +786,7 @@ class _DevicePageState extends State<DevicePage>
       case DeviceStatus.idle:
         return _yellowColor;
       case DeviceStatus.stop:
-        return _greyColor;
+        return _redColor;
       case DeviceStatus.offline:
         return _redColor;
     }
@@ -2693,7 +2693,7 @@ class _DevicePageState extends State<DevicePage>
 
     if (t == 'fuel') return '$value L';
     if (t == 'temperature') return '$value°C';
-    if (t == 'battery') return '$value%';
+    if (t == 'battery') return value.toString();
     if (t == 'speed') return '$value km/h';
     if (t == 'odometer') return '$value km';
 

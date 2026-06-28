@@ -287,8 +287,9 @@ class _MapPageState extends State<MapPage> with AutomaticKeepAliveClientMixin {
         for (var subElement in element.items!) {
           if (subElement.deviceData!.active.toString() == "1") {
             final String path = subElement.icon!.path!;
+            final String statusColor = Util.getDeviceStatusColorStr(subElement);
             final cachedIcon = Util.getCachedMarkerIcon(path, _currentMarkerSize,
-                statusColor: subElement.iconColor,
+                statusColor: statusColor,
                 iconType: subElement.icon?.type ?? subElement.iconType,
                 deviceName: subElement.name,
                 deviceId: subElement.id);
@@ -362,7 +363,7 @@ class _MapPageState extends State<MapPage> with AutomaticKeepAliveClientMixin {
             } else {
               final f = Util.getMarkerIcon(path,
                       size: _currentMarkerSize,
-                      statusColor: subElement.iconColor,
+                      statusColor: statusColor,
                       iconType: subElement.icon?.type ?? subElement.iconType,
                       deviceName: subElement.name,
                       deviceId: subElement.id)
@@ -451,8 +452,14 @@ class _MapPageState extends State<MapPage> with AutomaticKeepAliveClientMixin {
 
           if (element.deviceData!.active.toString() == "1") {
             final String path = element.icon!.path!;
+            final String? localAssetPath = Util.getLocalMappedAsset(
+                path,
+                iconType: element.icon?.type ?? element.iconType,
+                deviceName: element.name,
+                deviceId: element.id);
+            final String statusColor = Util.getDeviceStatusColorStr(element);
             final cachedIcon = Util.getCachedMarkerIcon(path, _currentMarkerSize,
-                statusColor: element.iconColor,
+                statusColor: statusColor,
                 iconType: element.icon?.type ?? element.iconType,
                 deviceName: element.name,
                 deviceId: element.id);
@@ -461,7 +468,7 @@ class _MapPageState extends State<MapPage> with AutomaticKeepAliveClientMixin {
 
             final double lat = double.parse(element.lat.toString());
             final double lng = double.parse(element.lng.toString());
-            final String currentState = "$lat,$lng,$course,${element.name},${element.iconColor},$_currentMarkerSize";
+            final String currentState = "$lat,$lng,$course,${element.name},$statusColor,$_currentMarkerSize,$path,$localAssetPath";
             if (_lastDeviceStates[element.id] == currentState) {
               continue;
             }
@@ -531,13 +538,28 @@ class _MapPageState extends State<MapPage> with AutomaticKeepAliveClientMixin {
                   position: LatLng(double.parse(element.lat.toString()),
                       double.parse(element.lng.toString())),
                 ));
+              }
 
-                if (_selectedDeviceId == element.id) {
-                  device = element;
+              if (_selectedDeviceId == element.id) {
+                device = element;
+                polylineCoordinates.clear();
+                for (var tail in element.tail!) {
                   polylineCoordinates.add(LatLng(
-                      double.parse(element.lat.toString()),
-                      double.parse(element.lng.toString())));
+                      double.parse(tail.lat.toString()),
+                      double.parse(tail.lng.toString())));
                 }
+                polylineCoordinates.add(LatLng(
+                    double.parse(element.lat.toString()),
+                    double.parse(element.lng.toString())));
+                
+                // Re-draw the polyline
+                PolylineId id = const PolylineId("poly");
+                Polyline polyline = Polyline(
+                    width: 3,
+                    polylineId: id,
+                    color: Colors.blue,
+                    points: polylineCoordinates);
+                polylines[id] = polyline;
               }
             }
 
@@ -547,7 +569,7 @@ class _MapPageState extends State<MapPage> with AutomaticKeepAliveClientMixin {
             } else {
               final f = Util.getMarkerIcon(path,
                       size: _currentMarkerSize,
-                      statusColor: element.iconColor,
+                      statusColor: statusColor,
                       iconType: element.icon?.type ?? element.iconType,
                       deviceName: element.name,
                       deviceId: element.id)

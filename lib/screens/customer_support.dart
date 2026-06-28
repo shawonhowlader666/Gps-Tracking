@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:gpspro/constants/app_constants.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:gpspro/widgets/scale_button.dart';
+import 'package:get/get.dart';
+import 'package:gpspro/storage/user_repository.dart';
+import 'package:gpspro/screens/data_controller/data_controller.dart';
 
 class CustomerSupportScreen extends StatefulWidget {
   const CustomerSupportScreen({super.key});
@@ -22,12 +25,67 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> {
     }
   }
 
+  /// Extracts the clean phone/email part from a potentially corrupted
+  /// stored identifier (e.g. "01805469656) - Bike (IMEI: N/A, SIM: ...)" ).
+  String _sanitizeIdentifier(String raw) {
+    if (raw.isEmpty) return raw;
+    final parenIdx = raw.indexOf(')');
+    if (parenIdx != -1) {
+      final c = raw.substring(0, parenIdx).trim();
+      if (c.isNotEmpty) return c;
+    }
+    final dashIdx = raw.indexOf(' - ');
+    if (dashIdx != -1) {
+      final c = raw.substring(0, dashIdx).trim();
+      if (c.isNotEmpty) return c;
+    }
+    if (raw.contains('@')) return raw.split('@').first.trim();
+    return raw.trim();
+  }
+
+  String _getSupportMessage() {
+    final String raw = UserRepository.getEmail() ?? '';
+    final String cleanIdentifier =
+        raw.isNotEmpty ? _sanitizeIdentifier(raw) : 'Unknown Account';
+
+    final StringBuffer buffer = StringBuffer();
+    buffer.writeln("Hello ${AppConstants.appName} Support,");
+    buffer.writeln("");
+    buffer.writeln("I need assistance with my account:");
+    buffer.writeln("User Account: $cleanIdentifier");
+
+    // Add device info if available
+    try {
+      if (Get.isRegistered<DataController>()) {
+        final controller = Get.find<DataController>();
+        if (controller.onlyDevices.isNotEmpty) {
+          buffer.writeln("");
+          buffer.writeln("My Registered Devices:");
+          for (var device in controller.onlyDevices) {
+            final name = device.name ?? 'Unknown Device';
+            final imei = device.imei ?? 'N/A';
+            final simNo = device.deviceData?.simNumber ?? 'N/A';
+            buffer.writeln("- $name (IMEI: $imei, SIM: $simNo)");
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching device info for helpline: $e");
+    }
+
+    return buffer.toString().trim();
+  }
+
   // Trigger email draft
   Future<void> _sendEmail(String email) async {
+    final String message = _getSupportMessage();
     final Uri url = Uri(
       scheme: 'mailto',
       path: email,
-      queryParameters: {'subject': 'Support Ticket: ${AppConstants.appName}'},
+      queryParameters: {
+        'subject': 'Support Ticket: ${AppConstants.appName}',
+        'body': message,
+      },
     );
     try {
       await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -39,7 +97,8 @@ class _CustomerSupportScreenState extends State<CustomerSupportScreen> {
   // Trigger WhatsApp message
   Future<void> _openWhatsApp(String phone) async {
     final cleanPhone = phone.replaceAll(RegExp(r'[^\d]'), '');
-    final Uri url = Uri.parse("https://wa.me/$cleanPhone");
+    final String message = _getSupportMessage();
+    final Uri url = Uri.parse("https://wa.me/$cleanPhone?text=${Uri.encodeComponent(message)}");
     try {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     } catch (e) {
