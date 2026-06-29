@@ -21,8 +21,8 @@ class WhitelabelAppController extends Controller
     public function index()
     {
         try {
-            // Only synchronize local registry with Firestore once every 5 minutes to avoid slow database/network overhead
-            \Cache::remember('firestore_db_sync_lock', 300, function() {
+            // Only synchronize local registry with Firestore once every 5 seconds to avoid slow database/network overhead
+            \Cache::remember('firestore_db_sync_lock', 5, function() {
                 $this->firebaseService->syncLocalDatabase();
                 return true;
             });

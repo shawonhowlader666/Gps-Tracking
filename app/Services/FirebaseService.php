@@ -59,7 +59,7 @@ class FirebaseService
         // If the app has custom credentials, fetch and cache individually
         if ($app->firebase_credential_path) {
             $cacheKey = 'app_config_custom_' . $app->package_name;
-            return \Cache::remember($cacheKey, 86400, function() use ($app) {
+            return \Cache::remember($cacheKey, 5, function() use ($app) {
                 try {
                     $db = $this->getFirestore($app);
                     $docRef = $db->collection('configs')->document($app->package_name);
@@ -230,7 +230,7 @@ class FirebaseService
      */
     public function getAllConfigs(): array
     {
-        return \Cache::remember('firestore_all_configs', 86400, function() {
+        return \Cache::remember('firestore_all_configs', 5, function() {
             try {
                 $db = $this->getFirestore();
                 $documents = $db->collection('configs')->documents();
@@ -253,7 +253,7 @@ class FirebaseService
      */
     public function getSpytrackServers(): array
     {
-        return \Cache::remember('firestore_spytrack_servers', 86400, function() {
+        return \Cache::remember('firestore_spytrack_servers', 5, function() {
             try {
                 $db = $this->getFirestore();
                 $docRef = $db->collection('configs')->document('urls');
