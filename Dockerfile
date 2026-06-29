@@ -5,11 +5,10 @@ RUN apt-get update && apt-get install -y \
     libzip-dev libicu-dev zip unzip nodejs npm \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip intl opcache
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip intl
 
-# Required by google/cloud-firestore
-RUN apt-get install -y php-grpc || \
-    pecl install grpc-1.38.0 && docker-php-ext-enable grpc
+# Install protobuf only (no grpc compile needed for kreait/firebase-php)
+RUN pecl install protobuf && docker-php-ext-enable protobuf
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
