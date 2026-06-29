@@ -260,6 +260,9 @@ class FirebaseService
                 $snapshot = $docRef->snapshot();
                 if ($snapshot->exists()) {
                     $data = $snapshot->data();
+                    if (isset($data['spytrack']['all_urls']) && is_array($data['spytrack']['all_urls'])) {
+                        return $data['spytrack']['all_urls'];
+                    }
                     if (isset($data['spytrack']['url']) && is_array($data['spytrack']['url'])) {
                         return $data['spytrack']['url'];
                     }
@@ -306,8 +309,30 @@ class FirebaseService
                 }
             }
 
+            $activeServers = [];
+            $allServers = [];
+            foreach ($servers as $srv) {
+                $isActive = !isset($srv['active']) || ($srv['active'] != '0' && $srv['active'] !== false);
+                $serverItem = [
+                    'name' => $srv['name'] ?? '',
+                    'url' => $srv['url'] ?? '',
+                    'type' => $srv['type'] ?? 'free',
+                    'showBannerAds' => !empty($srv['showBannerAds']),
+                    'message' => $srv['message'] ?? '',
+                    'active' => $isActive,
+                ];
+                $allServers[] = $serverItem;
+                
+                if ($isActive) {
+                    $clientItem = $serverItem;
+                    unset($clientItem['active']);
+                    $activeServers[] = $clientItem;
+                }
+            }
+
             $spytrackData = [
-                'url' => $servers,
+                'url' => $activeServers,
+                'all_urls' => $allServers,
                 'ads' => $oldAds,
                 'adsfrequency' => $oldAdsFreq,
                 'whatsapp' => $oldWhatsApp,

@@ -39,6 +39,7 @@ class AppConfigController extends Controller
             'type' => $data['type'],
             'showBannerAds' => $request->has('showBannerAds') ? (bool)$request->boolean('showBannerAds') : true,
             'message' => $data['message'] ?: '',
+            'active' => true,
         ];
 
         // Append to the end of the array (bottom in Firebase)
@@ -68,12 +69,15 @@ class AppConfigController extends Controller
             return redirect()->route('apps.index')->with('error', 'Server node index not found in Firebase.');
         }
 
+        $isActive = isset($servers[$index]['active']) ? (bool)$servers[$index]['active'] : true;
+
         $servers[$index] = [
             'name' => $data['name'] ?: 'Unnamed Node',
             'url' => $data['url'],
             'type' => $data['type'],
             'showBannerAds' => $request->has('showBannerAds') ? (bool)$request->boolean('showBannerAds') : true,
             'message' => $data['message'] ?: '',
+            'active' => $isActive,
         ];
 
         try {
@@ -99,6 +103,26 @@ class AppConfigController extends Controller
             return redirect()->route('apps.index')->with('success', 'Server gateway node successfully deleted from Firebase.');
         } catch (\Exception $e) {
             return redirect()->route('apps.index')->with('error', 'Failed to delete server in Firebase: ' . $e->getMessage());
+        }
+    }
+
+    public function toggle($index)
+    {
+        $servers = $this->firebaseService->getSpytrackServers();
+
+        if (!isset($servers[$index])) {
+            return redirect()->route('apps.index')->with('error', 'Server node index not found in Firebase.');
+        }
+
+        $current = isset($servers[$index]['active']) ? (bool)$servers[$index]['active'] : true;
+        $servers[$index]['active'] = !$current;
+
+        try {
+            $this->firebaseService->saveSpytrackServers($servers);
+            $status = !$current ? 'activated' : 'deactivated';
+            return redirect()->route('apps.index')->with('success', "Server gateway node successfully {$status}!");
+        } catch (\Exception $e) {
+            return redirect()->route('apps.index')->with('error', 'Failed to toggle status: ' . $e->getMessage());
         }
     }
 }

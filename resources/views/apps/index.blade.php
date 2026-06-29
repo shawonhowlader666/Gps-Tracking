@@ -38,12 +38,16 @@
                             <th>Server URL Address</th>
                             <th>Service Tier</th>
                             <th>Ads Settings</th>
+                            <th>Status</th>
                             <th style="text-align: right;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($servers as $index => $server)
-                            <tr class="server-row" data-index="{{ $index }}">
+                            @php
+                                $isActive = !isset($server['active']) || ($server['active'] != '0' && $server['active'] !== false);
+                            @endphp
+                            <tr class="server-row" data-index="{{ $index }}" style="{{ !$isActive ? 'opacity: 0.55;' : '' }} transition: opacity 0.2s;">
                                 <td style="text-align: center; color: var(--text-secondary); font-size: 12px;">
                                     <i class="fa-solid fa-chevron-right toggle-details-icon" style="transition: transform 0.2s ease;"></i>
                                 </td>
@@ -70,6 +74,18 @@
                                         <span class="badge badge-secondary" style="background-color: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-muted);">No Ads</span>
                                     @endif
                                 </td>
+                                <td>
+                                    <form action="{{ route('apps.toggle', $index) }}" method="POST" style="display: inline;" class="toggle-status-form">
+                                        @csrf
+                                        <button type="submit" style="background: none; border: none; cursor: pointer; padding: 0;" title="Click to Toggle Status">
+                                            @if($isActive)
+                                                <span class="badge badge-success">Active</span>
+                                            @else
+                                                <span class="badge badge-secondary" style="background-color: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-muted);">Inactive</span>
+                                            @endif
+                                        </button>
+                                    </form>
+                                </td>
                                 <td style="text-align: right;">
                                     <div style="display: inline-flex; gap: 8px; justify-content: flex-end; align-items: center;">
                                          <!-- Edit button populated with data attributes -->
@@ -95,11 +111,11 @@
                                          </form>
                                      </div>
                                 </td>
-                            </tr>
+                             </tr>
                             
-                            <!-- Expandable Drawer Details Row -->
-                            <tr class="details-row" id="details-{{ $index }}" style="display: none; background-color: rgba(17, 21, 34, 0.45);">
-                                <td colspan="6" style="padding: 20px 24px; border-bottom: 1px solid var(--border-color);">
+                             <!-- Expandable Drawer Details Row -->
+                             <tr class="details-row" id="details-{{ $index }}" style="display: none; background-color: rgba(17, 21, 34, 0.45);">
+                                 <td colspan="7" style="padding: 20px 24px; border-bottom: 1px solid var(--border-color);">
                                     <div style="display: grid; grid-template-columns: 1.5fr 2fr; gap: 24px; text-align: left;">
                                         
                                         <!-- Card Column 1: Config Info -->

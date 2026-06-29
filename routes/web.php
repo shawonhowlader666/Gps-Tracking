@@ -20,6 +20,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::resource('apps', AppConfigController::class)->except(['show', 'create', 'edit']);
+    Route::post('/apps/{index}/toggle', [AppConfigController::class, 'toggle'])->name('apps.toggle');
     Route::resource('whitelabel-apps', WhitelabelAppController::class);
     
     // Global Maintenance Mode routes
