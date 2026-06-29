@@ -163,28 +163,34 @@ class FirebaseService
             if ($app->package_name === 'com.orbitgps.app' || $app->package_name === 'com.onfleetgps.app') {
                 $oldDocRef = $db->collection('configs')->document('urls');
                 
-                // Format servers list for the legacy app schema
-                $oldServers = [];
-                foreach ($data['servers'] ?? [] as $srv) {
-                    $oldServers[] = [
-                        'name' => $srv['name'] ?? '',
-                        'url' => $srv['url'] ?? '',
-                        'type' => $srv['type'] ?? 'free',
-                        'showBannerAds' => !empty($srv['show_ads']),
-                        'message' => '',
-                    ];
-                }
-
-                // Preserve existing legacy banners and fuelData maps so they are not deleted
+                // Preserve existing legacy banners, fuelData and servers list so they are not deleted
                 $oldBanners = [];
                 $oldFuelData = (object) [];
+                $legacyServers = [];
                 $oldSnapshot = $oldDocRef->snapshot();
                 if ($oldSnapshot->exists()) {
                     $oldDocData = $oldSnapshot->data();
                     if (isset($oldDocData['spytrack'])) {
                         $oldBanners = $oldDocData['spytrack']['banners'] ?? [];
                         $oldFuelData = $oldDocData['spytrack']['fuelData'] ?? (object) [];
+                        $legacyServers = $oldDocData['spytrack']['url'] ?? [];
                     }
+                }
+
+                // Format servers list for the legacy app schema
+                if (isset($data['servers'])) {
+                    $oldServers = [];
+                    foreach ($data['servers'] as $srv) {
+                        $oldServers[] = [
+                            'name' => $srv['name'] ?? '',
+                            'url' => $srv['url'] ?? '',
+                            'type' => $srv['type'] ?? 'free',
+                            'showBannerAds' => !empty($srv['show_ads']),
+                            'message' => '',
+                        ];
+                    }
+                } else {
+                    $oldServers = $legacyServers;
                 }
 
                 $spytrackData = [
