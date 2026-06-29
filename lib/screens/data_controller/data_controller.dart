@@ -11,6 +11,7 @@ import 'package:smart_lock/services/api_service.dart';
 import 'package:smart_lock/storage/user_repository.dart';
 import 'package:smart_lock/services/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smart_lock/util/util.dart';
 
 class DataController extends GetxController {
   // Overrides to prevent UI bouncing after sending lock/unlock commands
@@ -184,7 +185,7 @@ class DataController extends GetxController {
 
   // ── Change-detection state (for local alert triggers) ─────────────────────
   final Map<int, bool> _prevEngineStatus = {};
-  final Map<int, String> _prevOnlineStatus = {};
+  final Map<int, bool> _prevOnlineStatus = {};
   final Map<int, bool> _prevIdleStatus = {};     // true = idle (engine on, speed=0)
   final Map<int, bool> _prevMovingStatus = {};   // true = moving (speed > 0)
   final Map<int, DateTime> _lastOverspeedTime = {};
@@ -509,31 +510,34 @@ class DataController extends GetxController {
         _prevIdleStatus[devId] = isCurrentlyIdle;
 
         // ─ 4. Offline / Back Online ───────────────────────────────────────────
+        final bool isOnline = Util.isDeviceOnline(device);
         if (_prevOnlineStatus.containsKey(devId)) {
-          final prev = _prevOnlineStatus[devId]!;
-          if (currentColor == 'red' && prev != 'red') {
+          final bool prevOnline = _prevOnlineStatus[devId]!;
+          if (!isOnline && prevOnline) {
             if (offlineEnabled) {
               const String msg = 'Vehicle went offline';
               _notificationService.showLocalNotification(
                 id: devId * 10 + 4,
                 title: '❌ Offline: ${device.name}',
                 body: msg,
+                channelId: 'alert_channel_v1',
               );
               _createAndSaveLocalEvent(message: msg, device: device);
             }
-          } else if (currentColor != 'red' && prev == 'red') {
+          } else if (isOnline && !prevOnline) {
             if (offlineEnabled) {
               const String msg = 'Vehicle is back online';
               _notificationService.showLocalNotification(
                 id: devId * 10 + 5,
                 title: '✅ Online: ${device.name}',
                 body: msg,
+                channelId: 'alert_channel_v1',
               );
               _createAndSaveLocalEvent(message: msg, device: device);
             }
           }
         }
-        _prevOnlineStatus[devId] = currentColor;
+        _prevOnlineStatus[devId] = isOnline;
       }
     } catch (e) {
       debugPrint('[LocalAlerts] Error: $e');

@@ -28,13 +28,14 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   static const Duration _minimumSplashDuration = Duration(seconds: 2);
   static const Duration _initialDelay = Duration(milliseconds: 400);
 
-  // Cache TTL: re-fetch Firestore config only after 30 minutes
-  static const int _configCacheTtlMs = 30 * 60 * 1000;
+  // Cache TTL: re-fetch Firestore config only after 10 seconds to ensure Maintenance Mode and Force Update take effect promptly
+  static const int _configCacheTtlMs = 10 * 1000;
 
   // ─── State ────────────────────────────────────────────────────────────────
   bool _configLoaded = false;
   bool _minimumTimeReached = false;
   bool _showCheckmark = false;
+  bool _isSystemBlockActive = false;
 
   // ─── Animation controllers ────────────────────────────────────────────────
   late AnimationController _logoController;
@@ -106,6 +107,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   // ─── Navigation gate ──────────────────────────────────────────────────────
   void _tryNavigate() {
     if (!mounted) return;
+    if (_isSystemBlockActive) return;
     if (_configLoaded && _minimumTimeReached) {
       setState(() => _showCheckmark = true);
       _checkController.forward();
@@ -116,18 +118,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   // ─── Config fetch with caching ────────────────────────────────────────────
   Future<void> fetchConfigAndProceed() async {
     try {
-      // Check cache first — skip Firestore if data is fresh
-      final int lastFetch = _prefs.getInt('config_last_fetch') ?? 0;
-      final int now = DateTime.now().millisecondsSinceEpoch;
-      final bool cacheValid =
-          (now - lastFetch) < _configCacheTtlMs && SERVER_URL.isNotEmpty;
-
-      if (!cacheValid) {
-        await _fetchFromFirestore();
-      } else {
-        // Still check for server maintenance message using cached SERVER_URL
-        _applyMaintenanceCheck();
-      }
+      await _fetchFromFirestore();
     } catch (e) {
       debugPrint('Config fetch error: $e');
     } finally {
@@ -215,12 +206,17 @@ class _SplashScreenPageState extends State<SplashScreenPage>
     await _prefs.setInt(
         'config_last_fetch', DateTime.now().millisecondsSinceEpoch);
 
-    _applyMaintenanceCheck();
-    _applyForceUpdateCheck();
+    bool isBlocked = _applyMaintenanceCheck();
+    if (!isBlocked) {
+      await _applyForceUpdateCheck();
+    }
   }
 
-  void _applyMaintenanceCheck() {
+  bool _applyMaintenanceCheck() {
     if (globalMaintenanceEnabled && globalMaintenanceMessage.isNotEmpty && mounted) {
+      setState(() {
+        _isSystemBlockActive = true;
+      });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
@@ -230,7 +226,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
           (route) => false,
         );
       });
-      return;
+      return true;
     }
 
     final String? currentServerUrl = UserRepository.getServerUrl();
@@ -239,6 +235,9 @@ class _SplashScreenPageState extends State<SplashScreenPage>
         ALWAYS_SHOW_BANNER_ADS = server['showBannerAds'] ?? false;
         final String message = server['message'] as String? ?? '';
         if (message.isNotEmpty && mounted) {
+          setState(() {
+            _isSystemBlockActive = true;
+          });
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             Navigator.of(context).pushAndRemoveUntil(
@@ -248,49 +247,55 @@ class _SplashScreenPageState extends State<SplashScreenPage>
               (route) => false,
             );
           });
+          return true;
         }
         break;
       }
     }
+    return false;
   }
 
-  void _applyForceUpdateCheck() {
+  Future<bool> _applyForceUpdateCheck() async {
     if (forceUpdateEnabled && forceUpdateVersion.isNotEmpty && mounted) {
-      PackageInfo.fromPlatform().then((packageInfo) {
-        final currentVersion = packageInfo.version;
-        if (_isVersionLower(currentVersion, forceUpdateVersion)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => PopScope(
-                canPop: false,
-                child: AlertDialog(
-                  title: const Text('Update Required'),
-                  content: Text(forceUpdateMessage.isNotEmpty 
-                      ? forceUpdateMessage 
-                      : 'A new version of the app is available. Please update to continue.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () async {
-                        if (forceUpdateUrl.isNotEmpty) {
-                          final uri = Uri.parse(forceUpdateUrl);
-                          if (await canLaunchUrl(uri)) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                          }
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version;
+      if (_isVersionLower(currentVersion, forceUpdateVersion)) {
+        setState(() {
+          _isSystemBlockActive = true;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => PopScope(
+              canPop: false,
+              child: AlertDialog(
+                title: const Text('Update Required'),
+                content: Text(forceUpdateMessage.isNotEmpty 
+                    ? forceUpdateMessage 
+                    : 'A new version of the app is available. Please update to continue.'),
+                actions: [
+                  TextButton(
+                    onPressed: () async {
+                      if (forceUpdateUrl.isNotEmpty) {
+                        final uri = Uri.parse(forceUpdateUrl);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
                         }
-                      },
-                      child: const Text('Update Now'),
-                    ),
-                  ],
-                ),
+                      }
+                    },
+                    child: const Text('Update Now'),
+                  ),
+                ],
               ),
-            );
-          });
-        }
-      });
+            ),
+          );
+        });
+        return true;
+      }
     }
+    return false;
   }
 
   bool _isVersionLower(String current, String required) {

@@ -135,7 +135,10 @@ Future<bool> _shouldShowNotification(String body) async {
   }
 
   // 3. Offline / Online
-  if (lower.contains('offline') || lower.contains('online')) {
+  if (lower.contains('offline') ||
+      lower.contains('online') ||
+      lower.contains('অফলাইন') ||
+      lower.contains('অনলাইন')) {
     return prefs.getBool('auto_alert_offline') ?? true;
   }
 
@@ -175,8 +178,8 @@ String _getEmojiForMessage(String message) {
   if (lower.contains('speed')) return '⚡';
   if (lower.contains('geofence')) return '📍';
   if (lower.contains('ignition')) return '🔑';
-  if (lower.contains('online')) return '✅';
-  if (lower.contains('offline')) return '❌';
+  if (lower.contains('online') || lower.contains('অনলাইন')) return '✅';
+  if (lower.contains('offline') || lower.contains('অফলাইন')) return '❌';
   if (lower.contains('fuel')) return '⛽';
   if (lower.contains('power')) return '🔌';
   if (lower.contains('battery')) return '🔋';
@@ -192,7 +195,11 @@ String _getChannelIdForMessage(String message) {
       lower.contains('fuel') ||
       lower.contains('power') ||
       lower.contains('battery') ||
-      lower.contains('geofence')) {   // ← geofence এখন alert channel এ
+      lower.contains('geofence') ||
+      lower.contains('offline') ||
+      lower.contains('online') ||
+      lower.contains('অফলাইন') ||
+      lower.contains('অনলাইন')) {   // ← geofence, offline, online এখন alert channel এ
     return 'alert_channel_v1';
   }
   return 'event_channel_v1';
