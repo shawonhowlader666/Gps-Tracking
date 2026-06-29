@@ -6,7 +6,7 @@
 // Strategy (live tracking):
 //   1. Each new GPS point → OSRM /nearest → snapped to closest road point
 //   2. LRU cache avoids duplicate API calls for same area
-//   3. Falls back to raw GPS instantly if API unreachable
+//   3. Falls back to Google Roads API and then to raw GPS instantly if API unreachable
 //
 // OSRM public server: router.project-osrm.org
 // Uses lon,lat order (opposite of Google Maps lat,lon)
@@ -21,28 +21,92 @@ class RoadSnapService {
   static const String _osrmBasePrimary = 'https://router.project-osrm.org';
   static const String _osrmBaseBackup = 'https://routing.openstreetmap.de/routed-car';
 
+  // Google Maps API Key for backup snapping & routing (from android/local.properties)
+  static const String _googleApiKey = 'AIzaSyALy4YVjzneMAJjI4Ng1DT4cGhJf16JXgc';
+
   // Helper to request from primary with fallback to backup on timeout or error
-  static Future<http.Response> _getWithFailover(String urlPath, {Duration timeout = const Duration(milliseconds: 1500)}) async {
+  static Future<http.Response> _getWithFailover(String urlPath, {Duration timeout = const Duration(milliseconds: 3500)}) async {
+    final Map<String, String> requestHeaders = {
+      'Accept': 'application/json',
+      'User-Agent': 'GpsProTrackerApp/1.0 (com.gpspro.app; contact@gpspro.com)'
+    };
     try {
       final uri = Uri.parse('$_osrmBasePrimary$urlPath');
       final resp = await http.get(
         uri,
-        headers: {'Accept': 'application/json'},
+        headers: requestHeaders,
       ).timeout(timeout);
       if (resp.statusCode == 200) return resp;
       throw Exception('Primary status code ${resp.statusCode}');
-    } catch (_) {
+    } catch (e) {
+      print("OSRM Primary failed for path '$urlPath': $e");
       // Primary failed, fall back to backup
       try {
         final uri = Uri.parse('$_osrmBaseBackup$urlPath');
         return await http.get(
           uri,
-          headers: {'Accept': 'application/json'},
+          headers: requestHeaders,
         ).timeout(timeout);
-      } catch (e) {
+      } catch (err) {
+        print("OSRM Backup failed for path '$urlPath': $err");
         rethrow;
       }
     }
+  }
+
+  // ─── Google Roads API Helpers ──────────────────────────────────────────────
+
+  static Future<LatLng?> _snapWithGoogle(LatLng raw) async {
+    try {
+      final url = 'https://roads.googleapis.com/v1/nearestRoads?points=${raw.latitude},${raw.longitude}&key=$_googleApiKey';
+      final resp = await http.get(Uri.parse(url)).timeout(const Duration(milliseconds: 3000));
+      if (resp.statusCode == 200) {
+        final json = jsonDecode(resp.body) as Map<String, dynamic>;
+        final snappedPoints = json['snappedPoints'] as List<dynamic>?;
+        if (snappedPoints != null && snappedPoints.isNotEmpty) {
+          final loc = snappedPoints.first['location'] as Map<String, dynamic>?;
+          if (loc != null) {
+            final lat = (loc['latitude'] as num).toDouble();
+            final lng = (loc['longitude'] as num).toDouble();
+            return LatLng(lat, lng);
+          }
+        }
+      } else {
+        print("Google nearestRoads failed: HTTP ${resp.statusCode} - ${resp.body}");
+      }
+    } catch (e) {
+      print("Google nearestRoads error: $e");
+    }
+    return null;
+  }
+
+  static Future<List<LatLng>?> _routeWithGoogle(LatLng start, LatLng end) async {
+    try {
+      final url = 'https://roads.googleapis.com/v1/snapToRoads?path=${start.latitude},${start.longitude}|${end.latitude},${end.longitude}&interpolate=true&key=$_googleApiKey';
+      final resp = await http.get(Uri.parse(url)).timeout(const Duration(milliseconds: 4000));
+      if (resp.statusCode == 200) {
+        final json = jsonDecode(resp.body) as Map<String, dynamic>;
+        final snappedPoints = json['snappedPoints'] as List<dynamic>?;
+        if (snappedPoints != null && snappedPoints.isNotEmpty) {
+          final List<LatLng> path = [];
+          for (final pt in snappedPoints) {
+            final loc = pt['location'] as Map<String, dynamic>?;
+            if (loc != null) {
+              path.add(LatLng(
+                (loc['latitude'] as num).toDouble(),
+                (loc['longitude'] as num).toDouble(),
+              ));
+            }
+          }
+          if (path.isNotEmpty) return path;
+        }
+      } else {
+        print("Google snapToRoads failed: HTTP ${resp.statusCode} - ${resp.body}");
+      }
+    } catch (e) {
+      print("Google snapToRoads error: $e");
+    }
+    return null;
   }
 
   // ─── LRU cache ────────────────────────────────────────────────────────────
@@ -53,7 +117,7 @@ class RoadSnapService {
   // ─── Public API ──────────────────────────────────────────────────────────
 
   /// Snap a single live GPS point to the nearest road using OSRM /nearest.
-  /// Falls back to [raw] on error or timeout.
+  /// Falls back to Google Roads API and then to [raw] on error or timeout.
   static Future<LatLng> snapSingleLivePoint(
     LatLng raw, {
     LatLng? previousPoint,
@@ -87,19 +151,32 @@ class RoadSnapService {
             if (distanceMeters(raw, snapped) < 150) {
               _cachePoint(raw, snapped);
               return snapped;
+            } else {
+              print("OSRM snap ignored: snapped point is too far (${distanceMeters(raw, snapped).toStringAsFixed(1)}m > 150m)");
             }
           }
+        } else {
+          print("OSRM snap response code not Ok: ${json['code']}");
         }
+      } else {
+        print("OSRM snap request failed with HTTP ${response.statusCode}");
       }
-    } catch (_) {
-      // Network error, timeout — fall back to raw GPS silently
+    } catch (e) {
+      print("OSRM snap network/parsing error: $e");
+    }
+
+    // Google Roads API fallback
+    final googleSnapped = await _snapWithGoogle(raw);
+    if (googleSnapped != null) {
+      _cachePoint(raw, googleSnapped);
+      return googleSnapped;
     }
 
     return raw;
   }
 
   /// Gets a list of LatLng points representing the road route between start and end.
-  /// Falls back to [start, end] on error.
+  /// Falls back to Google Roads API and then [start, end] on error.
   static Future<List<LatLng>> getRoutePath(LatLng start, LatLng end) async {
     if (distanceMeters(start, end) < 1.0) {
       return [start, end];
@@ -135,9 +212,16 @@ class RoadSnapService {
           }
         }
       }
-    } catch (_) {
-      // Fallback
+    } catch (e) {
+      print("OSRM route error: $e");
     }
+
+    // Google Roads API fallback
+    final googleRoute = await _routeWithGoogle(start, end);
+    if (googleRoute != null) {
+      return googleRoute;
+    }
+
     return [start, end];
   }
 

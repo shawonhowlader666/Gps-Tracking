@@ -264,6 +264,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
             .collection('configs')
             .doc(packageName)
             .get();
+        print('[DEBUG CONFIG] Fetched config for $packageName: ${doc.data()}');
 
         if (doc.exists && doc.data() != null) {
           final data = doc.data() as Map<String, dynamic>;
@@ -276,7 +277,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
           EMAIL = support['email'] as String? ?? '';
 
           final settings = data['settings'] as Map<String, dynamic>? ?? {};
-          SHOW_ADS = (settings['show_ads'] as bool? ?? false) && serverType == 'free';
+          SHOW_ADS = (settings['show_ads'] == true || settings['show_ads'] == 1 || settings['show_ads'] == '1' || settings['show_ads'] == 'true') && serverType == 'free';
           adsFrequency = settings['ads_frequency'] as int? ?? 30;
 
           if (data['servers'] != null) {
@@ -293,11 +294,11 @@ class _SplashScreenPageState extends State<SplashScreenPage>
           rocketNumber = payment['rocket'] as String? ?? '';
 
           final maintenance = data['maintenance'] as Map<String, dynamic>? ?? {};
-          globalMaintenanceEnabled = maintenance['enabled'] as bool? ?? false;
+          globalMaintenanceEnabled = maintenance['enabled'] == true || maintenance['enabled'] == 1 || maintenance['enabled'] == '1' || maintenance['enabled'] == 'true';
           globalMaintenanceMessage = maintenance['message'] as String? ?? '';
 
           final forceUpdate = data['force_update'] as Map<String, dynamic>? ?? {};
-          forceUpdateEnabled = forceUpdate['enabled'] as bool? ?? false;
+          forceUpdateEnabled = forceUpdate['enabled'] == true || forceUpdate['enabled'] == 1 || forceUpdate['enabled'] == '1' || forceUpdate['enabled'] == 'true';
           forceUpdateVersion = forceUpdate['version'] as String? ?? '';
           forceUpdateUrl = forceUpdate['url'] as String? ?? '';
           forceUpdateMessage = forceUpdate['message'] as String? ?? '';
@@ -338,8 +339,9 @@ class _SplashScreenPageState extends State<SplashScreenPage>
       _updateStatus('Almost ready...');
       _configLoaded = true;
       _tryNavigate();
-    } catch (e) {
-      print('Error fetching Firebase config: $e');
+    } catch (e, stack) {
+      print('[DEBUG CONFIG] Error fetching Firebase config: $e');
+      print(stack);
       _configLoaded = true;
       _tryNavigate();
     }
