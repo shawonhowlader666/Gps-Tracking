@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y \
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip intl opcache
 
 # Required by google/cloud-firestore
-RUN pecl install grpc && docker-php-ext-enable grpc
+RUN apt-get install -y php-grpc || \
+    pecl install grpc-1.38.0 && docker-php-ext-enable grpc
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
