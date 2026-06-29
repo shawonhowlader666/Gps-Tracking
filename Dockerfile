@@ -1,14 +1,15 @@
+FROM mlocati/php-extension-installer:latest AS installer
 FROM php:8.2-fpm
+
+COPY --from=installer /usr/bin/install-php-extensions /usr/bin/
 
 RUN apt-get update && apt-get install -y \
     git curl libpng-dev libonig-dev libxml2-dev \
     libzip-dev libicu-dev zip unzip nodejs npm \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip intl
-
-# Install protobuf only (no grpc compile needed for kreait/firebase-php)
-RUN pecl install protobuf && docker-php-ext-enable protobuf
+# install-php-extensions downloads pre-built binaries — no compilation
+RUN install-php-extensions grpc protobuf intl gd zip bcmath pdo_mysql mbstring exif pcntl
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
