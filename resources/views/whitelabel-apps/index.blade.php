@@ -61,7 +61,7 @@
                                     @if($app->firebase_credential_path)
                                         <span class="badge badge-success" title="{{ $app->firebase_credential_path }}">Custom Loaded</span>
                                     @else
-                                        <span class="badge badge-secondary" style="background-color: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-muted);">Shared Workspace</span>
+                                        <span class="badge badge-secondary" style="color: var(--text-muted);">Shared Workspace</span>
                                     @endif
                                 </td>
                                 <td style="text-align: right;">

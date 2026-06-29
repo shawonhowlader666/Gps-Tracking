@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'GPS Admin Portal')</title>
     <!-- Favicon -->
-    <link rel="shortcut icon" type="image/png" href="{{ asset('images/asthax.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('images/asthax.png') }}?v=1.0.3">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Style -->
-    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=1.0.5">
+    <link rel="stylesheet" href="{{ asset('css/admin.css') }}?v=1.0.9">
     @yield('styles')
 </head>
 <body>
@@ -17,8 +17,7 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-brand">
-                <img src="{{ asset('images/asthax.png') }}" alt="AsthaX Logo" style="height: 36px; object-fit: contain; border-radius: 5px; filter: drop-shadow(0 0 5px rgba(139, 92, 246, 0.3));">
-                <span>AsthaX Admin</span>
+                <img src="{{ asset('images/asthax.png') }}?v=1.0.3" alt="AsthaX Logo" style="height: 18px; object-fit: contain; border-radius: 5px; filter: drop-shadow(0 0 5px rgba(139, 92, 246, 0.3));">
             </div>
             <ul class="sidebar-menu">
                 <li>
@@ -37,6 +36,12 @@
                     <a href="{{ route('apps.index') }}" class="sidebar-link {{ request()->routeIs('apps.*') ? 'active' : '' }}">
                         <i class="fa-solid fa-server"></i>
                         <span>Server Gateways</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ route('maintenance.index') }}" class="sidebar-link {{ request()->routeIs('maintenance.*') ? 'active' : '' }}">
+                        <i class="fa-solid fa-screwdriver-wrench"></i>
+                        <span>Maintenance Mode</span>
                     </a>
                 </li>
             </ul>

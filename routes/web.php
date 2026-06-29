@@ -21,4 +21,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::resource('apps', AppConfigController::class)->except(['show', 'create', 'edit']);
     Route::resource('whitelabel-apps', WhitelabelAppController::class);
+    
+    // Global Maintenance Mode routes
+    Route::get('/maintenance', [WhitelabelAppController::class, 'maintenanceList'])->name('maintenance.index');
+    Route::put('/maintenance/{id}', [WhitelabelAppController::class, 'maintenanceUpdate'])->name('maintenance.update');
 });

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - GPS Admin Portal</title>
     <!-- Favicon -->
-    <link rel="shortcut icon" type="image/png" href="{{ asset('images/asthax.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('images/asthax.png') }}?v=1.0.1">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Style -->
@@ -14,7 +14,7 @@
 <body class="auth-page">
     <div class="auth-card">
         <div class="auth-header">
-            <img src="{{ asset('images/asthax.png') }}" alt="AsthaX Logo" style="height: 70px; object-fit: contain; margin: 0 auto 20px; display: block; filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.2));">
+            <img src="{{ asset('images/asthax.png') }}?v=1.0.1" alt="AsthaX Logo" style="height: 70px; object-fit: contain; margin: 0 auto 20px; display: block; filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.2));">
             <h1 class="auth-title">Welcome Back</h1>
             <p class="auth-subtitle">GPS Apps Management Portal</p>
         </div>

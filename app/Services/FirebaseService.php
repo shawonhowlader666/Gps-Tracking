@@ -330,6 +330,13 @@ class FirebaseService
     public function syncLocalDatabase(): void
     {
         $remoteConfigs = $this->getAllConfigs();
+        if (empty($remoteConfigs)) {
+            return;
+        }
+
+        // Fetch all local apps indexed by package name in a single query
+        $localApps = WhitelabelApp::all()->keyBy('package_name');
+
         foreach ($remoteConfigs as $packageName => $docData) {
             if ($packageName === 'urls') {
                 continue;
@@ -342,7 +349,7 @@ class FirebaseService
                     $iosBundleId = $docData['ios_bundle_id'];
                 }
 
-                $app = WhitelabelApp::where('package_name', $packageName)->first();
+                $app = $localApps->get($packageName);
                 if (!$app) {
                     WhitelabelApp::create([
                         'package_name' => $packageName,
