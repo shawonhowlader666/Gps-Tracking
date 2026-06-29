@@ -526,7 +526,6 @@
                     <span>Enable Ads on this Node</span>
                 </label>
             </div>
-
             <div style="display: flex; gap: 12px; margin-top: 16px;">
                 <button type="button" class="btn btn-secondary" id="cancel-node-modal" style="flex: 1;">
                     Cancel
@@ -535,6 +534,11 @@
                     Add Node <i class="fa-solid fa-plus" style="margin-left: 4px;"></i>
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+@endsection
+
 @section('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
