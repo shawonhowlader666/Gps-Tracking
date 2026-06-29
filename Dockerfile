@@ -1,14 +1,28 @@
-FROM richarvey/nginx-php-fpm:3.1.6
+FROM php:8.2-fpm
 
-# Set Nginx web root directory to Laravel public folder
-ENV WEBROOT /var/www/html/public
+RUN apt-get update && apt-get install -y \
+    git curl libpng-dev libonig-dev libxml2-dev \
+    libzip-dev libicu-dev zip unzip nodejs npm \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy application source code
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip intl opcache
+
+# Required by google/cloud-firestore
+RUN pecl install grpc && docker-php-ext-enable grpc
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www
+
+COPY composer.json composer.lock* ./
+RUN composer install --no-scripts --no-autoloader --prefer-dist
+
 COPY . .
+RUN composer dump-autoload --optimize
 
-# Run Composer installation automatically during container boot/build
-ENV COMPOSER_AS_ROOT 1
-ENV SKIP_COMPOSER 0
+RUN chown -R www-data:www-data /var/www \
+    && chmod -R 755 /var/www/storage \
+    && chmod -R 755 /var/www/bootstrap/cache
 
-# Set write permissions for Laravel storage and cache
-RUN chmod -R 777 storage bootstrap/cache
+EXPOSE 9000
+CMD ["php-fpm"]
