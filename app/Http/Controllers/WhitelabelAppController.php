@@ -121,15 +121,27 @@ class WhitelabelAppController extends Controller
         $app->save();
 
         // Format Firestore config data
-        $servers = [];
+        $activeServers = [];
+        $allServers = [];
         foreach ($request->input('servers', []) as $srv) {
             if (empty($srv['url'])) continue;
-            $servers[] = [
+            $isActive = !isset($srv['active']) || ($srv['active'] != '0' && $srv['active'] !== false);
+            
+            $serverItem = [
                 'name' => $srv['name'] ?: 'Unnamed Node',
                 'url' => $srv['url'],
                 'type' => $srv['type'] ?? 'free',
                 'show_ads' => !empty($srv['show_ads']),
+                'active' => $isActive,
             ];
+            
+            $allServers[] = $serverItem;
+            
+            if ($isActive) {
+                $clientItem = $serverItem;
+                unset($clientItem['active']);
+                $activeServers[] = $clientItem;
+            }
         }
 
         $configData = [
@@ -142,7 +154,8 @@ class WhitelabelAppController extends Controller
                 'email' => $request->input('email') ?: '',
                 'address' => $request->input('address') ?: '',
             ],
-            'servers' => $servers,
+            'servers' => $activeServers,
+            'all_servers' => $allServers,
             'policies' => [
                 'terms' => $request->input('terms_url') ?: '',
                 'privacy' => $request->input('privacy_url') ?: '',

@@ -113,6 +113,23 @@
     border-top: 1px solid var(--border-color);
     margin: 20px 0;
 }
+.edit-node-btn {
+    background: none;
+    border: none;
+    color: #3b82f6;
+    cursor: pointer;
+    font-size: 14px;
+    transition: color 0.2s;
+}
+.edit-node-btn:hover {
+    color: #2563eb;
+}
+.toggle-status-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
 </style>
 @endsection
 
@@ -247,48 +264,65 @@
                                 <th>Server Address (URL)</th>
                                 <th>Service Tier</th>
                                 <th>Ads Settings</th>
+                                <th>Status</th>
                                 <th style="text-align: right;">Action</th>
                             </tr>
                         </thead>
                         <tbody id="server-nodes-tbody">
                             @php
-                                $servers = $remoteConfig['servers'] ?? [];
+                                $servers = $remoteConfig['all_servers'] ?? $remoteConfig['servers'] ?? [];
                             @endphp
-
+ 
                             @if(empty($servers))
                                 <tr class="placeholder-row">
-                                    <td colspan="5" style="text-align: center; padding: 32px; color: var(--text-muted);">
+                                    <td colspan="6" style="text-align: center; padding: 32px; color: var(--text-muted);">
                                         <i class="fa-solid fa-network-wired" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
                                         No server gateways configured yet. Click "Add Server" to define one.
                                     </td>
                                 </tr>
                             @else
                                 @foreach($servers as $index => $server)
-                                    <tr class="server-node-row" data-index="{{ $index }}">
+                                    @php
+                                        $isActive = !isset($server['active']) || ($server['active'] != '0' && $server['active'] !== false);
+                                    @endphp
+                                    <tr class="server-node-row" data-index="{{ $index }}" style="{{ !$isActive ? 'opacity: 0.55;' : '' }} transition: opacity 0.2s;">
                                         <td style="font-weight: 700;">
                                             <span class="node-name-text text-truncate-sm" title="{{ $server['name'] ?: 'Unnamed Node' }}">{{ $server['name'] ?: 'Unnamed Node' }}</span>
-                                            <input type="hidden" name="servers[{{ $index }}][name]" value="{{ $server['name'] }}">
+                                            <input type="hidden" name="servers[{{ $index }}][name]" value="{{ $server['name'] }}" class="node-name-input">
                                         </td>
                                         <td>
                                             <code class="text-truncate-md" title="{{ $server['url'] }}" style="font-family: monospace; color: #a78bfa; font-size: 12.5px;">{{ $server['url'] }}</code>
-                                            <input type="hidden" name="servers[{{ $index }}][url]" value="{{ $server['url'] }}">
+                                            <input type="hidden" name="servers[{{ $index }}][url]" value="{{ $server['url'] }}" class="node-url-input">
                                         </td>
                                         <td>
                                             <span class="badge {{ ($server['type'] ?? 'free') == 'free' ? 'badge-primary' : 'badge-success' }}" style="text-transform: capitalize;">
                                                 {{ $server['type'] ?? 'free' }}
                                             </span>
-                                            <input type="hidden" name="servers[{{ $index }}][type]" value="{{ $server['type'] ?? 'free' }}">
+                                            <input type="hidden" name="servers[{{ $index }}][type]" value="{{ $server['type'] ?? 'free' }}" class="node-type-input">
                                         </td>
                                         <td>
                                             @if(!empty($server['show_ads']))
-                                                <span class="badge badge-success">Ads Active</span>
-                                                <input type="hidden" name="servers[{{ $index }}][show_ads]" value="1">
+                                                <span class="badge badge-success ads-badge-indicator">Ads Active</span>
+                                                <input type="hidden" name="servers[{{ $index }}][show_ads]" value="1" class="node-ads-input">
                                             @else
-                                                <span class="badge badge-secondary" style="background-color: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-muted);">No Ads</span>
-                                                <input type="hidden" name="servers[{{ $index }}][show_ads]" value="0">
+                                                <span class="badge badge-secondary ads-badge-indicator" style="background-color: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-muted);">No Ads</span>
+                                                <input type="hidden" name="servers[{{ $index }}][show_ads]" value="0" class="node-ads-input">
                                             @endif
                                         </td>
+                                        <td>
+                                            <button type="button" class="toggle-status-btn">
+                                                @if($isActive)
+                                                    <span class="badge badge-success status-badge-indicator">Active</span>
+                                                @else
+                                                    <span class="badge badge-secondary status-badge-indicator" style="background-color: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-muted);">Inactive</span>
+                                                @endif
+                                            </button>
+                                            <input type="hidden" name="servers[{{ $index }}][active]" value="{{ $isActive ? '1' : '0' }}" class="node-active-input">
+                                        </td>
                                         <td style="text-align: right;">
+                                            <button type="button" class="edit-node-btn" style="margin-right: 8px;">
+                                                <i class="fa-solid fa-pen-to-square"></i>
+                                            </button>
                                             <button type="button" class="remove-node-btn">
                                                 <i class="fa-solid fa-trash-can"></i>
                                             </button>
@@ -501,11 +535,6 @@
                     Add Node <i class="fa-solid fa-plus" style="margin-left: 4px;"></i>
                 </button>
             </div>
-        </div>
-    </div>
-</div>
-@endsection
-
 @section('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -528,7 +557,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // ─── ADD/REMOVE SERVER NODE LOGIC ───────────────────────────────────────
+    // ─── ADD/EDIT/REMOVE SERVER NODE LOGIC ───────────────────────────────────
     const modal = document.getElementById('node-modal');
     const openBtn = document.getElementById('open-node-modal');
     const closeBtn = document.getElementById('close-node-modal');
@@ -536,10 +565,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveBtn = document.getElementById('save-node-btn');
     const tbody = document.getElementById('server-nodes-tbody');
 
-    // Open Modal
+    const modalTitle = modal.querySelector('.modal-title');
+    const modalSubmitBtn = document.getElementById('save-node-btn');
+
+    // Open Modal for Adding
     if (openBtn) {
         openBtn.addEventListener('click', function(e) {
             e.preventDefault();
+            modal.removeAttribute('data-edit-index');
+            modalTitle.innerHTML = '<i class="fa-solid fa-server" style="color: var(--accent);"></i>Add Server Gateway Node';
+            modalSubmitBtn.innerHTML = 'Add Node <i class="fa-solid fa-plus" style="margin-left: 4px;"></i>';
+
             document.getElementById('modal-node-name').value = '';
             document.getElementById('modal-node-url').value = '';
             document.getElementById('modal-node-type').value = 'free';
@@ -565,7 +601,84 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Save Node (Insert into table dynamically)
+    // Toggle Status Handler
+    function attachStatusToggleHandler(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const row = btn.closest('.server-node-row');
+            const activeInput = row.querySelector('.node-active-input');
+            const indicator = btn.querySelector('.status-badge-indicator');
+            
+            const isCurrentlyActive = activeInput.value === '1';
+            const newActiveState = !isCurrentlyActive;
+            
+            activeInput.value = newActiveState ? '1' : '0';
+            
+            if (newActiveState) {
+                indicator.className = 'badge badge-success status-badge-indicator';
+                indicator.textContent = 'Active';
+                indicator.style.backgroundColor = '';
+                indicator.style.border = '';
+                indicator.style.color = '';
+                row.style.opacity = '1';
+            } else {
+                indicator.className = 'badge badge-secondary status-badge-indicator';
+                indicator.textContent = 'Inactive';
+                indicator.style.backgroundColor = 'rgba(255,255,255,0.03)';
+                indicator.style.border = '1px solid var(--border-color)';
+                indicator.style.color = 'var(--text-muted)';
+                row.style.opacity = '0.55';
+            }
+        });
+    }
+
+    // Edit Handler
+    function attachEditHandler(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const row = btn.closest('.server-node-row');
+            const index = row.getAttribute('data-index');
+
+            const name = row.querySelector('.node-name-input').value;
+            const url = row.querySelector('.node-url-input').value;
+            const type = row.querySelector('.node-type-input').value;
+            const ads = row.querySelector('.node-ads-input').value === '1';
+
+            modal.setAttribute('data-edit-index', index);
+            modalTitle.innerHTML = '<i class="fa-solid fa-server" style="color: var(--accent);"></i>Edit Server Gateway Node';
+            modalSubmitBtn.innerHTML = 'Update Node <i class="fa-solid fa-check" style="margin-left: 4px;"></i>';
+
+            document.getElementById('modal-node-name').value = name;
+            document.getElementById('modal-node-url').value = url;
+            document.getElementById('modal-node-type').value = type;
+            document.getElementById('modal-node-ads').checked = ads;
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+    }
+
+    // Remove Handler
+    function attachRemoveHandler(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const row = btn.closest('.server-node-row');
+            row.remove();
+
+            if (tbody.querySelectorAll('.server-node-row').length === 0) {
+                tbody.innerHTML = `
+                    <tr class="placeholder-row">
+                        <td colspan="6" style="text-align: center; padding: 32px; color: var(--text-muted);">
+                            <i class="fa-solid fa-network-wired" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
+                            No server gateways configured yet. Click "Add Server" to define one.
+                        </td>
+                    </tr>
+                `;
+            }
+        });
+    }
+
+    // Save Node (Insert or Update row)
     if (saveBtn) {
         saveBtn.addEventListener('click', function() {
             const name = document.getElementById('modal-node-name').value.trim();
@@ -578,80 +691,120 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            const placeholder = tbody.querySelector('.placeholder-row');
-            if (placeholder) {
-                placeholder.remove();
+            const editIndex = modal.getAttribute('data-edit-index');
+
+            if (editIndex !== null) {
+                // UPDATE EXISTING ROW
+                const row = tbody.querySelector(`.server-node-row[data-index="${editIndex}"]`);
+                if (row) {
+                    row.querySelector('.node-name-text').textContent = name || 'Unnamed Node';
+                    row.querySelector('.node-name-text').title = name || 'Unnamed Node';
+                    row.querySelector('.node-name-input').value = name;
+
+                    row.querySelector('code').textContent = url;
+                    row.querySelector('code').title = url;
+                    row.querySelector('.node-url-input').value = url;
+
+                    const typeBadge = row.querySelector('.node-type-input').previousElementSibling;
+                    typeBadge.className = `badge ${type === 'free' ? 'badge-primary' : 'badge-success'}`;
+                    typeBadge.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+                    row.querySelector('.node-type-input').value = type;
+
+                    const adsBadge = row.querySelector('.node-ads-input').previousElementSibling;
+                    if (ads) {
+                        adsBadge.className = 'badge badge-success ads-badge-indicator';
+                        adsBadge.textContent = 'Ads Active';
+                        adsBadge.style.backgroundColor = '';
+                        adsBadge.style.border = '';
+                        adsBadge.style.color = '';
+                    } else {
+                        adsBadge.className = 'badge badge-secondary ads-badge-indicator';
+                        adsBadge.textContent = 'No Ads';
+                        adsBadge.style.backgroundColor = 'rgba(255,255,255,0.03)';
+                        adsBadge.style.border = '1px solid var(--border-color)';
+                        adsBadge.style.color = 'var(--text-muted)';
+                    }
+                    row.querySelector('.node-ads-input').value = ads ? '1' : '0';
+                }
+            } else {
+                // ADD NEW ROW
+                const placeholder = tbody.querySelector('.placeholder-row');
+                if (placeholder) {
+                    placeholder.remove();
+                }
+
+                const rows = tbody.querySelectorAll('.server-node-row');
+                let nextIndex = 0;
+                if (rows.length > 0) {
+                    rows.forEach(row => {
+                        const idx = parseInt(row.getAttribute('data-index') || 0);
+                        if (idx >= nextIndex) nextIndex = idx + 1;
+                    });
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = 'server-node-row';
+                tr.setAttribute('data-index', nextIndex);
+                tr.style.transition = 'opacity 0.2s';
+
+                const adsBadge = ads 
+                    ? '<span class="badge badge-success ads-badge-indicator">Ads Active</span>' 
+                    : '<span class="badge badge-secondary ads-badge-indicator" style="background-color: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-muted);">No Ads</span>';
+
+                const typeBadge = type === 'free' 
+                    ? '<span class="badge badge-primary">Free</span>' 
+                    : (type === 'pro' ? '<span class="badge badge-success">Pro</span>' : '<span class="badge badge-success">Premium</span>');
+
+                tr.innerHTML = `
+                    <td style="font-weight: 700;">
+                        <span class="node-name-text text-truncate-sm" title="${name || 'Unnamed Node'}">${name || 'Unnamed Node'}</span>
+                        <input type="hidden" name="servers[${nextIndex}][name]" value="${name}" class="node-name-input">
+                    </td>
+                    <td>
+                        <code class="text-truncate-md" title="${url}" style="font-family: monospace; color: #a78bfa; font-size: 12.5px;">${url}</code>
+                        <input type="hidden" name="servers[${nextIndex}][url]" value="${url}" class="node-url-input">
+                    </td>
+                    <td>
+                        ${typeBadge}
+                        <input type="hidden" name="servers[${nextIndex}][type]" value="${type}" class="node-type-input">
+                    </td>
+                    <td>
+                        ${adsBadge}
+                        <input type="hidden" name="servers[${nextIndex}][show_ads]" value="${ads ? '1' : '0'}" class="node-ads-input">
+                    </td>
+                    <td>
+                        <button type="button" class="toggle-status-btn">
+                            <span class="badge badge-success status-badge-indicator">Active</span>
+                        </button>
+                        <input type="hidden" name="servers[${nextIndex}][active]" value="1" class="node-active-input">
+                    </td>
+                    <td style="text-align: right;">
+                        <button type="button" class="edit-node-btn" style="margin-right: 8px;">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button type="button" class="remove-node-btn">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+
+                tbody.appendChild(tr);
+                attachStatusToggleHandler(tr.querySelector('.toggle-status-btn'));
+                attachEditHandler(tr.querySelector('.edit-node-btn'));
+                attachRemoveHandler(tr.querySelector('.remove-node-btn'));
             }
 
-            const rows = tbody.querySelectorAll('.server-node-row');
-            let nextIndex = 0;
-            if (rows.length > 0) {
-                rows.forEach(row => {
-                    const idx = parseInt(row.getAttribute('data-index') || 0);
-                    if (idx >= nextIndex) nextIndex = idx + 1;
-                });
-            }
-
-            const tr = document.createElement('tr');
-            tr.className = 'server-node-row';
-            tr.setAttribute('data-index', nextIndex);
-
-            const adsBadge = ads 
-                ? '<span class="badge badge-success">Ads Active</span>' 
-                : '<span class="badge badge-secondary" style="background-color: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-muted);">No Ads</span>';
-
-            const typeBadge = type === 'free' 
-                ? '<span class="badge badge-primary">Free</span>' 
-                : (type === 'pro' ? '<span class="badge badge-success">Pro</span>' : '<span class="badge badge-success">Premium</span>');
-
-            tr.innerHTML = `
-                <td style="font-weight: 700;">
-                    <span class="node-name-text text-truncate-sm" title="${name || 'Unnamed Node'}">${name || 'Unnamed Node'}</span>
-                    <input type="hidden" name="servers[${nextIndex}][name]" value="${name}">
-                </td>
-                <td>
-                    <code class="text-truncate-md" title="${url}" style="font-family: monospace; color: #a78bfa; font-size: 12.5px;">${url}</code>
-                    <input type="hidden" name="servers[${nextIndex}][url]" value="${url}">
-                </td>
-                <td>
-                    ${typeBadge}
-                    <input type="hidden" name="servers[${nextIndex}][type]" value="${type}">
-                </td>
-                <td>
-                    ${adsBadge}
-                    <input type="hidden" name="servers[${nextIndex}][show_ads]" value="${ads ? '1' : '0'}">
-                </td>
-                <td style="text-align: right;">
-                    <button type="button" class="remove-node-btn">
-                        <i class="fa-solid fa-trash-can"></i>
-                    </button>
-                </td>
-            `;
-
-            tbody.appendChild(tr);
-            attachRemoveHandler(tr.querySelector('.remove-node-btn'));
             closeModal();
         });
     }
 
-    function attachRemoveHandler(btn) {
-        btn.addEventListener('click', function() {
-            const row = btn.closest('.server-node-row');
-            row.remove();
-
-            if (tbody.querySelectorAll('.server-node-row').length === 0) {
-                tbody.innerHTML = `
-                    <tr class="placeholder-row">
-                        <td colspan="5" style="text-align: center; padding: 32px; color: var(--text-muted);">
-                            <i class="fa-solid fa-network-wired" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
-                            No server gateways configured yet. Click "Add Server" to define one.
-                        </td>
-                    </tr>
-                `;
-            }
-        });
-    }
-
+    // Attach event listeners to initial rows
+    tbody.querySelectorAll('.toggle-status-btn').forEach(btn => {
+        attachStatusToggleHandler(btn);
+    });
+    tbody.querySelectorAll('.edit-node-btn').forEach(btn => {
+        attachEditHandler(btn);
+    });
     tbody.querySelectorAll('.remove-node-btn').forEach(btn => {
         attachRemoveHandler(btn);
     });
