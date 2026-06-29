@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Admin - GPS Admin Portal</title>
     <!-- Favicon -->
-    <link rel="shortcut icon" type="image/png" href="{{ asset('images/asthax.png') }}?v=1.0.1">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('images/favicon.png') }}?v=1.0.1">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Style -->

@@ -43,6 +43,9 @@ class FirebaseService
             $config['credentials'] = $config['credentialsFetcher'];
         }
 
+        // Use REST transport instead of gRPC to prevent network hangs on Windows/local ISPs
+        $config['transport'] = 'rest';
+
         // 3. Instantiate and return the Firestore Client directly
         return new FirestoreClient($config);
     }
@@ -63,7 +66,7 @@ class FirebaseService
                     $snapshot = $docRef->snapshot();
                     if ($snapshot->exists()) {
                         $data = $snapshot->data();
-                        if (isset($data['app_name']) || isset($data['servers'])) {
+                        if (!empty($data)) {
                             return $data;
                         }
                     }
@@ -81,7 +84,7 @@ class FirebaseService
             // 1. Try package-specific config from the batch
             if (isset($allConfigs[$app->package_name])) {
                 $data = $allConfigs[$app->package_name];
-                if (isset($data['app_name']) || isset($data['servers'])) {
+                if (!empty($data)) {
                     return $data;
                 }
             }
