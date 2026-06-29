@@ -437,9 +437,9 @@ class NotificationService {
       return _EventNotificationStyle(emoji: '📍', isAlert: false, isSOS: false);
     } else if (message.contains('ignition')) {
       return _EventNotificationStyle(emoji: '🔑', isAlert: false, isSOS: false);
-    } else if (message.contains('online')) {
+    } else if (message.contains('online') || message.contains('অনলাইন')) {
       return _EventNotificationStyle(emoji: '✅', isAlert: false, isSOS: false);
-    } else if (message.contains('offline')) {
+    } else if (message.contains('offline') || message.contains('অফলাইন')) {
       return _EventNotificationStyle(emoji: '❌', isAlert: false, isSOS: false);
     } else if (message.contains('fuel')) {
       return _EventNotificationStyle(emoji: '⛽', isAlert: true, isSOS: false);

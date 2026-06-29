@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
+import 'package:gpspro/util/util.dart';
 
 class DataController extends GetxController {
   // Device Lists
@@ -51,6 +52,7 @@ class DataController extends GetxController {
   // Maps to keep track of previous values for change detection
   final Map<int, bool> _prevEngineStatus = {};
   final Map<int, String> _prevOnlineStatus = {};
+  final Map<int, bool> _prevActualOnlineStatus = {};
   final Map<int, DateTime> _lastOverspeedTime = {};
   final Map<int, bool> _prevSOSStatus = {};
 
@@ -226,12 +228,12 @@ class DataController extends GetxController {
 
         // 4. Offline Alert
         final bool isOfflineEnabled = prefs.getBool('quick_alert_${devId}_offline_duration') ?? 
-                                      prefs.getBool('quick_alert_all_offline_duration') ?? false;
+                                       prefs.getBool('quick_alert_all_offline_duration') ?? false;
         if (isOfflineEnabled) {
-          String currentOnline = device.iconColor ?? 'green';
-          if (_prevOnlineStatus.containsKey(devId)) {
-            String prevOnline = _prevOnlineStatus[devId]!;
-            if (currentOnline == 'red' && prevOnline != 'red') {
+          final bool isOnline = Util.isDeviceOnline(device);
+          if (_prevActualOnlineStatus.containsKey(devId)) {
+            final bool prevOnline = _prevActualOnlineStatus[devId]!;
+            if (!isOnline && prevOnline) {
               final String body = "Vehicle went offline";
               _notificationService.showLocalNotification(
                 id: devId * 10 + 4,
@@ -245,7 +247,7 @@ class DataController extends GetxController {
               );
             }
           }
-          _prevOnlineStatus[devId] = currentOnline;
+          _prevActualOnlineStatus[devId] = isOnline;
         }
 
         // 5. Movement Alert
