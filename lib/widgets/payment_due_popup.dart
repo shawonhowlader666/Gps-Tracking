@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:smart_lock/screens/manual_payment_screen.dart';
 import 'package:smart_lock/services/model/payment_stats.dart';
+import 'package:smart_lock/services/model/payment_package.dart';
 import 'package:smart_lock/services/payment_service.dart';
 
 Future<String?> showPaymentDuePopupIfNeeded(BuildContext context) async {
@@ -138,10 +139,9 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
     return overdue.clamp(0, 10);
   }
 
-  Future<void> _handlePay(String packageType) async {
+  Future<void> _handlePay(double amount, String packageType) async {
     if (!mounted) return;
 
-    final double due = widget.stats.due;
     final bool isAfter10th = widget.isAfter10th;
     final nav = Navigator.of(context, rootNavigator: true);
 
@@ -154,8 +154,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
       await nav.push<String>(
         MaterialPageRoute(
           builder: (_) => ManualPaymentScreen(
-            dueAmount:
-                packageType == '1_year' ? 1800.0 : (due > 0 ? due : 200.0),
+            dueAmount: amount,
             isAfter10th: isAfter10th,
             packageType: packageType,
           ),
@@ -336,85 +335,98 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
 
           const SizedBox(height: 20),
 
-          // ✅ Package options row (1 Month & 1 Year)
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed:
-                        _isPaymentLoading ? null : () => _handlePay('1_month'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1B6B3A),
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor:
-                          const Color(0xFF1B6B3A).withValues(alpha: 0.6),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+          // ✅ Package options row (Dynamically loaded, defaults instantly)
+          FutureBuilder<DuePopupData>(
+            future: loadDuePopupData(widget.stats.unpaidBillsCount),
+            builder: (context, snapshot) {
+              final data = snapshot.data ?? DuePopupData(
+                getRecommendedPackages(widget.stats.unpaidBillsCount),
+              );
+              final pkg1 = data.packages[0];
+              final pkg2 = data.packages[1];
+
+              return Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _isPaymentLoading
+                            ? null
+                            : () => _handlePay(pkg1.finalPrice, pkg1.key),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1B6B3A),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor:
+                              const Color(0xFF1B6B3A).withValues(alpha: 0.6),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                        ),
+                        child: _isPaymentLoading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                pkg1.buttonText,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                       ),
-                      elevation: 0,
-                    ),
-                    icon: _isPaymentLoading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.credit_card, size: 18),
-                    label: const Text(
-                      '১ মাসের বিল',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed:
-                        _isPaymentLoading ? null : () => _handlePay('1_year'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE4B34E),
-                      foregroundColor: Colors.black,
-                      disabledBackgroundColor:
-                          const Color(0xFFE4B34E).withValues(alpha: 0.6),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 0,
-                    ),
-                    icon: _isPaymentLoading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.black,
-                            ),
-                          )
-                        : const Icon(Icons.star, size: 18),
-                    label: const Text(
-                      '১ বছরের বিল',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      textAlign: TextAlign.center,
                     ),
                   ),
-                ),
-              ),
-            ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _isPaymentLoading
+                            ? null
+                            : () => _handlePay(pkg2.finalPrice, pkg2.key),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF980E04), // Primary Red
+                          foregroundColor: Colors.white,            // White text
+                          disabledBackgroundColor:
+                              const Color(0xFF980E04).withValues(alpha: 0.6),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                        ),
+                        child: _isPaymentLoading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                pkg2.buttonText,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
 
           const SizedBox(height: 10),
@@ -561,4 +573,14 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
       ),
     );
   }
+}
+
+class DuePopupData {
+  final List<PaymentPackage> packages;
+  DuePopupData(this.packages);
+}
+
+Future<DuePopupData> loadDuePopupData(int unpaidBillsCount) async {
+  final packages = await fetchAndRecommendPackages(unpaidBillsCount);
+  return DuePopupData(packages);
 }

@@ -11,6 +11,7 @@ import 'package:fluttertoast/fluttertoast.dart' as ft;
 import 'dart:io';
 
 import '../services/pdf_generator.dart';
+import '../storage/user_repository.dart';
 
 class PaymentListScreen extends StatefulWidget {
   const PaymentListScreen({super.key});
@@ -76,18 +77,8 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
 
       setState(() {
         _isLoading = false;
-        _errorMessage = '${_getErrorMessage(e)}\n\n(Details: $e)';
+        _errorMessage = _getErrorMessage(e);
       });
-      
-      try {
-        ft.Fluttertoast.showToast(
-          msg: "Billing Error: $e",
-          toastLength: ft.Toast.LENGTH_LONG,
-          gravity: ft.ToastGravity.BOTTOM,
-          backgroundColor: Colors.red,
-          textColor: Colors.white,
-        );
-      } catch (_) {}
     }
   }
 
@@ -125,8 +116,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         _isLoadingMore = false;
         _currentPage--;
       });
-
-      _showErrorSnackBar('Failed to load more bills');
     }
   }
 
@@ -609,6 +598,11 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       return _buildErrorWidget();
     }
 
+    final email = UserRepository.getEmail()?.toLowerCase() ?? '';
+    final bool isAdmin = email == 'admin@example.com' ||
+        email.startsWith('admin@') ||
+        email.startsWith('manager');
+
     return RefreshIndicator(
       onRefresh: _loadData,
       child: SingleChildScrollView(
@@ -620,9 +614,9 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
           children: [
             _buildStatsCard(),
             const SizedBox(height: 24),
-            const Text(
-              'Transaction History',
-              style: TextStyle(
+            Text(
+              isAdmin ? 'All User Bills' : 'Transaction History',
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF1E293B),
@@ -687,6 +681,11 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
     final bool hasStats = _stats != null;
     final bool hasDue = due > 0;
 
+    final email = UserRepository.getEmail()?.toLowerCase() ?? '';
+    final bool isAdmin = email == 'admin@example.com' ||
+        email.startsWith('admin@') ||
+        email.startsWith('manager');
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -708,9 +707,9 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Total Due',
-            style: TextStyle(
+          Text(
+            isAdmin ? 'Total Outstanding Due' : 'Total Due',
+            style: const TextStyle(
               color: Colors.white70,
               fontSize: 14,
             ),
@@ -729,7 +728,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
             children: [
               Expanded(
                 child: _buildStatItem(
-                  'Unpaid Bills',
+                  isAdmin ? 'Total Unpaid Bills' : 'Unpaid Bills',
                   hasStats ? unpaid.toString() : '--',
                   Icons.receipt_long,
                 ),
@@ -741,47 +740,49 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
               ),
               Expanded(
                 child: _buildStatItem(
-                  'Total Paid',
+                  isAdmin ? 'Total Collections' : 'Total Paid',
                   hasStats ? 'BDT ${paid.toStringAsFixed(0)}' : '--',
                   Icons.history,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: (hasStats && hasDue)
-                  ? () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ManualPaymentScreen(dueAmount: _stats!.due),
-                        ),
-                      )
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF980E04),
-                disabledBackgroundColor: Colors.white.withValues(alpha: 0.5),
-                disabledForegroundColor:
-                    const Color(0xFF980E04).withValues(alpha: 0.5),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+          if (!isAdmin) ...[
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: (hasStats && hasDue)
+                    ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ManualPaymentScreen(dueAmount: _stats!.due),
+                          ),
+                        )
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF980E04),
+                  disabledBackgroundColor: Colors.white.withValues(alpha: 0.5),
+                  disabledForegroundColor:
+                      const Color(0xFF980E04).withValues(alpha: 0.5),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
                 ),
-                elevation: 0,
-              ),
-              child: const Text(
-                'Pay Now',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                child: const Text(
+                  'Pay Now',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

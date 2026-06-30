@@ -20,8 +20,15 @@ class UserRepository {
     prefs!.setString(PREF_API_HASH, hash);
   }
 
+  static String? _sessionEmail;
+  static String? _sessionPassword;
+
   static String? getEmail() {
-    return prefs!.getString(PREF_USER_EMAIL);
+    final email = prefs!.getString(PREF_USER_EMAIL);
+    if (email == null || email == 'null') {
+      return _sessionEmail;
+    }
+    return email;
   }
 
   static void setEmail(String email) {
@@ -40,6 +47,7 @@ class UserRepository {
       }
     }
     prefs!.setString(PREF_USER_EMAIL, clean);
+    _sessionEmail = clean;
   }
 
   static String? getName() {
@@ -51,11 +59,24 @@ class UserRepository {
   }
 
   static String? getPassword() {
-    return prefs!.getString(PREF_PASSWORD).toString();
+    final pass = prefs!.getString(PREF_PASSWORD);
+    if (pass == null || pass == 'null') {
+      return _sessionPassword;
+    }
+    return pass;
   }
 
   static void setPassword(String password) {
     prefs!.setString(PREF_PASSWORD, password);
+    _sessionPassword = password;
+  }
+
+  static void setSessionPassword(String password) {
+    _sessionPassword = password;
+  }
+
+  static void clearSessionPassword() {
+    _sessionPassword = null;
   }
 
   // NEW: Phone number
@@ -97,6 +118,8 @@ class UserRepository {
 
   static void doLogout() {
     prefs!.clear();
+    _sessionPassword = null;
+    _sessionEmail = null;
   }
 
   static String? getServerUrl() {

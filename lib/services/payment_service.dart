@@ -7,7 +7,7 @@ import 'package:smart_lock/storage/user_repository.dart';
 import 'package:http/http.dart' as http;
 
 class PaymentService {
-  static const String baseUrl = "https://billing.orbitgps.com.bd/api";
+  static const String baseUrl = "https://billing.smartlockbd.com/api";
   static const Duration timeoutDuration = Duration(seconds: 30);
   static String? _token;
   static bool _isLoggingIn = false;
@@ -185,5 +185,18 @@ class PaymentService {
     } catch (e) {
       rethrow;
     }
+  }
+
+  /// Get all billing packages from the server
+  static Future<List<Map<String, dynamic>>?> getBillingPackages() async {
+    try {
+      final data = await _getJson('/billing-packages');
+      if (data != null && data['data'] != null) {
+        return List<Map<String, dynamic>>.from(data['data']);
+      }
+    } catch (e) {
+      rethrow;
+    }
+    return null;
   }
 }

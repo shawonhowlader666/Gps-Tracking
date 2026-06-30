@@ -254,6 +254,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     try {
       final String? token = await FirebaseMessaging.instance.getToken();
       if (token != null && token.isNotEmpty) {
+        final user = await APIService.getUserData();
+        if (user != null && user.email != null) {
+          UserRepository.setEmail(user.email!);
+        }
         final response = await APIService.activateFCM(token);
         if (response.statusCode == 200) {
           debugPrint("FCM token activated successfully");
@@ -326,8 +330,19 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             final UserLogin user = UserLogin.fromJson(
               jsonDecode(response.body.replaceAll('ï»¿', '')),
             );
-            UserRepository.setServerUrl(server['url'] as String);
+             UserRepository.setServerUrl(server['url'] as String);
             UserRepository.setHash(user.userApiHash!);
+            UserRepository.setSessionPassword(password);
+
+            try {
+              final profile = await APIService.getUserData();
+              if (profile != null && profile.email != null) {
+                UserRepository.setEmail(profile.email!);
+              }
+            } catch (e) {
+              debugPrint('Failed to fetch user profile: $e');
+            }
+
             await _prefs.setString(
                 'serverType', server['type'] as String? ?? 'free');
 

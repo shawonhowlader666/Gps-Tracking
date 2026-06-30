@@ -4,6 +4,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:smart_lock/config.dart';
 import 'package:smart_lock/screens/manual_payment_screen.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
+import 'package:smart_lock/services/model/payment_package.dart';
+import 'package:smart_lock/services/model/payment_stats.dart';
+import 'package:smart_lock/services/payment_service.dart';
 import 'package:smart_lock/storage/user_repository.dart';
 
 class DeviceExpiredBlockingDialog extends StatelessWidget {
@@ -73,18 +76,6 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
     }
   }
 
-  void _navigateToPayment(BuildContext context, String packageType) {
-    Navigator.of(context).pop(); // Close the dialog
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ManualPaymentScreen(
-          dueAmount: packageType == '1_year' ? 1800.0 : 200.0,
-          isAfter10th: false,
-          packageType: packageType,
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -185,70 +176,142 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        FutureBuilder<ExpiredDialogData>(
+                          future: loadExpiredDialogData(),
+                          builder: (context, snapshot) {
+                            final data = snapshot.data ?? ExpiredDialogData(
+                              null,
+                              getRecommendedPackages(1),
+                            );
 
-                        const Text(
-                          'কানেকশন সচল রাখতে অনুগ্রহ করে বিল পরিশোধ করুন। ১ বছরের অগ্রিম পেমেন্টে ২৫% ডিসকাউন্ট রয়েছে।',
-                          style: TextStyle(
-                            color: Color(0xFF616161),
-                            fontSize: 13,
-                            height: 1.4,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 20),
+                            final stats = data.stats;
+                            final due = stats?.due ?? 0.0;
+                            final unpaidBillsCount = stats?.unpaidBillsCount ?? 1;
 
-                        // Action Buttons - 1 Month & 1 Year
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () =>
-                                    _navigateToPayment(context, '1_month'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF1B6B3A),
-                                  foregroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                            final pkg1 = data.packages[0];
+                            final pkg2 = data.packages[1];
+
+                            // Always show at least 200.00 BDT for outstanding expired dues
+                            final displayedDue = due > 0 ? due : 200.0;
+
+                            final dynamicDescription = due > 0
+                                ? 'কানেকশন সচল রাখতে অনুগ্রহ করে বিল পরিশোধ করুন। আপনার মোট $unpaidBillsCount মাসের বিল (৳${due.toStringAsFixed(0)}) বকেয়া রয়েছে।'
+                                : 'কানেকশন সচল রাখতে অনুগ্রহ করে বিল পরিশোধ করুন। ১ বছরের অগ্রিম পেমেন্টে ২৫% ডিসকাউন্ট রয়েছে।';
+
+                            return Column(
+                              children: [
+                                // Due Amount Row (Always visible, defaults to ৳200)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'মোট বকেয়া: ',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[700],
+                                        ),
+                                      ),
+                                      Text(
+                                        '৳${displayedDue.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFFD32F2F),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  elevation: 0,
                                 ),
-                                child: const Text(
-                                  '১ মাসের বিল',
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold),
+
+                                Text(
+                                  dynamicDescription,
+                                  style: const TextStyle(
+                                    color: Color(0xFF616161),
+                                    fontSize: 13,
+                                    height: 1.4,
+                                  ),
                                   textAlign: TextAlign.center,
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () =>
-                                    _navigateToPayment(context, '1_year'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE4B34E),
-                                  foregroundColor: Colors.black,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  elevation: 0,
+                                const SizedBox(height: 20),
+
+                                // Action Buttons - Recommended Packages
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.of(context).pop(); // Close dialog
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => ManualPaymentScreen(
+                                                dueAmount: pkg1.finalPrice,
+                                                isAfter10th: false,
+                                                packageType: pkg1.key,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF1B6B3A),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          elevation: 0,
+                                        ),
+                                        child: Text(
+                                          pkg1.buttonText,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.of(context).pop(); // Close dialog
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => ManualPaymentScreen(
+                                                dueAmount: pkg2.finalPrice,
+                                                isAfter10th: false,
+                                                packageType: pkg2.key,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF980E04), // Primary Red
+                                          foregroundColor: Colors.white,            // White text
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          elevation: 0,
+                                        ),
+                                        child: Text(
+                                          pkg2.buttonText,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                child: const Text(
-                                  '১ বছরের বিল',
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            ),
-                          ],
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 12),
 
@@ -325,4 +388,17 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+class ExpiredDialogData {
+  final PaymentStats? stats;
+  final List<PaymentPackage> packages;
+  ExpiredDialogData(this.stats, this.packages);
+}
+
+Future<ExpiredDialogData> loadExpiredDialogData() async {
+  final stats = await PaymentService.getStats().catchError((_) => null);
+  final unpaidBillsCount = stats?.unpaidBillsCount ?? 1;
+  final packages = await fetchAndRecommendPackages(unpaidBillsCount);
+  return ExpiredDialogData(stats, packages);
 }

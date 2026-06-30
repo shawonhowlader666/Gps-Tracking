@@ -161,7 +161,11 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
 
       final String packageStr = widget.packageType == '1_year'
           ? '1 Year (25% Discount BDT 1800)'
-          : (widget.packageType == '1_month' ? '1 Month (BDT 200)' : 'N/A');
+          : (widget.packageType == '1_month'
+              ? '1 Month (BDT 200)'
+              : (widget.packageType != null && widget.packageType!.contains('_months')
+                  ? '${widget.packageType!.split('_').first} Months (BDT ${widget.dueAmount})'
+                  : '${widget.packageType ?? 'Custom'} (BDT ${widget.dueAmount})'));
 
       final msg = Uri.encodeComponent(
         '🧾 *Manual Payment Notification*\n\n'
@@ -395,14 +399,14 @@ class _DueBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF3E6FB8), Color(0xFF5C8ACF)],
+          colors: [Color(0xFF980E04), Color(0xFFC0392B)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF3E6FB8).withValues(alpha: 0.35),
+            color: const Color(0xFF980E04).withValues(alpha: 0.35),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -456,7 +460,7 @@ class _StepHeader extends StatelessWidget {
           width: 28,
           height: 28,
           decoration: const BoxDecoration(
-            color: Color(0xFF3E6FB8),
+            color: Color(0xFF980E04),
             shape: BoxShape.circle,
           ),
           child: Center(
@@ -728,7 +732,7 @@ class _InputField extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-            prefixIcon: Icon(icon, color: const Color(0xFF3E6FB8), size: 20),
+            prefixIcon: Icon(icon, color: const Color(0xFF980E04), size: 20),
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(
@@ -741,7 +745,7 @@ class _InputField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF3E6FB8), width: 2),
+              borderSide: const BorderSide(color: Color(0xFF980E04), width: 2),
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -773,7 +777,7 @@ class _ReceiptCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color accent = method?.color ?? const Color(0xFF3E6FB8);
+    final Color accent = method?.color ?? const Color(0xFF980E04);
 
     return RepaintBoundary(
       key: repaintKey,
