@@ -1062,12 +1062,46 @@ class Util {
     if (!isDeviceOnline(device)) return "red";
     final speed = double.tryParse(device.speed.toString()) ?? 0;
     if (speed > 0) return "green";
-    if (isEngineOn(device)) return "yellow";
-    return "red";
+    return "yellow";
+  }
+
+  static String resolveStatusIconPath(String imagePath, Color color, {bool isOnline = true}) {
+    debugPrint("[DEBUG RESOLVE COLOR] path: $imagePath, color: $color");
+    if (imagePath.isEmpty) return imagePath;
+
+    // 1. Strip extension (e.g. .png, .jpg, .svg)
+    final int extIdx = imagePath.lastIndexOf('.');
+    String ext = '';
+    String base = imagePath;
+    if (extIdx != -1) {
+      ext = imagePath.substring(extIdx);
+      base = imagePath.substring(0, extIdx);
+    }
+
+    // 2. Strip any existing status suffix if present
+    final suffixes = ['_online', '_offline', '_ack', '_engine'];
+    for (final suffix in suffixes) {
+      if (base.endsWith(suffix)) {
+        base = base.substring(0, base.length - suffix.length);
+        break;
+      }
+    }
+
+    // 3. Determine the correct suffix based on status/color
+    String newSuffix = '_offline';
+    if (color.toARGB32() == 0xFF00C853) {
+      newSuffix = '_online';
+    } else if (color.toARGB32() == 0xFFFF9100) {
+      newSuffix = '_ack';
+    } else {
+      newSuffix = !isOnline ? '_offline' : '_ack';
+    }
+
+    return "$base$newSuffix$ext";
   }
 
   static Future<BitmapDescriptor> getMarkerIcon(String imagePath,
-      {int size = 55, String? statusColor, String? iconType, String? deviceName, dynamic deviceId}) async {
+      {int size = 55, String? statusColor, String? iconType, String? deviceName, dynamic deviceId, DeviceItem? device}) async {
     final String cacheKey = _getCacheKey(imagePath, size,
         statusColor: statusColor, iconType: iconType, deviceName: deviceName, deviceId: deviceId);
     if (_markerIconCache.containsKey(cacheKey)) {
@@ -1076,7 +1110,7 @@ class Util {
     final int physicalSize = size;
 
     try {
-      // 1. Check if we have a local custom icon preference set
+      // 1. Check if we have a local custom icon preference set (Highest priority)
       if (deviceId != null) {
         final String? localCustomAsset = UserRepository.prefs
             ?.getString("custom_icon_path_${deviceId.toString()}");
@@ -1092,55 +1126,66 @@ class Util {
         }
       }
 
-      // 2. Check if it's a bike/scooter and use local asset mapping
-      final String path =
-          "${imagePath.toLowerCase()} ${iconType?.toLowerCase() ?? ''} ${deviceName?.toLowerCase() ?? ''}"
-              .trim();
-      final bool isBike = path.contains('motorcycle') ||
-          path.contains('bike') ||
-          path.contains('scooter') ||
-          path.contains('scotty');
-
-      if (isBike) {
-        final String localAsset = (path.contains('scotty') || path.contains('scooter'))
-            ? 'assets/images/scotty_toprunning.png'
-            : 'assets/images/bike_toprunning.png';
-        final tintColor = _getColorFromStatus(statusColor, imagePath);
-        final Uint8List? bytes =
-            await getTintedBytesFromAsset(localAsset, physicalSize, tintColor);
-        if (bytes != null) {
-          final descriptor = BitmapDescriptor.bytes(bytes);
-          _markerIconCache[cacheKey] = descriptor;
-          return descriptor;
-        }
-      }
-
-      // 3. Fetch the server PNG image directly
+      // 2. Fetch the server PNG image directly
       if (imagePath.isNotEmpty) {
         final String? serverUrl = UserRepository.getServerUrl();
         if (serverUrl != null && serverUrl.isNotEmpty) {
-          final String imageUrl = "$serverUrl/$imagePath";
-          final File imageFile =
-              await DefaultCacheManager().getSingleFile(imageUrl);
-          final Uint8List bytes = await imageFile.readAsBytes();
+          Color colorVal = const m.Color(0xFFE53935); // red/offline default
+          final status = statusColor?.toLowerCase().trim() ?? '';
+          if (status == 'green' || status.contains('green')) {
+            colorVal = const m.Color(0xFF00C853);
+          } else if (status == 'yellow' || status.contains('yellow')) {
+            colorVal = const m.Color(0xFFFF9100);
+          }
+          final String resolvedPath = resolveStatusIconPath(
+              imagePath, colorVal,
+              isOnline: device != null ? isDeviceOnline(device) : status != 'red');
 
-          // Since server icons have no transparent margins, scale down the target size to 50% of requested size
-          final int adjustedSize = (size * 0.5).toInt();
+          final String imageUrl = "$serverUrl/$resolvedPath";
+          try {
+            final File imageFile =
+                await DefaultCacheManager().getSingleFile(imageUrl);
+            final Uint8List bytes = await imageFile.readAsBytes();
 
-          // Resize image using instantiateImageCodec
-          final ui.Codec codec =
-              await ui.instantiateImageCodec(bytes, targetWidth: adjustedSize);
-          final ui.FrameInfo fi = await codec.getNextFrame();
-          final Uint8List resizedBytes =
-              (await fi.image.toByteData(format: ui.ImageByteFormat.png))!
-                  .buffer
-                  .asUint8List();
+            // Scale down the target size to 85% of requested size for consistency
+            final int adjustedSize = (size * 0.85).toInt();
 
-          final descriptor = BitmapDescriptor.bytes(resizedBytes);
-          _markerIconCache[cacheKey] = descriptor;
-          return descriptor;
+            // Get original image size to constrain the larger dimension (width or height)
+            final ui.Codec tempCodec = await ui.instantiateImageCodec(bytes);
+            final ui.FrameInfo tempFi = await tempCodec.getNextFrame();
+            final int origW = tempFi.image.width;
+            final int origH = tempFi.image.height;
+
+            int targetW;
+            int targetH;
+            if (origW > origH) {
+              targetW = adjustedSize;
+              targetH = (origH * adjustedSize / origW).toInt();
+            } else {
+              targetH = adjustedSize;
+              targetW = (origW * adjustedSize / origH).toInt();
+            }
+
+            // Resize image using instantiateImageCodec
+            final ui.Codec codec =
+                await ui.instantiateImageCodec(bytes, targetWidth: targetW, targetHeight: targetH);
+            final ui.FrameInfo fi = await codec.getNextFrame();
+            final ui.Image decodedImage = fi.image;
+
+            // Directly load the server image in its raw original colors (no custom color filter/tint)
+            final Uint8List finalBytes = (await decodedImage.toByteData(format: ui.ImageByteFormat.png))!
+                .buffer
+                .asUint8List();
+
+            final descriptor = BitmapDescriptor.bytes(finalBytes);
+            _markerIconCache[cacheKey] = descriptor;
+            return descriptor;
+          } catch (serverErr) {
+            debugPrint("Server icon fetch failed: $serverErr.");
+          }
         }
       }
+
       return BitmapDescriptor.defaultMarker;
     } catch (e) {
       debugPrint("Failed to fetch server icon: $e. Returning default marker.");
@@ -1207,16 +1252,15 @@ class Util {
   //   _cachedMarkerIcon = await getScaledMarkerIcon(imagePath, size: size);
   //   _cachedMarkerPath = imagePath;
   //   return _cachedMarkerIcon!;
-  // }
-
-  static Widget getVehicleIconWidget(String? imagePath, Color color, {double size = 40, String? iconType, String? deviceName, dynamic deviceId}) {
+  static Widget getVehicleIconWidget(String? imagePath, Color color, {double size = 40, String? iconType, String? deviceName, dynamic deviceId, DeviceItem? device}) {
     final bool isMoving = color == const Color(0xFF00C853);
 
-    // 1. Check if the user set a custom icon locally in the app
+    // 1. Check if the user set a custom icon locally in the app (Highest priority)
     if (deviceId != null) {
       final String? savedAsset = UserRepository.prefs
           ?.getString("custom_icon_path_${deviceId.toString()}");
       if (savedAsset != null && savedAsset.isNotEmpty) {
+        debugPrint("[DEBUG ICON] Custom icon preference found for device $deviceId ($deviceName): $savedAsset");
         final Widget img = Image.asset(
           savedAsset,
           width: size,
@@ -1229,50 +1273,43 @@ class Util {
       }
     }
 
-    // 2. Check if it's a bike/scooter and use local asset mapping
-    final String path =
-        "${imagePath?.toLowerCase() ?? ''} ${iconType?.toLowerCase() ?? ''} ${deviceName?.toLowerCase() ?? ''}"
-            .trim();
-    final bool isBike = path.contains('motorcycle') ||
-        path.contains('bike') ||
-        path.contains('scooter') ||
-        path.contains('scotty');
-
-    if (isBike) {
-      final String localAsset = (path.contains('scotty') || path.contains('scooter'))
-          ? 'assets/images/scotty_toprunning.png'
-          : 'assets/images/bike_toprunning.png';
-      final Widget img = Image.asset(
-        localAsset,
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-      );
-      return isMoving
-          ? img
-          : ColorFiltered(colorFilter: getTintFilter(color), child: img);
-    }
-
-    // 3. Fetch the server PNG image directly
+    // 2. Fetch the server PNG image directly
     if (imagePath != null && imagePath.isNotEmpty) {
       final String? serverUrl = UserRepository.getServerUrl();
       if (serverUrl != null && serverUrl.isNotEmpty) {
+        final String resolvedPath = resolveStatusIconPath(
+            imagePath, color,
+            isOnline: device != null ? isDeviceOnline(device) : color != const Color(0xFFE53935));
+
         final Widget fallbackImg = Icon(
           Icons.directions_car,
           color: color,
           size: size * 0.7,
         );
+
+        debugPrint("[DEBUG IMAGE URL] requesting: $serverUrl/$resolvedPath");
+
         return CachedNetworkImage(
-          imageUrl: "$serverUrl/$imagePath",
+          imageUrl: "$serverUrl/$resolvedPath",
           width: size,
           height: size,
           fit: BoxFit.contain,
-          placeholder: (context, url) => fallbackImg,
+          placeholder: (context, url) => SizedBox(
+            width: size,
+            height: size,
+            child: const Center(
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.grey),
+              ),
+            ),
+          ),
           errorWidget: (context, url, error) => fallbackImg,
         );
       }
     }
-    
+
     return Icon(
       Icons.directions_car,
       color: color,
@@ -1282,26 +1319,6 @@ class Util {
 
   static Widget getChangeIconWidget(String? imagePath, {double size = 55, String? iconType, String? deviceName, dynamic deviceId}) {
     if (imagePath != null && imagePath.isNotEmpty) {
-      final String path =
-          "$imagePath ${iconType?.toLowerCase() ?? ''} ${deviceName?.toLowerCase() ?? ''}"
-              .trim();
-      final bool isBike = path.contains('motorcycle') ||
-          path.contains('bike') ||
-          path.contains('scooter') ||
-          path.contains('scotty');
-
-      if (isBike) {
-        final String localAsset = (path.contains('scotty') || path.contains('scooter'))
-            ? 'assets/images/scotty_toprunning.png'
-            : 'assets/images/bike_toprunning.png';
-        return Image.asset(
-          localAsset,
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-        );
-      }
-
       final String? serverUrl = UserRepository.getServerUrl();
       if (serverUrl != null && serverUrl.isNotEmpty) {
         return CachedNetworkImage(
@@ -1312,21 +1329,21 @@ class Util {
           placeholder: (context, url) => const SizedBox(
             width: 30,
             height: 30,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           ),
           errorWidget: (context, url, error) => Icon(
-            Icons.image_not_supported,
-            color: Colors.grey[400],
-            size: size * 0.6,
+            Icons.directions_car,
+            color: Colors.grey[600],
+            size: size * 0.7,
           ),
         );
       }
     }
-    
+
     return Icon(
-      Icons.image_not_supported,
-      color: Colors.grey[400],
-      size: size * 0.6,
+      Icons.directions_car,
+      color: Colors.grey[600],
+      size: size * 0.7,
     );
   }
 

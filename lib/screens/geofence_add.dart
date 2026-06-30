@@ -138,7 +138,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                   statusColor: device.iconColor,
                   iconType: device.icon?.type ?? device.iconType,
                   deviceName: device.name,
-                  deviceId: device.id);
+                  deviceId: device.id,
+                  device: device);
 
               _markers.add(Marker(
                 markerId: MarkerId(device.id.toString()),

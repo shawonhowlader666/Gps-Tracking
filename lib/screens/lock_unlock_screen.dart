@@ -460,6 +460,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                     iconType: widget.device.icon?.type ?? widget.device.iconType,
                     deviceName: widget.device.name,
                     deviceId: widget.device.id,
+                    device: widget.device,
                   ),
                 ),
               ),

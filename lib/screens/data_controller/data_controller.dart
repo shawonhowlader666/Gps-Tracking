@@ -73,7 +73,7 @@ class DataController extends GetxController {
 
   @override
   Future<void> onReady() async {
-    Timer.periodic(const Duration(seconds: 8), (timer) {
+    Timer.periodic(const Duration(seconds: 4), (timer) {
       // Periodic polling works for both API modes
       if (UserRepository.getHash() != null || UserRepository.isTracksolidMode()) {
         getDevices();

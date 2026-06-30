@@ -4,6 +4,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:gpspro/screens/report/get_today_report.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
+import 'package:gpspro/theme/custom_color.dart';
 import 'package:intl/intl.dart';
 
 import '../../playback.dart';
@@ -141,6 +142,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
         period: ReportPeriod.custom,
         customStart: date,
         customEnd: DateTime(date.year, date.month, date.day, 23, 59, 59),
+        fetchPdfInBackground: false,
       );
 
       if (dayReport.isNotEmpty) {
@@ -190,7 +192,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
 
     return RefreshIndicator(
       onRefresh: _loadMonthlyReport,
-      color: const Color(0xFF3F51B5),
+      color: CustomColor.primary,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -254,14 +256,14 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: onTap != null
-              ? const Color(0xFF3F51B5).withValues(alpha: 0.1)
+              ? CustomColor.primary.withValues(alpha: 0.1)
               : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(
           icon,
           size: 20,
-          color: onTap != null ? const Color(0xFF3F51B5) : Colors.grey,
+          color: onTap != null ? CustomColor.primary : Colors.grey,
         ),
       ),
     );
@@ -272,7 +274,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
       padding: const EdgeInsets.all(60),
       child: const Center(
         child: CircularProgressIndicator(
-          color: Color(0xFF3F51B5),
+          color: CustomColor.primary,
           strokeWidth: 2,
         ),
       ),
@@ -353,7 +355,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
                   child: LinearProgressIndicator(
                     value: progress,
                     backgroundColor: Colors.grey[200],
-                    valueColor: const AlwaysStoppedAnimation(Color(0xFF3F51B5)),
+                    valueColor: const AlwaysStoppedAnimation(CustomColor.primary),
                     minHeight: 4,
                   ),
                 ),
@@ -377,7 +379,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF3F51B5), Color(0xFF5C6BC0)],
+          colors: [CustomColor.primary, Color(0xFFFF5252)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -467,7 +469,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isToday ? const Color(0xFF3F51B5) : Colors.grey.shade200,
+          color: isToday ? CustomColor.primary : Colors.grey.shade200,
           width: isToday ? 2 : 1,
         ),
       ),
@@ -481,10 +483,10 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
             height: 48,
             decoration: BoxDecoration(
               color: isToday
-                  ? const Color(0xFF3F51B5)
+                  ? CustomColor.primary
                   : isWeekend
                   ? Colors.orange.withValues(alpha: 0.1)
-                  : const Color(0xFF3F51B5).withValues(alpha: 0.1),
+                  : CustomColor.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
@@ -499,7 +501,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
                         ? Colors.white
                         : isWeekend
                         ? Colors.orange
-                        : const Color(0xFF3F51B5),
+                        : CustomColor.primary,
                   ),
                 ),
                 Text(
@@ -510,7 +512,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
                         ? Colors.white70
                         : isWeekend
                         ? Colors.orange
-                        : const Color(0xFF3F51B5),
+                        : CustomColor.primary,
                   ),
                 ),
               ],

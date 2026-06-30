@@ -157,7 +157,7 @@ class ReportService {
 
   static final Map<String, TodayReportData> _cache = {};
   static DateTime? _lastCacheTime;
-  static const int _cacheDurationSeconds = 30;
+  static const int _cacheDurationSeconds = 600; // 10 minutes cache duration
 
   /// Get report for a specific period (today, yesterday, this week, this month)
   static Future<TodayReportData> getReportForPeriod({
@@ -166,6 +166,7 @@ class ReportService {
     DateTime? customStart,
     DateTime? customEnd,
     bool forceRefresh = false,
+    bool fetchPdfInBackground = true,
   }) async {
     final dates = _getDateRangeForPeriod(period, customStart, customEnd);
 
@@ -177,6 +178,7 @@ class ReportService {
       fromDate: dates['from']!,
       toDate: dates['to']!,
       forceRefresh: forceRefresh,
+      fetchPdfInBackground: fetchPdfInBackground,
     );
   }
 
@@ -228,6 +230,7 @@ class ReportService {
     required DateTime fromDate,
     required DateTime toDate,
     bool forceRefresh = false,
+    bool fetchPdfInBackground = true,
   }) async {
     final cacheKey = 'device_${deviceId}_${_formatDate(fromDate)}_${_formatDate(toDate)}';
 
@@ -241,52 +244,57 @@ class ReportService {
     }
 
     try {
-      log('🔄 [ReportService] Fetching report for device $deviceId');
+      log('🔄 [ReportService] Fetching history report for device $deviceId');
 
       final fromDateStr = _formatDate(fromDate);
-      final toDateStr = _formatDate(toDate.add(const Duration(days: 1)));
+      final toDateStr = _formatDate(toDate);
 
-      log('📅 [ReportService] Date range: $fromDateStr to $toDateStr');
-
-      final reportResponse = await APIService.getReport(
+      // Phase 1: Fast API Fetch (History JSON)
+      final history = await APIService.getHistory(
         deviceId.toString(),
         fromDateStr,
+        "00:00",
         toDateStr,
-        1,
+        "23:59",
       );
 
-      if (reportResponse == null || reportResponse.url == null) {
-        log('❌ [ReportService] No report URL received');
-        return TodayReportData();
+      TodayReportData data = TodayReportData();
+
+      if (history != null) {
+        double distanceVal = 0;
+        double hoursVal = 0;
+        String avgSpeedStr = '--';
+        
+        if (history.distance_sum != null) {
+          try {
+            distanceVal = double.parse(history.distance_sum!.replaceAll(RegExp(r'[^0-9.]'), ''));
+          } catch (_) {}
+        }
+        if (history.move_duration != null) {
+          hoursVal = _parseDurationToHours(history.move_duration!);
+        }
+        if (hoursVal > 0) {
+          avgSpeedStr = "${(distanceVal / hoursVal).toStringAsFixed(1)} kph";
+        }
+
+        data = TodayReportData(
+          routeLength: history.distance_sum,
+          topSpeed: history.top_speed != null ? "${history.top_speed} kph" : '--',
+          moveDuration: history.move_duration,
+          stopDuration: history.stop_duration,
+          averageSpeed: avgSpeedStr,
+          fuelConsumption: history.fuel_consumption,
+        );
+
+        // Cache the history-only result immediately
+        _cache[cacheKey] = data;
+        _lastCacheTime = DateTime.now();
       }
 
-      log('📥 [ReportService] Report URL: ${reportResponse.url}');
-
-      final pdfFile = await _downloadPdf(reportResponse.url!);
-      if (pdfFile == null) {
-        log('❌ [ReportService] Failed to download PDF');
-        return TodayReportData();
+      // Phase 2: Start background PDF loading to fetch remaining details
+      if (fetchPdfInBackground) {
+        _fetchCompleteReportInBackground(deviceId, fromDate, toDate, cacheKey);
       }
-
-      log('📄 [ReportService] PDF downloaded successfully');
-
-      final text = await _extractText(pdfFile.path);
-      if (text == null || text.isEmpty) {
-        log('❌ [ReportService] No text extracted from PDF');
-        return TodayReportData();
-      }
-
-      log('📝 [ReportService] Text extracted (${text.length} characters)');
-
-      // Parse the extracted text
-      final data = _parseMultiLineText(text);
-
-      log('✅ [ReportService] Report parsed successfully');
-      log('📊 [ReportService] Data: $data');
-
-      // Cache the result
-      _cache[cacheKey] = data;
-      _lastCacheTime = DateTime.now();
 
       return data;
     } catch (e, stack) {
@@ -294,6 +302,81 @@ class ReportService {
       log('❌ [ReportService] Stack trace: $stack');
       return TodayReportData();
     }
+  }
+
+  static double _parseDurationToHours(String duration) {
+    try {
+      double hours = 0;
+      final RegExp hourReg = RegExp(r'(\d+)\s*h');
+      final RegExp minReg = RegExp(r'(\d+)\s*m');
+      final RegExp secReg = RegExp(r'(\d+)\s*s');
+
+      final hMatch = hourReg.firstMatch(duration);
+      if (hMatch != null) {
+        hours += double.parse(hMatch.group(1)!);
+      }
+      final mMatch = minReg.firstMatch(duration);
+      if (mMatch != null) {
+        hours += double.parse(mMatch.group(1)!) / 60.0;
+      }
+      final sMatch = secReg.firstMatch(duration);
+      if (sMatch != null) {
+        hours += double.parse(sMatch.group(1)!) / 3600.0;
+      }
+      return hours;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static void _fetchCompleteReportInBackground(int deviceId, DateTime fromDate, DateTime toDate, String cacheKey) {
+    Future.microtask(() async {
+      try {
+        final fromDateStr = _formatDate(fromDate);
+        final toDateStr = _formatDate(toDate.add(const Duration(days: 1)));
+
+        final reportResponse = await APIService.getReport(
+          deviceId.toString(),
+          fromDateStr,
+          toDateStr,
+          1,
+        );
+
+        if (reportResponse == null || reportResponse.url == null) return;
+
+        final pdfFile = await _downloadPdf(reportResponse.url!);
+        if (pdfFile == null) return;
+
+        final text = await _extractText(pdfFile.path);
+        if (text == null || text.isEmpty) return;
+
+        final pdfData = _parseMultiLineText(text);
+
+        if (pdfData.isNotEmpty) {
+          final existing = _cache[cacheKey] ?? TodayReportData();
+          final merged = TodayReportData(
+            device: pdfData.device ?? existing.device,
+            routeStart: pdfData.routeStart ?? existing.routeStart,
+            routeEnd: pdfData.routeEnd ?? existing.routeEnd,
+            routeLength: pdfData.routeLength ?? existing.routeLength,
+            moveDuration: pdfData.moveDuration ?? existing.moveDuration,
+            stopDuration: pdfData.stopDuration ?? existing.stopDuration,
+            topSpeed: pdfData.topSpeed ?? existing.topSpeed,
+            averageSpeed: pdfData.averageSpeed ?? existing.averageSpeed,
+            overspeedCount: pdfData.overspeedCount ?? existing.overspeedCount,
+            engineHours: pdfData.engineHours ?? existing.engineHours,
+            engineWork: pdfData.engineWork ?? existing.engineWork,
+            engineIdle: pdfData.engineIdle ?? existing.engineIdle,
+            odometer: pdfData.odometer ?? existing.odometer,
+            fuelConsumption: pdfData.fuelConsumption ?? existing.fuelConsumption,
+          );
+          _cache[cacheKey] = merged;
+          log('✅ [ReportService] Background PDF cache merged for $cacheKey');
+        }
+      } catch (e) {
+        log('⚠️ [ReportService] Background complete report fetch failed: $e');
+      }
+    });
   }
 
   /// Get today's report (backward compatibility)
@@ -380,9 +463,9 @@ class ReportService {
       String text = '';
       for (int i = 0; i < document.pages.count; i++) {
         final pageText = extractor.extractText(startPageIndex: i, endPageIndex: i);
-        text += pageText ?? '';
+        text += pageText;
         text += '\n';
-        log('📄 [ReportService] Page ${i + 1} extracted (${pageText.length ?? 0} chars)');
+        log('📄 [ReportService] Page ${i + 1} extracted (${pageText.length} chars)');
       }
 
       document.dispose();
@@ -401,6 +484,19 @@ class ReportService {
       log('❌ [ReportService] Stack trace: $stack');
       return null;
     }
+  }
+
+  static String _cleanValue(String val) {
+    val = val.trim();
+    val = val.replaceAll(RegExp(r'\s+'), ' ');
+    // Remove duplicate kph/mph etc.
+    if (val.toLowerCase().endsWith('kph kph')) {
+      val = val.substring(0, val.length - 4).trim();
+    }
+    if (val.toLowerCase().endsWith('km/h km/h')) {
+      val = val.substring(0, val.length - 5).trim();
+    }
+    return val;
   }
 
   /// Parse multi-line format where key and value are on separate lines
@@ -423,20 +519,20 @@ class ReportService {
 
     // Define keys to look for
     final keyMap = <String, void Function(String)>{
-      'device:': (v) => data.device = v,
-      'route start:': (v) => data.routeStart = v,
-      'route end:': (v) => data.routeEnd = v,
-      'route length:': (v) => data.routeLength = v,
-      'move duration:': (v) => data.moveDuration = v,
-      'stop duration:': (v) => data.stopDuration = v,
-      'top speed:': (v) => data.topSpeed = v,
-      'average speed:': (v) => data.averageSpeed = v,
-      'overspeed count:': (v) => data.overspeedCount = v,
-      'engine hours:': (v) => data.engineHours = v,
-      'engine work:': (v) => data.engineWork = v,
-      'engine idle:': (v) => data.engineIdle = v,
-      'odometer:': (v) => data.odometer = v,
-      'fuel consumption:': (v) => data.fuelConsumption = v,
+      'device:': (v) => data.device = _cleanValue(v),
+      'route start:': (v) => data.routeStart = _cleanValue(v),
+      'route end:': (v) => data.routeEnd = _cleanValue(v),
+      'route length:': (v) => data.routeLength = _cleanValue(v),
+      'move duration:': (v) => data.moveDuration = _cleanValue(v),
+      'stop duration:': (v) => data.stopDuration = _cleanValue(v),
+      'top speed:': (v) => data.topSpeed = _cleanValue(v),
+      'average speed:': (v) => data.averageSpeed = _cleanValue(v),
+      'overspeed count:': (v) => data.overspeedCount = _cleanValue(v),
+      'engine hours:': (v) => data.engineHours = _cleanValue(v),
+      'engine work:': (v) => data.engineWork = _cleanValue(v),
+      'engine idle:': (v) => data.engineIdle = _cleanValue(v),
+      'odometer:': (v) => data.odometer = _cleanValue(v),
+      'fuel consumption:': (v) => data.fuelConsumption = _cleanValue(v),
     };
 
     // Iterate through lines
@@ -496,17 +592,17 @@ class ReportService {
 
     // Try to find patterns like "Route length:\n52.12 Km" or "Route length: 52.12 Km"
     final patterns = <String, void Function(String)>{
-      r'Route\s+length[:\s]+([0-9.]+\s*(?:Km|km|KM|mi|Mi))': (v) => data.routeLength = v,
-      r'Move\s+duration[:\s]+([0-9hms\s:]+)': (v) => data.moveDuration = v,
-      r'Stop\s+duration[:\s]+([0-9hms\s:]+)': (v) => data.stopDuration = v,
-      r'Top\s+speed[:\s]+([0-9.]+\s*(?:kph|km/h|Kph|mph))': (v) => data.topSpeed = v,
-      r'Average\s+speed[:\s]+([0-9.]+\s*(?:kph|km/h|Kph|mph))': (v) => data.averageSpeed = v,
-      r'Overspeed\s+count[:\s]+([0-9]+)': (v) => data.overspeedCount = v,
-      r'Engine\s+hours[:\s]+([0-9hms\s:]+)': (v) => data.engineHours = v,
-      r'Engine\s+work[:\s]+([0-9hms\s:]+)': (v) => data.engineWork = v,
-      r'Engine\s+idle[:\s]+([0-9hms\s:]+)': (v) => data.engineIdle = v,
-      r'Odometer[:\s]+([0-9.]+\s*(?:Km|km|KM|mi|Mi)?)': (v) => data.odometer = v,
-      r'Fuel\s+consumption[:\s]+([0-9.]+\s*(?:L|l|gal)?)': (v) => data.fuelConsumption = v,
+      r'Route\s+length[:\s]+([0-9.]+\s*(?:Km|km|KM|mi|Mi))': (v) => data.routeLength = _cleanValue(v),
+      r'Move\s+duration[:\s]+([0-9hms\s:]+)': (v) => data.moveDuration = _cleanValue(v),
+      r'Stop\s+duration[:\s]+([0-9hms\s:]+)': (v) => data.stopDuration = _cleanValue(v),
+      r'Top\s+speed[:\s]+([0-9.]+\s*(?:kph|km/h|Kph|mph))': (v) => data.topSpeed = _cleanValue(v),
+      r'Average\s+speed[:\s]+([0-9.]+\s*(?:kph|km/h|Kph|mph))': (v) => data.averageSpeed = _cleanValue(v),
+      r'Overspeed\s+count[:\s]+([0-9]+)': (v) => data.overspeedCount = _cleanValue(v),
+      r'Engine\s+hours[:\s]+([0-9hms\s:]+)': (v) => data.engineHours = _cleanValue(v),
+      r'Engine\s+work[:\s]+([0-9hms\s:]+)': (v) => data.engineWork = _cleanValue(v),
+      r'Engine\s+idle[:\s]+([0-9hms\s:]+)': (v) => data.engineIdle = _cleanValue(v),
+      r'Odometer[:\s]+([0-9.]+\s*(?:Km|km|KM|mi|Mi)?)': (v) => data.odometer = _cleanValue(v),
+      r'Fuel\s+consumption[:\s]+([0-9.]+\s*(?:L|l|gal)?)': (v) => data.fuelConsumption = _cleanValue(v),
     };
 
     // Normalize text - replace newlines with spaces for regex matching

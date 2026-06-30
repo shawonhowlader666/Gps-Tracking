@@ -3,6 +3,7 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:gpspro/screens/report/get_today_report.dart';
+import 'package:gpspro/theme/custom_color.dart';
 import 'package:intl/intl.dart';
 
 class CustomReportTab extends StatefulWidget {
@@ -110,7 +111,7 @@ class _CustomReportTabState extends State<CustomReportTab>
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: Color(0xFF3F51B5)),
+            colorScheme: const ColorScheme.light(primary: CustomColor.primary),
           ),
           child: child!,
         );
@@ -213,19 +214,19 @@ class _CustomReportTabState extends State<CustomReportTab>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF3F51B5).withValues(alpha: 0.08),
+              color: CustomColor.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.date_range, size: 16, color: Color(0xFF3F51B5)),
+                const Icon(Icons.date_range, size: 16, color: CustomColor.primary),
                 const SizedBox(width: 6),
                 Text(
                   '$days day${days > 1 ? 's' : ''} selected',
                   style: const TextStyle(
                     fontSize: 13,
-                    color: Color(0xFF3F51B5),
+                    color: CustomColor.primary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -254,7 +255,7 @@ class _CustomReportTabState extends State<CustomReportTab>
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.calendar_today, size: 14, color: Color(0xFF3F51B5)),
+                const Icon(Icons.calendar_today, size: 14, color: CustomColor.primary),
                 const SizedBox(width: 6),
                 Text(
                   DateFormat('dd MMM yy').format(date),
@@ -282,7 +283,7 @@ class _CustomReportTabState extends State<CustomReportTab>
             : const Icon(Icons.analytics, size: 20),
         label: Text(_isLoading ? 'Generating...' : 'Generate Report'),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF3F51B5),
+          backgroundColor: CustomColor.primary,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -295,7 +296,7 @@ class _CustomReportTabState extends State<CustomReportTab>
     return Container(
       padding: const EdgeInsets.all(40),
       child: const Center(
-        child: CircularProgressIndicator(color: Color(0xFF3F51B5), strokeWidth: 2),
+        child: CircularProgressIndicator(color: CustomColor.primary, strokeWidth: 2),
       ),
     );
   }
@@ -343,10 +344,10 @@ class _CustomReportTabState extends State<CustomReportTab>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3F51B5).withValues(alpha: 0.1),
+                  color: CustomColor.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.assessment, color: Color(0xFF3F51B5), size: 20),
+                child: const Icon(Icons.assessment, color: CustomColor.primary, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -372,7 +373,7 @@ class _CustomReportTabState extends State<CustomReportTab>
 
           // Data Rows
           if (data.routeLength != null)
-            _buildResultRow('Distance', data.routeLength!, Icons.route, const Color(0xFF3F51B5)),
+            _buildResultRow('Distance', data.routeLength!, Icons.route, CustomColor.primary),
           if (data.moveDuration != null)
             _buildResultRow('Move Duration', data.moveDuration!, Icons.directions_car, const Color(0xFF43A047)),
           if (data.stopDuration != null)
@@ -386,7 +387,7 @@ class _CustomReportTabState extends State<CustomReportTab>
           if (data.fuelConsumption != null)
             _buildResultRow('Fuel', data.fuelConsumption!, Icons.local_gas_station, const Color(0xFFFF7043)),
           if (data.odometer != null)
-            _buildResultRow('Odometer', data.odometer!, Icons.speed, const Color(0xFF5C6BC0)),
+            _buildResultRow('Odometer', data.odometer!, Icons.speed, const Color(0xFFFF5252)),
           if (data.overspeedCount != null && data.overspeedCount != '0')
             _buildResultRow('Overspeed', '${data.overspeedCount} times', Icons.warning_amber, const Color(0xFFE91E63)),
         ],

@@ -281,7 +281,16 @@ class _SplashScreenPageState extends State<SplashScreenPage>
           adsFrequency = settings['ads_frequency'] as int? ?? 30;
 
           if (data['servers'] != null) {
-            SERVER_URL = data['servers'] as List;
+            SERVER_URL = List.from(data['servers'] as List);
+          }
+          if (data['all_servers'] != null) {
+            final additional = data['all_servers'] as List;
+            for (var server in additional) {
+              final exists = SERVER_URL.any((s) => s['url'] == server['url']);
+              if (!exists) {
+                SERVER_URL.add(server);
+              }
+            }
           }
 
           final policies = data['policies'] as Map<String, dynamic>? ?? {};
@@ -311,7 +320,16 @@ class _SplashScreenPageState extends State<SplashScreenPage>
           if (fallbackDoc.exists && fallbackDoc.data() != null) {
             final fallbackData = fallbackDoc.data() as Map<String, dynamic>;
             final spytrackConfig = fallbackData['spytrack'] as Map<String, dynamic>? ?? {};
-            SERVER_URL = spytrackConfig['url'] as List? ?? [];
+            SERVER_URL = List.from(spytrackConfig['url'] as List? ?? []);
+            if (spytrackConfig['all_urls'] != null) {
+              final additional = spytrackConfig['all_urls'] as List;
+              for (var server in additional) {
+                final exists = SERVER_URL.any((s) => s['url'] == server['url']);
+                if (!exists) {
+                  SERVER_URL.add(server);
+                }
+              }
+            }
             SHOW_ADS = (spytrackConfig['ads'] as bool? ?? false) && serverType == 'free';
             WHATS_APP = spytrackConfig['whatsapp'] as String? ?? '';
             PHONE_NO = spytrackConfig['phone'] as String? ?? '';

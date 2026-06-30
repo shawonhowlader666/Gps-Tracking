@@ -5,7 +5,6 @@ import 'dart:math' as m;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -373,6 +372,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
     }
 
     final DataController controller = Get.put(DataController());
+    controller.getDevices();
     _onlyDevicesSubscription = controller.onlyDevices.listen((devices) {
       if (mounted && !_isDisposed) {
         for (var element in devices) {
@@ -777,7 +777,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       }
     }
 
-    // 4. Fallback: iconColor yellow/green → engine considered on
+    // 4. Fallback: iconColor yellow/green â†’ engine considered on
     final iconColor = d.iconColor?.toLowerCase().trim() ?? '';
     if (iconColor == 'yellow' || iconColor == 'green') return true;
 
@@ -920,7 +920,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
     final gpsSpeed = double.tryParse(element.speed?.toString() ?? '0') ?? 0.0;
     final gpsBearing = double.tryParse(element.course?.toString() ?? '0.0') ?? 0.0;
 
-    // ── Outlier Rejection (LBS Jump / GPS Drift Filter) ───────────────────
+    // â”€â”€ Outlier Rejection (LBS Jump / GPS Drift Filter) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     if (_lastRawGpsPoint != null && _lastUpdateTimestamp > 0) {
       final double dtSeconds = (nowMs - _lastUpdateTimestamp) / 1000.0;
@@ -937,16 +937,16 @@ class _TrackDeviceState extends State<TrackDevicePage>
       }
     }
 
-    // ── Step 1: Kalman filter ─────────────────────────────────────────────
+    // â”€â”€ Step 1: Kalman filter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     final filteredPos = _kalman.process(rawLat, rawLng);
 
-    // ── Step 2: Freeze when stationary ───────────────────────────────────
+    // â”€â”€ Step 2: Freeze when stationary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (gpsSpeed < 3.0) {
       _updateIconIfChanged(element);
       return;
     }
 
-    // ── Step 3: Minimum distance gate ─────────────────────────────────────
+    // â”€â”€ Step 3: Minimum distance gate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Check if the vehicle has actually moved at least 6 meters on the road.
     final refPos = _lastSnappedPos ?? filteredPos;
     final rawDist = RoadSnapService.distanceMeters(refPos, filteredPos);
@@ -955,7 +955,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       return;
     }
 
-    // ── Step 3.5: Jump Teleport Gate ──────────────────────────────────────
+    // â”€â”€ Step 3.5: Jump Teleport Gate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // If the distance is > 1500 meters, it represents a network wake-up delay or GPS teleport.
     // Teleport the car instantly to the destination to prevent it from flying through buildings.
     if (rawDist > 1500.0) {
@@ -981,7 +981,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       return;
     }
 
-    // ── Step 4: Get Snapped Road Path ─────────────────────────────────────
+    // â”€â”€ Step 4: Get Snapped Road Path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Snaps start and end coordinates directly via OSRM route network.
     // This avoids snapping to side streets by analyzing the route trajectory.
     List<LatLng> animPath;
@@ -1032,7 +1032,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
     // Fetch address for updated coordinates
     _fetchAddressForCoordinates(snappedPos.latitude, snappedPos.longitude);
 
-    // ── Step 5: Dynamic Expected Interval ──────────────────────────────────
+    // â”€â”€ Step 5: Dynamic Expected Interval â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     int expectedIntervalMs = 8000;
     if (_lastUpdateTimestamp != 0) {
       expectedIntervalMs = nowMs - _lastUpdateTimestamp;
@@ -1040,7 +1040,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
     _lastUpdateTimestamp = nowMs;
     expectedIntervalMs = expectedIntervalMs.clamp(3000, 15000);
 
-    // ── Step 6: Commit previous traveled path to history ──────────────────
+    // â”€â”€ Step 6: Commit previous traveled path to history â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (_carAnimator != null) {
       final traveled = _carAnimator!.getTraveledPath();
       if (traveled.isNotEmpty) {
@@ -1051,11 +1051,11 @@ class _TrackDeviceState extends State<TrackDevicePage>
       _polylinePoints.removeRange(0, _polylinePoints.length - _maxPolylinePoints);
     }
 
-    // ── Step 7: Update state ───────────────────────────────────────────────
+    // â”€â”€ Step 7: Update state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     _lastRawGpsPoint = filteredPos;
     _lastSnappedPos = snappedPos;
 
-    // ── Step 8: Smooth animation along the road path ───────────────────────
+    // â”€â”€ Step 8: Smooth animation along the road path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     _carAnimator!.moveToPath(
       animPath,
       gpsBearing,
@@ -1069,7 +1069,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   void _onCarPositionUpdate(LatLng position, double bearing) {
     if (_isDisposed) return;
 
-    // ── Marker & Polyline: throttle to 30fps ──────────────────────────────
+    // â”€â”€ Marker & Polyline: throttle to 30fps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastMarkerUpdateMs >= 33) {
       _lastMarkerUpdateMs = now;
@@ -2285,21 +2285,20 @@ class _TrackDeviceState extends State<TrackDevicePage>
   // ==================== REFERENCE DESIGN BOTTOM SHEET ====================
   Widget _buildBottomSheet() {
     _fetchAddress();
-
     return DraggableScrollableSheet(
-      initialChildSize: 0.31,
+      initialChildSize: 0.40,
       minChildSize: 0.08,
-      maxChildSize: 0.80,
+      maxChildSize: 0.62,
       builder: (context, scrollController) {
         return Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 15,
-                offset: const Offset(0, -5),
+                color: Color(0x1A000000),
+                blurRadius: 12,
+                offset: Offset(0, -4),
               ),
             ],
           ),
@@ -2307,18 +2306,14 @@ class _TrackDeviceState extends State<TrackDevicePage>
             controller: scrollController,
             padding: EdgeInsets.zero,
             children: [
-              _buildCurvedHeader(),
-              _buildSpeedSection(),
-              _buildSensorsSection(),
-              const Divider(height: 1),
-              _buildInfoSection(),
-              const Divider(height: 1),
-              _buildRouteCard(),
-              const Divider(height: 1),
-              _buildQuickActions(),
-              const Divider(height: 1),
-              _buildSummarySection(),
-              const SizedBox(height: 30),
+              _buildDragHandle(),
+              _buildDeviceHeader(),
+              _buildStatColumns(),
+              _buildAddressRow(),
+              _buildInfoCardsRow(),
+              const Divider(height: 1, color: Color(0xFFE5E7EB)),
+              _buildActionButtons(),
+              const SizedBox(height: 8),
             ],
           ),
         );
@@ -2326,84 +2321,50 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 
-  Widget _buildCurvedHeader() {
-    return SizedBox(
-      height: 40,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(painter: HeaderCurvePainter()),
-          ),
-          Positioned(
-            top: 8,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Text(
-                widget.name ?? 'Track Device',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A2E),
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ),
-          ),
-        ],
+  Widget _buildDragHandle() {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.only(top: 10, bottom: 6),
+        width: 40,
+        height: 4,
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(2),
+        ),
       ),
     );
   }
 
-  Widget _buildSpeedSection() {
+  Widget _buildDeviceHeader() {
     final speed = device?.speed ?? 0;
-
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
       child: Row(
         children: [
           Expanded(
-            flex: 2,
-            child: Column(
-              children: [
-                _MiniSensor(
-                  icon: Icons.route,
-                  label: 'Today KM',
-                  value: todaytotalDistance,
-                  statusColor: _getStatusColor(),
-                ),
-                const SizedBox(height: 8),
-                _MiniSensor(
-                  icon: Icons.engineering,
-                  label: 'Engine',
-                  value: todayData?.engineHours ?? todayEngineHours,
-                  statusColor: _getStatusColor(),
-                ),
-              ],
+            child: Text(
+              widget.name ?? device?.name ?? 'Track Device',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F172A),
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          Expanded(
-            flex: 3,
-            child: _Speedometer(speed: speed),
-          ),
-          Expanded(
-            flex: 2,
-            child: Column(
-              children: [
-                _MiniSensor(
-                  icon: Icons.moving,
-                  label: 'Moving',
-                  value: todayData?.moveDuration ?? '--',
-                  statusColor: _getStatusColor(),
-                ),
-                const SizedBox(height: 8),
-                _MiniSensor(
-                  icon: Icons.speed,
-                  label: 'Top Speed',
-                  value: todayData?.topSpeed ?? '--',
-                  statusColor: _getStatusColor(),
-                ),
-              ],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFEBEB),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'Speed: $speed km/hr',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFFE53935),
+              ),
             ),
           ),
         ],
@@ -2411,392 +2372,267 @@ class _TrackDeviceState extends State<TrackDevicePage>
     );
   }
 
-  Widget _buildSensorsSection() {
-    final sensors = device?.sensors ?? [];
-    if (sensors.isEmpty) return const SizedBox.shrink();
+  Widget _buildStatColumns() {
+    final statusText = _getStatusText();
+    final statusColor = _getStatusColor();
+    final isStopped = statusText == 'Stopped' || statusText == 'Offline';
+    final statColor = isStopped ? const Color(0xFFE53935) : statusColor;
+    
+    final engineVal = device != null ? getEngineStatus() : '--';
+    final stopDur = device?.stopDuration ?? '';
+    final durationDisplay = stopDur.isNotEmpty ? stopDur : '-';
+    final totalKmDisplay = todaytotalDistance.isNotEmpty && todaytotalDistance != '0'
+        ? (todaytotalDistance.toLowerCase().contains('km') ? todaytotalDistance : '$todaytotalDistance Km')
+        : '--';
+    final batVal = getBatteryVoltage();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: 30,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            itemCount: sensors.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (_, i) {
-              final s = sensors[i];
-              return _SensorChip(
-                name: s['name'] ?? '',
-                value: s['value']?.toString() ?? '--',
-              );
-            },
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Color(0xFFE5E7EB)),
+          bottom: BorderSide(color: Color(0xFFE5E7EB)),
         ),
-        const SizedBox(height: 12),
-      ],
+      ),
+      child: Row(
+        children: [
+          _buildStatCol(statusText, durationDisplay, statColor),
+          _buildStatSep(),
+          _buildStatCol('Acc', engineVal, const Color(0xFF0F172A)),
+          _buildStatSep(),
+          _buildStatCol('Today Km', totalKmDisplay, const Color(0xFF0F172A)),
+          _buildStatSep(),
+          _buildStatCol('Battery', batVal, const Color(0xFF0F172A)),
+        ],
+      ),
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: _primaryColor),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey[800],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRouteCard() {
-    final routeStart = todayData?.routeStart;
-    final routeEnd = todayData?.routeEnd;
-
-    // If no route data at all, don't show
-    if (routeStart == null && routeEnd == null && _address == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
+  Widget _buildStatCol(String label, String value, Color valueColor) {
+    return Expanded(
       child: Column(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: valueColor,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatSep() {
+    return Container(width: 1, height: 36, color: const Color(0xFFE5E7EB));
+  }
+
+  Widget _buildAddressRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Row(
-            children: [
-              Icon(Icons.route, size: 16, color: _primaryColor),
-              const SizedBox(width: 6),
-              Text(
-                "Today's Route",
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
-                ),
+          const Icon(Icons.location_on, size: 16, color: Color(0xFF6B7280)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              _address ?? 'Loading address...',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Start Point
-          _buildSimpleRoutePoint(
-            label: 'Start',
-            value: routeStart ?? 'No start location',
-            color: Colors.green,
-            isStart: true,
-          ),
-
-          // Line
-          Container(
-            margin: const EdgeInsets.only(left: 9),
-            width: 2,
-            height: 20,
-            color: Colors.grey[300],
-          ),
-
-          // End/Current Point
-          _buildSimpleRoutePoint(
-            label: routeEnd != null ? 'End' : 'Current',
-            value: routeEnd ?? _address ?? 'Loading...',
-            color: routeEnd != null ? Colors.red : _primaryColor,
-            isStart: false,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSimpleRoutePoint({
-    required String label,
-    required String value,
-    required Color color,
-    required bool isStart,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Circle indicator
-        Container(
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
+  Widget _buildInfoCardsRow() {
+    String totalDist = '--';
+    if (device?.totalDistance != null) {
+      final td = device!.totalDistance;
+      if (td is num) {
+        totalDist = td.toStringAsFixed(2);
+      } else if (td is String) {
+        final parsed = double.tryParse(td);
+        totalDist = parsed != null ? parsed.toStringAsFixed(2) : td;
+      } else {
+        totalDist = td.toString();
+      }
+    }
+    
+    final engineVal = device != null ? getEngineStatus() : '--';
+    final batVal = getBatteryVoltage();
+    final netVal = getNetworkStatus();
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+      child: Row(
+        children: [
+          _buildInfoCard(Icons.route_outlined, 'Distance', totalDist),
+          const SizedBox(width: 8),
+          _buildInfoCard(Icons.power_settings_new_rounded, 'Engine', engineVal),
+          const SizedBox(width: 8),
+          _buildInfoCard(Icons.battery_std_rounded, 'Battery', batVal),
+          const SizedBox(width: 8),
+          _buildInfoCard(Icons.signal_cellular_alt_rounded, 'Net', netVal),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(IconData icon, String label, String value) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 110),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFEBEE), // soft pink/red
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFFEE2E2), width: 1.2), // red border
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 5,
+            offset: const Offset(0, 3),
           ),
-          child: Icon(
-            isStart ? Icons.play_arrow : Icons.location_on,
-            size: 12,
-            color: Colors.white,
+          BoxShadow(
+            color: const Color(0xFFE53935).withValues(alpha: 0.04),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
           ),
-        ),
-        const SizedBox(width: 10),
-        // Text
-        Expanded(
-          child: Column(
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 22,
+            color: const Color(0xFFE53935),
+          ),
+          const SizedBox(width: 8),
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey[500],
-                  fontWeight: FontWeight.w500,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
                 ),
               ),
+              const SizedBox(height: 2),
               Text(
                 value,
                 style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF1A1A2E),
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoSection() {
-    if (device == null) return const SizedBox.shrink();
-
-    final statusColor = _getStatusColor();
-    final statusText = _getStatusText();
-    final isEngineOn = _isEngineOn(device!);
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: statusColor,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isEngineOn ? Icons.power : Icons.power_off,
-                      size: 12,
-                      color: statusColor,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      statusText,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: statusColor,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.location_on, size: 16, color: Colors.grey[500]),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  _address ?? 'Loading address...',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  maxLines: 2,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _QuickStat(
-                icon: Icons.directions_car,
-                label: 'Move',
-                value: todayData?.moveDuration ?? '--',
-              ),
-              _QuickStat(
-                icon: Icons.local_parking,
-                label: 'Stop',
-                value: todayData?.stopDuration ?? '--',
-              ),
-              _QuickStat(
-                icon: Icons.route,
-                label: 'Distance',
-                value: '${device?.totalDistance?.toStringAsFixed(1) ?? '0'}',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActions() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _ActionButton(
-                icon: Icons.description,
-                label: 'Report',
-                color: Colors.indigo,
-                onTap: _openReport,
-              ),
-              _ActionButton(
-                icon: Icons.play_circle_fill,
-                label: 'Playback',
-                color: Colors.orange,
-                onTap: _openPlayback,
-              ),
-              _ActionButton(
-                icon: Icons.phone,
-                label: 'Call',
-                color: _successColor,
-                onTap: _callDevice,
-              ),
-              _ActionButton(
-                icon: Icons.lock,
-                label: 'Lock',
-                color: _dangerColor,
-                onTap: _openLock,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _ActionButton(
-                icon: Icons.share,
-                label: 'Share',
-                color: Colors.teal,
-                onTap: _shareLocation,
-              ),
-              _ActionButton(
-                icon: Icons.navigation,
-                label: 'Navigate',
-                color: Colors.purple,
-                onTap: _navigate,
-              ),
-              _ActionButton(
-                icon: Icons.streetview,
-                label: 'Street View',
-                color: _primaryColor,
-                onTap: _openStreetView,
-              ),
-              _ActionButton(
-                icon: Icons.gps_fixed,
-                label: 'Center',
-                color: _neutralColor,
-                onTap: _centerOnVehicle,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummarySection() {
-    final report = todayData;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.analytics, color: _primaryColor, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                "Today's Summary",
-                style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF0F172A),
                 ),
               ),
             ],
           ),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 3,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 1.5,
-            children: [
-              _SummaryItem(
-                icon: Icons.route,
-                label: 'Distance',
-                value: todaytotalDistance,
-                color: _primaryColor,
-              ),
-              _SummaryItem(
-                icon: Icons.speed,
-                label: 'Top Speed',
-                value: report?.topSpeed ?? '--',
-                color: _warningColor,
-              ),
-              _SummaryItem(
-                icon: Icons.play_arrow,
-                label: 'Moving',
-                value: report?.moveDuration ?? '--',
-                color: _successColor,
-              ),
-              _SummaryItem(
-                icon: Icons.pause,
-                label: 'Stopped',
-                value: report?.stopDuration ?? '--',
-                color: _dangerColor,
-              ),
-              _SummaryItem(
-                icon: Icons.speed_outlined,
-                label: 'Avg Speed',
-                value: report?.averageSpeed ?? '--',
-                color: _neutralColor,
-              ),
-              _SummaryItem(
-                icon: Icons.engineering,
-                label: 'Engine',
-                value: report?.engineHours ?? todayEngineHours,
-                color: _successColor,
-              ),
-            ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildActionBtn(
+            icon: Icons.play_arrow_rounded,
+            label: 'Play Back',
+            color: const Color(0xFF03A9F4), // Play Back light blue
+            onTap: _openPlayback,
+          ),
+          _buildActionBtn(
+            icon: Icons.directions_car_filled_rounded,
+            label: 'Icon',
+            color: const Color(0xFFFF9800), // Vehicle icon orange
+            onTap: _openIconSelection,
+          ),
+          _buildActionBtn(
+            icon: Icons.lock_rounded,
+            label: 'Lock',
+            color: const Color(0xFF00C853), // Lock green
+            onTap: _openLock,
+          ),
+          _buildActionBtn(
+            icon: Icons.settings_rounded,
+            label: 'Setting',
+            color: const Color(0xFF1E88E5), // Settings deep blue
+            onTap: () => _showDiagnosticsDialog(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionBtn({
+    IconData? icon,
+    Widget? iconWidget,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Center(
+              child: iconWidget ??
+                  Icon(icon!, color: Colors.white, size: 22),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+            ),
           ),
         ],
       ),
@@ -2835,7 +2671,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
     APIService.editDeviceData({'device_id': devId.toString()}).then((value) {
       Navigator.pop(context); // Close loading dialog
       try {
-        final decoded = json.decode(value.body.replaceAll("ï»¿", ""));
+        final decoded = json.decode(value.body.replaceAll("Ã¯Â»Â¿", ""));
         if (decoded is Map<String, dynamic> && decoded.containsKey('message')) {
           Fluttertoast.showToast(msg: decoded['message'].toString());
           return;
@@ -3116,422 +2952,3 @@ class _MapButton extends StatelessWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, size: 22, color: color),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.grey[700],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Speedometer extends StatelessWidget {
-  final int speed;
-  final int maxSpeed;
-
-  const _Speedometer({required this.speed, this.maxSpeed = 140});
-
-  Color get statusColor {
-    if (speed >= 120) return const Color(0xFFE53935);
-    if (speed >= 80) return const Color(0xFFFF5722);
-    if (speed >= 60) return const Color(0xFFFFA726);
-    return const Color(0xFF4CAF50);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 140,
-      width: 180,
-      child: CustomPaint(
-        painter: SpeedometerPainter(
-          speed: speed.toDouble(),
-          maxSpeed: maxSpeed.toDouble(),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(height: 14),
-              Text(
-                '$speed',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: statusColor,
-                  letterSpacing: 1,
-                  shadows: [
-                    Shadow(
-                      color: statusColor.withValues(alpha: 0.5),
-                      blurRadius: 10,
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                'km/h',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[500],
-                  letterSpacing: 1,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class SpeedometerPainter extends CustomPainter {
-  final double speed;
-  final double maxSpeed;
-
-  SpeedometerPainter({required this.speed, this.maxSpeed = 140});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.55);
-    final radius = m.min(size.width, size.height) / 2 - 10;
-
-    const startAngle = m.pi;
-    const sweepAngle = m.pi;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      startAngle,
-      sweepAngle,
-      false,
-      Paint()
-        ..color = Colors.grey[200]!
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 8
-        ..strokeCap = StrokeCap.round,
-    );
-
-    final speedRatio = (speed / maxSpeed).clamp(0.0, 1.0);
-    final progressAngle = speedRatio * sweepAngle;
-
-    if (speed > 0) {
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        startAngle,
-        progressAngle,
-        false,
-        Paint()
-          ..color = _getSpeedColor(speed)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 8
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-
-    _drawTickMarks(canvas, center, radius, startAngle, sweepAngle);
-  }
-
-  void _drawTickMarks(Canvas canvas, Offset center, double radius,
-      double startAngle, double sweepAngle) {
-    final int totalTicks = (maxSpeed ~/ 10);
-
-    for (int i = 0; i <= totalTicks; i++) {
-      final angle = startAngle + (i / totalTicks) * sweepAngle;
-      final isMajor = i % 2 == 0;
-      final tickLength = isMajor ? 6 : 3;
-      final tickWidth = isMajor ? 2.0 : 1.0;
-
-      final outerPoint = Offset(
-        center.dx + (radius - 8) * m.cos(angle),
-        center.dy + (radius - 8) * m.sin(angle),
-      );
-      final innerPoint = Offset(
-        center.dx + (radius - 8 - tickLength) * m.cos(angle),
-        center.dy + (radius - 8 - tickLength) * m.sin(angle),
-      );
-
-      final speedAtTick = (i / totalTicks) * maxSpeed;
-      Color tickColor = Colors.grey[400]!;
-      if (speedAtTick >= 120) {
-        tickColor = const Color(0xFFE53935);
-      } else if (speedAtTick >= 80) {
-        tickColor = const Color(0xFFFF5722);
-      }
-
-      canvas.drawLine(
-        innerPoint,
-        outerPoint,
-        Paint()
-          ..color = tickColor
-          ..strokeWidth = tickWidth
-          ..strokeCap = StrokeCap.round,
-      );
-
-      if (isMajor) {
-        final labelRadius = radius - 22;
-        final labelPos = Offset(
-          center.dx + labelRadius * m.cos(angle),
-          center.dy + labelRadius * m.sin(angle),
-        );
-
-        final speedValue = (i * 10);
-
-        final textPainter = TextPainter(
-          text: TextSpan(
-            text: '$speedValue',
-            style: TextStyle(
-              color: speedValue >= 80 ? const Color(0xFFE53935) : Colors.grey[600],
-              fontSize: 8,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        );
-        textPainter.layout();
-        textPainter.paint(
-          canvas,
-          Offset(
-            labelPos.dx - textPainter.width / 2,
-            labelPos.dy - textPainter.height / 2,
-          ),
-        );
-      }
-    }
-  }
-
-  Color _getSpeedColor(double speed) {
-    if (speed >= 120) return const Color(0xFFE53935);
-    if (speed >= 80) return const Color(0xFFFF5722);
-    if (speed >= 60) return const Color(0xFFFFA726);
-    return const Color(0xFF4CAF50);
-  }
-
-  @override
-  bool shouldRepaint(covariant SpeedometerPainter oldDelegate) {
-    return oldDelegate.speed != speed;
-  }
-}
-
-class _MiniSensor extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color statusColor;
-
-  const _MiniSensor({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.statusColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: statusColor),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: TextStyle(fontSize: 9, color: Colors.grey[500])),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SensorChip extends StatelessWidget {
-  final String name;
-  final String value;
-
-  const _SensorChip({required this.name, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: CustomColor.primaryColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        '$name: $value',
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: CustomColor.primaryColor,
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickStat extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _QuickStat({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, size: 18, color: CustomColor.primaryColor),
-        const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-      ],
-    );
-  }
-}
-
-class _SummaryItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _SummaryItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 12, color: color),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(fontSize: 9, color: Colors.grey[600]),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class HeaderCurvePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFFF5F5F5)
-      ..style = PaintingStyle.fill;
-
-    final path = Path();
-    path.moveTo(0, 0);
-    path.lineTo(0, size.height * 0.5);
-    path.quadraticBezierTo(
-        size.width * 0.25, size.height * 0.9, size.width * 0.5, size.height * 0.95);
-    path.quadraticBezierTo(
-        size.width * 0.75, size.height * 0.9, size.width, size.height * 0.5);
-    path.lineTo(size.width, 0);
-    path.close();
-
-    canvas.drawPath(path, paint);
-
-    final borderPaint = Paint()
-      ..color = Colors.grey[300]!
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-
-    final borderPath = Path();
-    borderPath.moveTo(0, size.height * 0.5);
-    borderPath.quadraticBezierTo(
-        size.width * 0.25, size.height * 0.9, size.width * 0.5, size.height * 0.95);
-    borderPath.quadraticBezierTo(
-        size.width * 0.75, size.height * 0.9, size.width, size.height * 0.5);
-
-    canvas.drawPath(borderPath, borderPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

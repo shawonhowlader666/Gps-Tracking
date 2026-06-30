@@ -5,6 +5,7 @@ import 'package:gpspro/screens/report/tabs/daily_report_tab.dart';
 import 'package:gpspro/screens/report/tabs/monthly_report_tab.dart';
 import 'package:gpspro/screens/report/tabs/custom_report_tab.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
+import 'package:gpspro/theme/custom_color.dart';
 
 class ReportScreen extends StatefulWidget {
   final int deviceId;
@@ -52,7 +53,7 @@ class _ReportScreenState extends State<ReportScreen>
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: const Color(0xFF4B5FCC),
+        backgroundColor: CustomColor.primary,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),

@@ -177,11 +177,29 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             List<dynamic> serverList = [];
 
             if (urlData is List) {
-              serverList = urlData;
+              serverList = List.from(urlData);
             } else if (urlData is String) {
               try {
-                serverList = jsonDecode(urlData) as List;
+                serverList = List.from(jsonDecode(urlData) as List);
               } catch (e) {}
+            }
+
+            if (spytrackConfig.containsKey('all_urls')) {
+              final allUrlsData = spytrackConfig['all_urls'];
+              List<dynamic> additionalServers = [];
+              if (allUrlsData is List) {
+                additionalServers = allUrlsData;
+              } else if (allUrlsData is String) {
+                try {
+                  additionalServers = jsonDecode(allUrlsData) as List;
+                } catch (e) {}
+              }
+              for (var server in additionalServers) {
+                final exists = serverList.any((s) => s['url'] == server['url']);
+                if (!exists) {
+                  serverList.add(server);
+                }
+              }
             }
 
             print("FETCHED SERVERS FROM FIREBASE: $serverList");
@@ -286,7 +304,25 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         final spytrackConfig = data['spytrack'] as Map<String, dynamic>;
 
         if (spytrackConfig['url'] is List) {
-          SERVER_URL = spytrackConfig['url'] as List;
+          SERVER_URL = List.from(spytrackConfig['url'] as List);
+        }
+
+        if (spytrackConfig.containsKey('all_urls')) {
+          final allUrlsData = spytrackConfig['all_urls'];
+          List<dynamic> additionalServers = [];
+          if (allUrlsData is List) {
+            additionalServers = allUrlsData;
+          } else if (allUrlsData is String) {
+            try {
+              additionalServers = jsonDecode(allUrlsData) as List;
+            } catch (e) {}
+          }
+          for (var server in additionalServers) {
+            final exists = SERVER_URL.any((s) => s['url'] == server['url']);
+            if (!exists) {
+              SERVER_URL.add(server);
+            }
+          }
         }
 
         SHOW_ADS = (spytrackConfig['ads'] as bool) && serverType == 'free';

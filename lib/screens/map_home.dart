@@ -366,7 +366,8 @@ class _MapPageState extends State<MapPage> with AutomaticKeepAliveClientMixin {
                       statusColor: statusColor,
                       iconType: subElement.icon?.type ?? subElement.iconType,
                       deviceName: subElement.name,
-                      deviceId: subElement.id)
+                      deviceId: subElement.id,
+                      device: subElement)
                   .then((markerIcon) {
                 if (mounted) {
                   setState(() {
@@ -572,7 +573,8 @@ class _MapPageState extends State<MapPage> with AutomaticKeepAliveClientMixin {
                       statusColor: statusColor,
                       iconType: element.icon?.type ?? element.iconType,
                       deviceName: element.name,
-                      deviceId: element.id)
+                      deviceId: element.id,
+                      device: element)
                   .then((markerIcon) {
                 if (mounted) {
                   setState(() {

@@ -1,7 +1,9 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:gpspro/screens/report/get_today_report.dart';
+import 'package:gpspro/theme/custom_color.dart';
 import 'package:intl/intl.dart';
+
 
 class DailyReportTab extends StatefulWidget {
   final int deviceId;
@@ -82,7 +84,7 @@ class _DailyReportTabState extends State<DailyReportTab>
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF3F51B5),
+              primary: CustomColor.primary,
             ),
           ),
           child: child!,
@@ -102,7 +104,7 @@ class _DailyReportTabState extends State<DailyReportTab>
 
     return RefreshIndicator(
       onRefresh: _loadReport,
-      color: const Color(0xFF3F51B5),
+      color: CustomColor.primary,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -131,8 +133,20 @@ class _DailyReportTabState extends State<DailyReportTab>
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 5,
+            offset: const Offset(0, 3),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -187,13 +201,13 @@ class _DailyReportTabState extends State<DailyReportTab>
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: onTap != null ? const Color(0xFF3F51B5).withValues(alpha: 0.1) : Colors.grey.shade100,
+          color: onTap != null ? CustomColor.primary.withValues(alpha: 0.1) : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(
           icon,
           size: 20,
-          color: onTap != null ? const Color(0xFF3F51B5) : Colors.grey,
+          color: onTap != null ? CustomColor.primary : Colors.grey,
         ),
       ),
     );
@@ -204,7 +218,7 @@ class _DailyReportTabState extends State<DailyReportTab>
       padding: const EdgeInsets.all(60),
       child: const Center(
         child: CircularProgressIndicator(
-          color: Color(0xFF3F51B5),
+          color: CustomColor.primary,
           strokeWidth: 2,
         ),
       ),
@@ -293,11 +307,23 @@ class _DailyReportTabState extends State<DailyReportTab>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF3F51B5), Color(0xFF5C6BC0)],
+          colors: [CustomColor.primary, Color(0xFFFF5252)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: CustomColor.primary.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: const Color(0xFFFF5252).withValues(alpha: 0.15),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -376,8 +402,20 @@ class _DailyReportTabState extends State<DailyReportTab>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 5,
+            offset: const Offset(0, 3),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,8 +481,20 @@ class _DailyReportTabState extends State<DailyReportTab>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 5,
+            offset: const Offset(0, 3),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -471,8 +521,20 @@ class _DailyReportTabState extends State<DailyReportTab>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 5,
+            offset: const Offset(0, 3),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -486,7 +548,7 @@ class _DailyReportTabState extends State<DailyReportTab>
                   child: _buildStatItem(
                     'Odometer',
                     data.odometer!,
-                    const Color(0xFF5C6BC0),
+                    const Color(0xFFFF5252),
                   ),
                 ),
               if (data.odometer != null && data.fuelConsumption != null)
@@ -578,14 +640,14 @@ class _DailyReportTabState extends State<DailyReportTab>
   Widget _buildSectionHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: const Color(0xFF3F51B5)),
+        Icon(icon, size: 18, color: CustomColor.primary),
         const SizedBox(width: 8),
         Text(
           title,
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF3F51B5),
+            color: CustomColor.primary,
           ),
         ),
       ],
@@ -597,7 +659,7 @@ class _DailyReportTabState extends State<DailyReportTab>
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
