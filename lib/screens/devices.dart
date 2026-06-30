@@ -648,73 +648,28 @@ class _DevicePageState extends State<DevicePage>
 
   /// Check if engine/ignition is on - MASTER ENGINE CHECK
   bool _isEngineOn(DeviceItem device) {
-    // 1. If speed > 0, engine must be on (telematics override for wiring/reporting issues)
-    final speed = double.tryParse(device.speed.toString()) ?? 0;
-    if (speed > 0) {
-      return true;
-    }
-
-    // 2. Check engineStatus field directly
     if (device.engineStatus != null) {
       final status = device.engineStatus;
       if (status is bool) return status;
       if (status is int) return status == 1;
       if (status is String) {
         final s = status.toLowerCase().trim();
-        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s)) {
-          return true;
-        }
-        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
-            .contains(s)) {
-          return false;
+        return s == 'on' || s == '1' || s == 'true';
+      }
+    } else {
+      final traccar = device.deviceData?.traccar;
+      if (traccar != null) {
+        final engineOnAt = traccar.engineOnAt;
+        final engineOffAt = traccar.engineOffAt;
+        if (engineOnAt != null && engineOffAt != null) {
+          try {
+            final onTime = DateTime.parse(engineOnAt);
+            final offTime = DateTime.parse(engineOffAt);
+            return onTime.isAfter(offTime);
+          } catch (_) {}
         }
       }
     }
-
-    // 3. Check sensors for ignition/acc status
-    if (device.sensors != null && device.sensors!.isNotEmpty) {
-      for (var sensor in device.sensors!) {
-        try {
-          final type = (sensor['type'] ?? '').toString().toLowerCase();
-          final name = (sensor['name'] ?? '').toString().toLowerCase();
-          final value = sensor['value'];
-
-          // Check for ignition or ACC sensors
-          if (type == 'acc' ||
-              type == 'ignition' ||
-              type == 'engine' ||
-              name.contains('ignition') ||
-              name.contains('acc') ||
-              name.contains('engine')) {
-            if (value == null) continue;
-
-            if (value is bool) return value;
-            if (value is int) return value == 1;
-            if (value is String) {
-              final v = value.toLowerCase().trim();
-              if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
-                  .contains(v)) {
-                return true;
-              }
-              if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
-                  .contains(v)) {
-                return false;
-              }
-            }
-          }
-        } catch (e) {
-          continue;
-        }
-      }
-    }
-
-    // 4. Fallback: Check iconColor as indicator
-    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
-    if (iconColor == 'yellow' || iconColor == 'green') {
-      return true;
-    }
-
-    // Default: engine is off
     return false;
   }
 
@@ -786,7 +741,7 @@ class _DevicePageState extends State<DevicePage>
       case DeviceStatus.idle:
         return _yellowColor;
       case DeviceStatus.stop:
-        return _greyColor;
+        return _yellowColor;
       case DeviceStatus.offline:
         return _redColor;
     }
@@ -1316,6 +1271,7 @@ class _DevicePageState extends State<DevicePage>
                               iconType: device.icon?.type ?? device.iconType,
                               deviceName: device.name,
                               deviceId: device.id,
+                              device: device,
                             ),
                           ),
                         ),
@@ -2693,7 +2649,7 @@ class _DevicePageState extends State<DevicePage>
 
     if (t == 'fuel') return '$value L';
     if (t == 'temperature') return '$value°C';
-    if (t == 'battery') return '$value%';
+    if (t == 'battery') return value.toString();
     if (t == 'speed') return '$value km/h';
     if (t == 'odometer') return '$value km';
 

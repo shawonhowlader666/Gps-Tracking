@@ -326,6 +326,7 @@ class _DevicePageState extends State<DeviceSelection> {
                                     iconType: device.icon?.type ?? device.iconType,
                                     deviceName: device.name,
                                     deviceId: device.id,
+                                    device: device,
                                   ),
                                 ),
                               ),

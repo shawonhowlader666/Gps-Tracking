@@ -85,7 +85,9 @@ class PlaybackCarAnimator {
       onPositionUpdate(_currentPosition, _currentBearing);
       _targetPosition = null;
       _stop();
-      onAnimationComplete?.call();
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        onAnimationComplete?.call();
+      });
       return;
     }
 
@@ -303,7 +305,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             statusColor: widget.device?.iconColor,
             iconType: widget.device?.icon?.type ?? widget.device?.iconType,
             deviceName: widget.device?.name,
-            deviceId: widget.device?.id);
+            deviceId: widget.device?.id,
+            device: widget.device);
       }
 
       _cachedCarIcon ??=
@@ -832,7 +835,12 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             bottomRouteList.add(rt);
           }
 
-          if (el["status"] == 1) parkingPoints.add(el['items']);
+          if (el["status"] == 1) {
+            parkingPoints.add({
+              'items': el['items'],
+              'time': el['time'],
+            });
+          }
           if (el["status"] == 5) eventsPoints.add(el['items']);
 
           if (el['items'] != null) {
@@ -986,26 +994,26 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   }
 
   Future<BitmapDescriptor> _createCircleMarker(String text, Color color) async {
-    const size = 36.0;
+    const size = 26.0;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final center = const Offset(size / 2, size / 2);
 
     canvas.drawCircle(
-      Offset(center.dx + 1, center.dy + 1),
-      size / 2 - 4,
-      Paint()..color = Colors.black26,
+      Offset(center.dx + 0.8, center.dy + 0.8),
+      size / 2 - 2,
+      Paint()..color = Colors.black12,
     );
 
-    canvas.drawCircle(center, size / 2 - 4, Paint()..color = color);
+    canvas.drawCircle(center, size / 2 - 2, Paint()..color = color);
 
     canvas.drawCircle(
       center,
-      size / 2 - 4,
+      size / 2 - 2,
       Paint()
         ..color = Colors.white
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
+        ..strokeWidth = 1.5,
     );
 
     final textPainter = TextPainter(
@@ -1013,7 +1021,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
         text: text,
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: FontWeight.bold,
         ),
       ),
@@ -1031,6 +1039,132 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
   }
 
+  Future<Map<String, dynamic>> _createParkingMarkerWithTime(String timeText, String pText, Color color) async {
+    final timePainter = TextPainter(
+      text: TextSpan(
+        text: timeText,
+        style: TextStyle(
+          color: color,
+          fontSize: 7.5,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    );
+    timePainter.layout();
+
+    final pPainter = TextPainter(
+      text: TextSpan(
+        text: pText,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 8.5,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    );
+    pPainter.layout();
+
+    final cardHeight = 14.0;
+    final cardWidth = (timePainter.width + 8.0).clamp(24.0, 100.0);
+    final pointerHeight = 3.0;
+    final circleRadius = 9.0;
+    final circleDiameter = circleRadius * 2;
+    
+    final width = cardWidth > circleDiameter ? cardWidth : circleDiameter;
+    final height = cardHeight + pointerHeight + circleDiameter + 4.0;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final centerX = width / 2;
+
+    // --- DRAW "P" CIRCLE LOGO AT THE BOTTOM ---
+    final circleCenter = Offset(centerX, height - circleRadius - 2.0);
+    
+    // Circle Shadow
+    canvas.drawCircle(
+      Offset(circleCenter.dx + 0.8, circleCenter.dy + 0.8),
+      circleRadius,
+      Paint()..color = Colors.black12,
+    );
+
+    // Blue Circle
+    canvas.drawCircle(circleCenter, circleRadius, Paint()..color = color);
+    
+    // White Border
+    canvas.drawCircle(
+      circleCenter,
+      circleRadius,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+
+    // 'P' Text
+    pPainter.paint(
+      canvas,
+      Offset(circleCenter.dx - pPainter.width / 2, circleCenter.dy - pPainter.height / 2),
+    );
+
+    // --- DRAW FLOAT CARD WITH TIME ON TOP ---
+    if (timeText.isNotEmpty) {
+      final cardRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH((width - cardWidth) / 2, 0, cardWidth, cardHeight),
+        const Radius.circular(3.0),
+      );
+
+      // Card Shadow
+      final shadowRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH((width - cardWidth) / 2 + 0.8, 0.8, cardWidth, cardHeight),
+        const Radius.circular(3.0),
+      );
+      canvas.drawRRect(shadowRect, Paint()..color = Colors.black12);
+
+      // White Background
+      canvas.drawRRect(cardRect, Paint()..color = Colors.white);
+
+      // Card border
+      canvas.drawRRect(
+        cardRect,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.8,
+      );
+
+      // Card pointer triangle pointing down
+      final path = Path()
+        ..moveTo(centerX - 3.5, cardHeight)
+        ..lineTo(centerX + 3.5, cardHeight)
+        ..lineTo(centerX, cardHeight + pointerHeight)
+        ..close();
+      canvas.drawPath(path, Paint()..color = Colors.white);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.8,
+      );
+
+      // Time Text
+      timePainter.paint(
+        canvas,
+        Offset((width - timePainter.width) / 2, (cardHeight - timePainter.height) / 2),
+      );
+    }
+
+    final image = await recorder.endRecording().toImage(width.toInt() + 2, height.toInt() + 2);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+
+    return {
+      'icon': BitmapDescriptor.bytes(bytes!.buffer.asUint8List()),
+      'anchorY': (height - circleRadius - 2.0) / height,
+    };
+  }
+
   void _addParkingMarkers() async {
     if (!mounted || parkingPoints.isEmpty) return;
 
@@ -1039,21 +1173,39 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
     for (var element in parkingPoints) {
       if (!mounted) return;
-      if (element == null || (element as List).isEmpty) continue;
+      if (element == null) continue;
+
+      final itemsList = element['items'];
+      if (itemsList == null || (itemsList as List).isEmpty) continue;
 
       final id = MarkerId('parking_$index');
-      final lat = double.tryParse(element[0]["latitude"]?.toString() ?? '') ?? 0;
-      final lng = double.tryParse(element[0]["longitude"]?.toString() ?? '') ?? 0;
+      final lat = double.tryParse(itemsList[0]["latitude"]?.toString() ?? '') ?? 0;
+      final lng = double.tryParse(itemsList[0]["longitude"]?.toString() ?? '') ?? 0;
 
       if (lat == 0 && lng == 0) continue;
 
-      final icon = await _createCircleMarker('P$index', Colors.blue);
+      // Extract raw time e.g., "1h 17min 49s"
+      String timeText = element['time']?.toString() ?? '';
+      String displayDuration = timeText.trim();
+      
+      // Shorten duration string: min -> m, sec -> s
+      displayDuration = displayDuration
+          .replaceAll('min', 'm')
+          .replaceAll('sec', 's');
+          
+      // Strip trailing seconds if hours or minutes are present
+      displayDuration = displayDuration.replaceAll(RegExp(r'\s*\d+s$'), '');
+      displayDuration = displayDuration.replaceAll(' ', '');
+
+      final label = displayDuration.isNotEmpty ? displayDuration : 'P$index';
+
+      final markerData = await _createParkingMarkerWithTime(label, 'P', Colors.blue);
 
       _parkingMarkers![id] = Marker(
         markerId: id,
         position: LatLng(lat, lng),
-        icon: icon,
-        anchor: const Offset(0.5, 0.5),
+        icon: markerData['icon'] as BitmapDescriptor,
+        anchor: Offset(0.5, markerData['anchorY'] as double),
         zIndex: 2,
       );
 
@@ -1316,7 +1468,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                     zoomControlsEnabled: false,
                     mapToolbarEnabled: false,
                     buildingsEnabled: false,
-                    padding: const EdgeInsets.only(bottom: 120),
+                    padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.24 + 10),
                   );
                 },
               );
@@ -1393,7 +1545,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
           // Marker Toggle Buttons
           if (playbackRoutePoints.isNotEmpty && !_isPlaybackLoading)
             Positioned(
-              bottom: 130,
+              bottom: MediaQuery.of(context).size.height * 0.24 + 10,
               left: 10,
               child: _buildMarkerToggles(),
             ),
@@ -1470,8 +1622,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
   Widget _buildBottomSheet() {
     return DraggableScrollableSheet(
-      initialChildSize: 0.14,
-      minChildSize: 0.08,
+      initialChildSize: 0.24,
+      minChildSize: 0.24,
       maxChildSize: 0.55,
       controller: _sheetController,
       builder: (context, scrollController) {
@@ -1481,7 +1633,9 @@ class _PlaybackScreenState extends State<PlaybackScreen>
             borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
             boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8)],
           ),
-          child: ListView(
+          child: SafeArea(
+            top: false,
+            child: ListView(
             controller: scrollController,
             padding: EdgeInsets.zero,
             children: [
@@ -1523,7 +1677,8 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                 ),
             ],
           ),
-        );
+        ),
+      );
       },
     );
   }
@@ -1533,26 +1688,101 @@ class _PlaybackScreenState extends State<PlaybackScreen>
     final currentValue = _playbackProgress.clamp(0.0, maxValue);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                DateFormat('dd/MM HH:mm').format(_fromDate),
-                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-              ),
-              if (playbackRoutePoints.isNotEmpty && _playbackProgress.toInt() < routeList.length)
-                Text(
-                  '${routeList[_playbackProgress.toInt().clamp(0, routeList.length - 1)].speed ?? 0} kph',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            margin: const EdgeInsets.only(bottom: 6),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!, width: 1),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "START TIME",
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[500],
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      DateFormat('dd/MM HH:mm').format(_fromDate),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
                 ),
-              Text(
-                DateFormat('dd/MM HH:mm').format(_toDate),
-                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-              ),
-            ],
+                if (playbackRoutePoints.isNotEmpty && _playbackProgress.toInt() < routeList.length)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: CustomColor.primaryColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: CustomColor.primaryColor.withValues(alpha: 0.15),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.speed,
+                          size: 16,
+                          color: CustomColor.primaryColor,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${routeList[_playbackProgress.toInt().clamp(0, routeList.length - 1)].speed ?? 0} kph',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: CustomColor.primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  const SizedBox(),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      "END TIME",
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[500],
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      DateFormat('dd/MM HH:mm').format(_toDate),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           if (playbackRoutePoints.isNotEmpty) ...[
             SliderTheme(

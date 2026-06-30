@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' as math;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -46,6 +48,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   bool _configLoaded = false;
   bool _minimumTimeReached = false;
   String _loadingStatus = 'Initializing...';
+  bool _isSystemBlockActive = false;
 
   // Animation Controllers
   late AnimationController _logoController;
@@ -210,6 +213,8 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   }
 
   void _tryNavigate() {
+    if (!mounted) return;
+    if (_isSystemBlockActive) return;
     if (_configLoaded && _minimumTimeReached) {
       checkPreference();
     }
@@ -252,46 +257,96 @@ class _SplashScreenPageState extends State<SplashScreenPage>
         BANNER_IMAGE = [];
         fuelData = {};
       } else {
+        final PackageInfo packageInfo = await PackageInfo.fromPlatform();
+        final String packageName = packageInfo.packageName;
+
         final doc = await FirebaseFirestore.instance
             .collection('configs')
-            .doc('urls')
+            .doc(packageName)
             .get();
+        print('[DEBUG CONFIG] Fetched config for $packageName: ${doc.data()}');
 
-        if (doc.exists) {
+        if (doc.exists && doc.data() != null) {
           final data = doc.data() as Map<String, dynamic>;
-          final spytrackConfig = data['spytrack'] as Map<String, dynamic>;
-          SERVER_URL = spytrackConfig['url'] as List;
-          SHOW_ADS = (spytrackConfig['ads'] as bool) && serverType == 'free';
-          WHATS_APP = spytrackConfig['whatsapp'] as String;
-          PHONE_NO = spytrackConfig['phone'] as String;
-          EMAIL = spytrackConfig['email'] as String;
-          adsFrequency = spytrackConfig['adsfrequency'] as int;
-          APP_VERSION = spytrackConfig['version'] as String;
-          BANNER_IMAGE = spytrackConfig['banners'] as List<dynamic>;
-          fuelData = spytrackConfig['fuelData'];
+          APP_NAME = data['app_name'] as String? ?? APP_NAME;
+          APP_VERSION = data['version'] as String? ?? '1.0.0';
+
+          final support = data['support'] as Map<String, dynamic>? ?? {};
+          WHATS_APP = support['whatsapp'] as String? ?? '';
+          PHONE_NO = support['phone'] as String? ?? '';
+          EMAIL = support['email'] as String? ?? '';
+
+          final settings = data['settings'] as Map<String, dynamic>? ?? {};
+          SHOW_ADS = (settings['show_ads'] == true || settings['show_ads'] == 1 || settings['show_ads'] == '1' || settings['show_ads'] == 'true') && serverType == 'free';
+          adsFrequency = settings['ads_frequency'] as int? ?? 30;
+
+          if (data['servers'] != null) {
+            SERVER_URL = List.from(data['servers'] as List);
+          }
+          if (data['all_servers'] != null) {
+            final additional = data['all_servers'] as List;
+            for (var server in additional) {
+              final exists = SERVER_URL.any((s) => s['url'] == server['url']);
+              if (!exists) {
+                SERVER_URL.add(server);
+              }
+            }
+          }
+
+          final policies = data['policies'] as Map<String, dynamic>? ?? {};
+          TERMS_AND_CONDITIONS = policies['terms'] as String? ?? TERMS_AND_CONDITIONS;
+          PRIVACY_POLICY = policies['privacy'] as String? ?? PRIVACY_POLICY;
+
+          final payment = data['payment'] as Map<String, dynamic>? ?? {};
+          bkashNumber = payment['bkash'] as String? ?? '';
+          nagadNumber = payment['nagad'] as String? ?? '';
+          rocketNumber = payment['rocket'] as String? ?? '';
+
+          final maintenance = data['maintenance'] as Map<String, dynamic>? ?? {};
+          globalMaintenanceEnabled = maintenance['enabled'] == true || maintenance['enabled'] == 1 || maintenance['enabled'] == '1' || maintenance['enabled'] == 'true';
+          globalMaintenanceMessage = maintenance['message'] as String? ?? '';
+
+          final forceUpdate = data['force_update'] as Map<String, dynamic>? ?? {};
+          forceUpdateEnabled = forceUpdate['enabled'] == true || forceUpdate['enabled'] == 1 || forceUpdate['enabled'] == '1' || forceUpdate['enabled'] == 'true';
+          forceUpdateVersion = forceUpdate['version'] as String? ?? '';
+          forceUpdateUrl = forceUpdate['url'] as String? ?? '';
+          forceUpdateMessage = forceUpdate['message'] as String? ?? '';
+        } else {
+          final fallbackDoc = await FirebaseFirestore.instance
+              .collection('configs')
+              .doc('urls')
+              .get();
+
+          if (fallbackDoc.exists && fallbackDoc.data() != null) {
+            final fallbackData = fallbackDoc.data() as Map<String, dynamic>;
+            final spytrackConfig = fallbackData['spytrack'] as Map<String, dynamic>? ?? {};
+            SERVER_URL = List.from(spytrackConfig['url'] as List? ?? []);
+            if (spytrackConfig['all_urls'] != null) {
+              final additional = spytrackConfig['all_urls'] as List;
+              for (var server in additional) {
+                final exists = SERVER_URL.any((s) => s['url'] == server['url']);
+                if (!exists) {
+                  SERVER_URL.add(server);
+                }
+              }
+            }
+            SHOW_ADS = (spytrackConfig['ads'] as bool? ?? false) && serverType == 'free';
+            WHATS_APP = spytrackConfig['whatsapp'] as String? ?? '';
+            PHONE_NO = spytrackConfig['phone'] as String? ?? '';
+            EMAIL = spytrackConfig['email'] as String? ?? '';
+            adsFrequency = spytrackConfig['adsfrequency'] as int? ?? 3;
+            APP_VERSION = spytrackConfig['version'] as String? ?? '1.0.0';
+            BANNER_IMAGE = spytrackConfig['banners'] as List<dynamic>? ?? [];
+            fuelData = spytrackConfig['fuelData'] as Map<String, dynamic>? ?? {};
+          }
         }
       }
 
       _updateStatus('Checking server...');
 
-      String? currentServerUrl = UserRepository.getServerUrl();
-      for (var server in SERVER_URL) {
-        if (server['url'] == currentServerUrl) {
-          ALWAYS_SHOW_BANNER_ADS = server['showBannerAds'];
-          final message = server['message'] ?? '';
-          if (message.isNotEmpty) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => ServerMaintenanceScreen(message: message),
-                ),
-                    (route) => false,
-              );
-            });
-            return;
-          }
-          break;
-        }
+      bool isBlocked = _applyMaintenanceCheck();
+      if (!isBlocked) {
+        await _applyForceUpdateCheck();
       }
 
       if (SHOW_ADS) {
@@ -302,10 +357,113 @@ class _SplashScreenPageState extends State<SplashScreenPage>
       _updateStatus('Almost ready...');
       _configLoaded = true;
       _tryNavigate();
-    } catch (e) {
-      print('Error fetching Firebase config: $e');
+    } catch (e, stack) {
+      print('[DEBUG CONFIG] Error fetching Firebase config: $e');
+      print(stack);
       _configLoaded = true;
       _tryNavigate();
+    }
+  }
+
+  bool _applyMaintenanceCheck() {
+    if (globalMaintenanceEnabled && globalMaintenanceMessage.isNotEmpty && mounted) {
+      setState(() {
+        _isSystemBlockActive = true;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => ServerMaintenanceScreen(message: globalMaintenanceMessage),
+          ),
+          (route) => false,
+        );
+      });
+      return true;
+    }
+
+    final String? currentServerUrl = UserRepository.getServerUrl();
+    for (final server in SERVER_URL) {
+      if (server['url'] == currentServerUrl) {
+        ALWAYS_SHOW_BANNER_ADS = server['showBannerAds'] ?? false;
+        final String message = server['message'] as String? ?? '';
+        if (message.isNotEmpty && mounted) {
+          setState(() {
+            _isSystemBlockActive = true;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (_) => ServerMaintenanceScreen(message: message),
+              ),
+              (route) => false,
+            );
+          });
+          return true;
+        }
+        break;
+      }
+    }
+    return false;
+  }
+
+  Future<bool> _applyForceUpdateCheck() async {
+    if (forceUpdateEnabled && forceUpdateVersion.isNotEmpty && mounted) {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version;
+      if (_isVersionLower(currentVersion, forceUpdateVersion)) {
+        setState(() {
+          _isSystemBlockActive = true;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => PopScope(
+              canPop: false,
+              child: AlertDialog(
+                title: const Text('Update Required'),
+                content: Text(forceUpdateMessage.isNotEmpty 
+                    ? forceUpdateMessage 
+                    : 'A new version of the app is available. Please update to continue.'),
+                actions: [
+                  TextButton(
+                    onPressed: () async {
+                      if (forceUpdateUrl.isNotEmpty) {
+                        final uri = Uri.parse(forceUpdateUrl);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      }
+                    },
+                    child: const Text('Update Now'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isVersionLower(String current, String required) {
+    try {
+      final currentParts = current.split('.').map(int.parse).toList();
+      final requiredParts = required.split('.').map(int.parse).toList();
+      for (var i = 0; i < requiredParts.length; i++) {
+        final currentPart = i < currentParts.length ? currentParts[i] : 0;
+        final requiredPart = requiredParts[i];
+        if (currentPart < requiredPart) return true;
+        if (currentPart > requiredPart) return false;
+      }
+      return false;
+    } catch (_) {
+      return false;
     }
   }
 

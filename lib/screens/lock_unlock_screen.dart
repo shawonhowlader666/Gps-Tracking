@@ -8,6 +8,7 @@ import 'package:gpspro/config.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/services/model/device_item.dart' hide Icon;
 import 'package:gpspro/widgets/banner_ad_widget.dart';
+import 'package:gpspro/util/util.dart';
 
 class LockUnlockScreen extends StatefulWidget {
   final DeviceItem device;
@@ -129,10 +130,18 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
   void _checkEngineStatus() {
     // 1. Determine Locked/Secured Status
-    final lockVal = _getRawParameter('blocked') ?? _getRawParameter('lock');
+    final lockVal = _getRawParameter('blocked') ??
+        _getRawParameter('lock') ??
+        _getRawParameter('immobiliz') ??
+        _getRawParameter('relay');
     if (lockVal != null) {
       final lv = lockVal.toLowerCase().trim();
-      setState(() => _isLocked = (lv == 'true' || lv == '1' || lv == 'blocked' || lv == 'lock'));
+      setState(() => _isLocked = (lv == 'true' ||
+          lv == '1' ||
+          lv == 'blocked' ||
+          lv == 'lock' ||
+          lv == 'on' ||
+          lv == 'yes'));
     } else {
       setState(() => _isLocked = false);
     }
@@ -243,9 +252,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                       child: Column(
                         children: [
                           const SizedBox(height: 10),
-                          // HUD Status Ring
-                          _buildHUDStatusRing(),
-                          const SizedBox(height: 28),
                           // Vehicle Dashboard Card
                           _buildVehicleDashboard(),
                           const SizedBox(height: 28),
@@ -408,12 +414,20 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   }
 
   Widget _buildVehicleDashboard() {
+    final String statusStr = widget.device.iconColor?.toLowerCase() ?? 'red';
+    Color statusColor = _dangerColor;
+    if (statusStr == 'green') {
+      statusColor = _successColor;
+    } else if (statusStr == 'yellow') {
+      statusColor = _warningColor;
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: const Color(0xFFE2E8F0),
           width: 1,
@@ -432,15 +446,22 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: CustomColor.primary.withValues(alpha: 0.08),
+                  color: statusColor.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
-                child: m.Icon(
-                  Icons.directions_car_filled_rounded,
-                  color: CustomColor.primary,
-                  size: 22,
+                child: Center(
+                  child: Util.getVehicleIconWidget(
+                    widget.device.icon?.path,
+                    statusColor,
+                    size: 24,
+                    iconType: widget.device.icon?.type ?? widget.device.iconType,
+                    deviceName: widget.device.name,
+                    deviceId: widget.device.id,
+                    device: widget.device,
+                  ),
                 ),
               ),
               const SizedBox(width: 14),
@@ -524,57 +545,39 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     
     // Core color scheme definitions
     final Color themeColor = isUnlockButton ? _successColor : _dangerColor; // green / red
-    
-    // Base light background and border colors
-    final Color baseBgColor = isUnlockButton ? _successColor.withValues(alpha: 0.35) : _dangerColor.withValues(alpha: 0.35); // light green / light red
-    final Color baseBorderColor = isUnlockButton ? _successColor.withValues(alpha: 0.35) : _dangerColor.withValues(alpha: 0.35);
-
-    // Apply active/inactive colors
-    final Color bgColor = isActive 
-        ? (isUnlockButton ? _successColor : _dangerColor) 
-        : baseBgColor;
-        
-    final Color borderColor = isActive 
-        ? (isUnlockButton ? _successColor : _dangerColor) 
-        : baseBorderColor;
-
-    final Color textIconColor = isActive ? Colors.white : Colors.white.withValues(alpha: 0.65);
-
     final IconData iconData = isUnlockButton ? Icons.lock_open_rounded : Icons.lock_rounded;
-    final String title = isUnlockButton ? 'UNLOCK' : 'LOCK';
-    final String subtitle = isUnlockButton ? 'Unlock Vehicle' : 'Lock Vehicle';
+    final String title = isUnlockButton ? 'UNLOCK ENGINE' : 'LOCK ENGINE';
+    final String subtitle = isUnlockButton ? 'Enable ignition' : 'Disable ignition';
 
-    return GestureDetector(
-      onTap: () {
-        if (!_isLoading && !isActive) {
-          sendEngineCommand(
-            isUnlockButton ? (_unlockCommandType ?? 'engineResume') : (_lockCommandType ?? 'engineStop'),
-            isUnlockButton ? _unlockCommandId : _lockCommandId,
-            isUnlockButton,
-          );
-        }
-      },
-      child: Column(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            width: 125,
-            height: 125,
+    // Build the exact visual button widget based on user images
+    Widget buttonWidget;
+
+    if (!isUnlockButton) {
+      // ── RED BUTTON (LOCK ENGINE) ──
+      if (isActive) {
+        // Active Red Button (Image 2 style: solid red background, thin white ring inside, white lock icon, soft red glow)
+        buttonWidget = Container(
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: themeColor, // Solid red
+            boxShadow: [
+              BoxShadow(
+                color: themeColor.withValues(alpha: 0.55),
+                blurRadius: 15,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Container(
+            margin: const EdgeInsets.all(6.0), // Gap to the white ring
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: bgColor,
               border: Border.all(
-                color: borderColor,
-                width: 2.0,
+                color: Colors.white, // Thin white ring
+                width: 2.2,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
             child: Center(
               child: AnimatedBuilder(
@@ -588,29 +591,209 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                 },
                 child: m.Icon(
                   iconData,
-                  color: textIconColor,
-                  size: 42,
+                  color: Colors.white, // White lock icon
+                  size: 38,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 14),
+        );
+      } else {
+        // Inactive Red Button (Translucent red background and red lock icon - bolder)
+        buttonWidget = Container(
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: themeColor.withValues(alpha: 0.22), // More saturated translucent background
+            border: Border.all(
+              color: themeColor.withValues(alpha: 0.55), // Bolder red outer border
+              width: 2.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Container(
+            margin: const EdgeInsets.all(6.0),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: themeColor.withValues(alpha: 0.35), // Bolder inner ring
+                width: 1.5,
+              ),
+            ),
+            child: Center(
+              child: m.Icon(
+                iconData,
+                color: themeColor.withValues(alpha: 0.8), // Solid, rich red icon
+                size: 34,
+              ),
+            ),
+          ),
+        );
+      }
+    } else {
+      // ── GREEN BUTTON (UNLOCK ENGINE) ──
+      if (isActive) {
+        // Active Green Button (Image 1 style: glossy green sphere with carbon-black border, white unlock icon, soft green glow)
+        buttonWidget = Container(
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF151515), // Carbon black border base
+            border: Border.all(
+              color: const Color(0xFF2C2C2C),
+              width: 5.5, // Thick outer border
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: themeColor.withValues(alpha: 0.5), // Green glow
+                blurRadius: 16,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: Stack(
+              children: [
+                // Glossy Green Sphere Gradient (radial offset)
+                Container(
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      center: Alignment(-0.3, -0.3),
+                      radius: 0.85,
+                      colors: [
+                        Color(0xFF86EFAC), // Bright neon green core
+                        Color(0xFF22C55E), // Vibrant green middle
+                        Color(0xFF15803D), // Deep dark green bottom-right
+                      ],
+                    ),
+                  ),
+                ),
+                // Glossy Crescent/Lens Highlight at the top-left
+                Positioned(
+                  top: 5,
+                  left: 9,
+                  child: Container(
+                    width: 65,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.55),
+                          Colors.white.withValues(alpha: 0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Icon in center
+                Center(
+                  child: AnimatedBuilder(
+                    animation: _animationController,
+                    builder: (context, child) {
+                      final double scale = isActive ? 1.0 + (_animationController.value * 0.05) : 1.0;
+                      return Transform.scale(
+                        scale: scale,
+                        child: child,
+                      );
+                    },
+                    child: m.Icon(
+                      iconData,
+                      color: Colors.white,
+                      size: 38,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        // Inactive Green Button (Translucent green background and green lock icon - matches inactive red button)
+        buttonWidget = Container(
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: themeColor.withValues(alpha: 0.22), // More saturated translucent background
+            border: Border.all(
+              color: themeColor.withValues(alpha: 0.55), // Bolder green outer border
+              width: 2.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Container(
+            margin: const EdgeInsets.all(6.0),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: themeColor.withValues(alpha: 0.35), // Bolder inner ring
+                width: 1.5,
+              ),
+            ),
+            child: Center(
+              child: m.Icon(
+                iconData,
+                color: themeColor.withValues(alpha: 0.8), // Solid, rich green icon
+                size: 34,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    return GestureDetector(
+      onTap: () {
+        if (!_isLoading && !isActive) {
+          sendEngineCommand(
+            isUnlockButton ? (_unlockCommandType ?? 'engineResume') : (_lockCommandType ?? 'engineStop'),
+            isUnlockButton ? _unlockCommandId : _lockCommandId,
+            isUnlockButton,
+          );
+        }
+      },
+      child: Column(
+        children: [
+          buttonWidget,
+          const SizedBox(height: 12),
           Text(
             title,
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
               letterSpacing: 0.8,
-              color: themeColor,
+              color: isActive ? themeColor : const Color(0xFF4B5563),
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             subtitle,
             style: const TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
+              fontSize: 10,
               color: Color(0xFF94A3B8),
             ),
             textAlign: TextAlign.center,
@@ -625,7 +808,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(

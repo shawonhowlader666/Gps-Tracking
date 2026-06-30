@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:developer';
 import 'package:get/get.dart';
+import 'package:gpspro/screens/common_method.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/screens/report/get_today_report.dart';
 import 'package:gpspro/services/api_service.dart';
@@ -148,46 +149,143 @@ class HomeController extends GetxController {
       return;
     }
 
-   // log('📊 [HomeController] loadTodayReport for device: $deviceId');
-
     // Set loading state
     isLoadingReport.value = true;
     reportError.value = '';
 
     try {
-      // Call ReportService with the selected period
-      final report = await ReportService.getReportForPeriod(
-        deviceId: deviceId,
-        period: selectedPeriod.value,
-        customStart: selectedPeriod.value == ReportPeriod.custom ? customStart.value : null,
-        customEnd:   selectedPeriod.value == ReportPeriod.custom ? customEnd.value   : null,
-        forceRefresh: forceRefresh,
-      );
-      //
-      // log('📊 [HomeController] Report received:');
-      // log('   isEmpty: ${report.isEmpty}');
-      // log('   routeLength: ${report.routeLength}');
-      // log('   moveDuration: ${report.moveDuration}');
-      // log('   stopDuration: ${report.stopDuration}');
-      // log('   topSpeed: ${report.topSpeed}');
-      // log('   engineHours: ${report.engineHours}');
-
-      // UPDATE THE REACTIVE VARIABLE - THIS IS KEY!
-      todayReport.value = report;
-
-      if (report.isEmpty) {
-        reportError.value = 'No data for ${selectedPeriod.value.name}';
-      //  log('⚠️ [HomeController] Report is empty');
+      final now = DateTime.now();
+      DateTime from, to;
+      final period = selectedPeriod.value;
+      
+      if (period == ReportPeriod.today) {
+        from = DateTime(now.year, now.month, now.day);
+        to = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      } else if (period == ReportPeriod.yesterday) {
+        final yesterday = now.subtract(const Duration(days: 1));
+        from = DateTime(yesterday.year, yesterday.month, yesterday.day);
+        to = DateTime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59);
+      } else if (period == ReportPeriod.thisWeek) {
+        final monday = now.subtract(Duration(days: now.weekday - 1));
+        from = DateTime(monday.year, monday.month, monday.day);
+        to = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      } else if (period == ReportPeriod.thisMonth) {
+        from = DateTime(now.year, now.month, 1);
+        to = DateTime(now.year, now.month, now.day, 23, 59, 59);
       } else {
-       // log('✅ [HomeController] Report loaded successfully');
+        from = customStart.value ?? DateTime(now.year, now.month, now.day);
+        to = customEnd.value ?? DateTime(now.year, now.month, now.day, 23, 59, 59);
       }
+
+      final fromDateStr = formatDateReport(from.toString());
+      final toDateStr = formatDateReport(to.toString());
+
+      // Phase 1: Fast API Fetch (History JSON) - Instant load
+      final history = await APIService.getHistory(
+        deviceId.toString(),
+        fromDateStr,
+        "00:00",
+        toDateStr,
+        "23:59",
+      );
+
+      if (history != null) {
+        double distanceVal = 0;
+        double hoursVal = 0;
+        String avgSpeedStr = '--';
+        
+        if (history.distance_sum != null) {
+          try {
+            distanceVal = double.parse(history.distance_sum!.replaceAll(RegExp(r'[^0-9.]'), ''));
+          } catch (_) {}
+        }
+        if (history.move_duration != null) {
+          hoursVal = _parseDurationToHours(history.move_duration!);
+        }
+        if (hoursVal > 0) {
+          avgSpeedStr = "${(distanceVal / hoursVal).toStringAsFixed(1)} kph";
+        }
+
+        final initialData = TodayReportData(
+          routeLength: history.distance_sum,
+          topSpeed: history.top_speed != null ? "${history.top_speed} kph" : '--',
+          moveDuration: history.move_duration,
+          stopDuration: history.stop_duration,
+          averageSpeed: avgSpeedStr,
+          fuelConsumption: history.fuel_consumption,
+          engineHours: selectedDevice?.engineHours ?? selectedDevice?.deviceData?.engineHours,
+        );
+
+        // Instantly display Phase 1 data and stop the spinner
+        todayReport.value = initialData;
+        isLoadingReport.value = false;
+      }
+
+      // Phase 2: PDF generation & parse in background to get extra details
+      ReportService.getReportForPeriod(
+        deviceId: deviceId,
+        period: period,
+        customStart: customStart.value,
+        customEnd: customEnd.value,
+        forceRefresh: forceRefresh,
+      ).then((pdfReport) {
+        if (!pdfReport.isEmpty) {
+          // Merge PDF report fields with history data
+          final mergedData = TodayReportData(
+            device: pdfReport.device ?? todayReport.value?.device,
+            routeStart: pdfReport.routeStart ?? todayReport.value?.routeStart,
+            routeEnd: pdfReport.routeEnd ?? todayReport.value?.routeEnd,
+            routeLength: pdfReport.routeLength ?? todayReport.value?.routeLength,
+            moveDuration: pdfReport.moveDuration ?? todayReport.value?.moveDuration,
+            stopDuration: pdfReport.stopDuration ?? todayReport.value?.stopDuration,
+            topSpeed: pdfReport.topSpeed ?? todayReport.value?.topSpeed,
+            averageSpeed: pdfReport.averageSpeed ?? todayReport.value?.averageSpeed,
+            overspeedCount: pdfReport.overspeedCount ?? todayReport.value?.overspeedCount,
+            engineHours: pdfReport.engineHours ?? todayReport.value?.engineHours,
+            engineWork: pdfReport.engineWork ?? todayReport.value?.engineWork,
+            engineIdle: pdfReport.engineIdle ?? todayReport.value?.engineIdle,
+            odometer: pdfReport.odometer ?? todayReport.value?.odometer,
+            fuelConsumption: pdfReport.fuelConsumption ?? todayReport.value?.fuelConsumption,
+          );
+          todayReport.value = mergedData;
+        }
+      }).catchError((e) {
+        log('⚠️ [HomeController] Background PDF load failed: $e');
+      });
+
     } catch (e) {
-    //  log('❌ [HomeController] Error: $e');
-      todayReport.value = TodayReportData();
-      reportError.value = 'Failed to load report';
+      log('❌ [HomeController] Error: $e');
+      if (todayReport.value == null) {
+        todayReport.value = TodayReportData();
+        reportError.value = 'Failed to load report';
+      }
     } finally {
       isLoadingReport.value = false;
-      log('📊 [HomeController] isLoadingReport = false');
+    }
+  }
+
+  double _parseDurationToHours(String duration) {
+    try {
+      double hours = 0;
+      final RegExp hourReg = RegExp(r'(\d+)\s*h');
+      final RegExp minReg = RegExp(r'(\d+)\s*m');
+      final RegExp secReg = RegExp(r'(\d+)\s*s');
+
+      final hMatch = hourReg.firstMatch(duration);
+      if (hMatch != null) {
+        hours += double.parse(hMatch.group(1)!);
+      }
+      final mMatch = minReg.firstMatch(duration);
+      if (mMatch != null) {
+        hours += double.parse(mMatch.group(1)!) / 60.0;
+      }
+      final sMatch = secReg.firstMatch(duration);
+      if (sMatch != null) {
+        hours += double.parse(sMatch.group(1)!) / 3600.0;
+      }
+      return hours;
+    } catch (_) {
+      return 0;
     }
   }
 

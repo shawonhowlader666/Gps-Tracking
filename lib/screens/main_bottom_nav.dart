@@ -26,7 +26,7 @@ class MainBottomNav extends StatefulWidget {
 }
 
 class _MainBottomNavState extends State<MainBottomNav> {
-  int _selectedIndex = 2;
+  int _selectedIndex = 1;
   late final PageController _pageController = PageController(initialPage: _selectedIndex);
   double _dueAmount = 0.0;
   bool _isLoadingDue = true;
@@ -164,8 +164,8 @@ class _MainBottomNavState extends State<MainBottomNav> {
 
   final List<Widget> _screens = [
     HomeScreen(),
-    const MapPage(),
     const DevicePage(),
+    const MapPage(),
     EventsPage(),
     SettingsPage(),
   ];
@@ -267,12 +267,12 @@ class _MainBottomNavState extends State<MainBottomNav> {
                 text: 'homePage'.tr,
               ),
               GButton(
-                icon: LineIcons.mapMarked,
-                text: 'map'.tr,
-              ),
-              GButton(
                 icon: LineIcons.car,
                 text: 'vehicles'.tr,
+              ),
+              GButton(
+                icon: LineIcons.mapMarked,
+                text: 'map'.tr,
               ),
               GButton(
                 icon: LineIcons.bell,

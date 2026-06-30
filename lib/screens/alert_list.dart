@@ -502,18 +502,21 @@ class _AlertListPageState extends State<AlertListPage> with SingleTickerProvider
     String type = selectedType;
     String devices = selectedDevices.join("&");
 
+    // Always enable push and sound notifications on the server for the alert
+    const notifParams = "&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1";
+
     if (_isSimpleType()) {
-      return "&name=$name&type=$type&$devices";
+      return "&name=$name&type=$type&$devices$notifParams";
     }
 
     if (_isGeofenceType()) {
       String geofences = selectedFenceList.join("&");
-      return "&name=$name&type=$type&zone=0&$geofences&$devices";
+      return "&name=$name&type=$type&zone=0&$geofences&$devices$notifParams";
     }
 
     String value = Uri.encodeComponent(_typeCtl.text.trim());
     String paramName = _getParameterName();
-    return "&name=$name&type=$type&$paramName=$value&$devices";
+    return "&name=$name&type=$type&$paramName=$value&$devices$notifParams";
   }
 
   bool _isSimpleType() {

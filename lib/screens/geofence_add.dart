@@ -138,7 +138,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                   statusColor: device.iconColor,
                   iconType: device.icon?.type ?? device.iconType,
                   deviceName: device.name,
-                  deviceId: device.id);
+                  deviceId: device.id,
+                  device: device);
 
               _markers.add(Marker(
                 markerId: MarkerId(device.id.toString()),
@@ -148,6 +149,8 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
                 ),
                 icon: markerIcon,
                 rotation: double.tryParse(device.course.toString()) ?? 0,
+                anchor: const Offset(0.5, 0.5),
+                flat: true,
                 onTap: () => _toggleDeviceSelection(device),
               ));
             } catch (e) {
