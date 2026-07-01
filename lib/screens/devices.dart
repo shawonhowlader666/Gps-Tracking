@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -21,10 +22,15 @@ import 'package:gpspro/services/model/share_perm.dart';
 import 'package:gpspro/services/model/single_device.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/widgets/address.dart';
+import 'package:gpspro/widgets/svg_asset_colorizer.dart';
+import 'package:gpspro/util/util.dart';
 import 'package:gpspro/widgets/banner_ad_widget.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/payment_service.dart';
+import 'package:gpspro/services/model/billing_vehicle.dart';
+import 'package:gpspro/theme/custom_color.dart';
+import 'package:gpspro/arguments/device_args.dart';
 
 enum DeviceStatus { running, idle, stop, offline }
 
@@ -35,13 +41,20 @@ class DevicePage extends StatefulWidget {
   State<DevicePage> createState() => _DevicePageState();
 }
 
-class _DevicePageState extends State<DevicePage> {
+class _DevicePageState extends State<DevicePage>
+    with AutomaticKeepAliveClientMixin {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _name = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  final Set<int> _expandedDeviceIds = {};
 
   // Due amount observable
   final RxDouble totalDue = 0.0.obs;
+
+  // Billing info state
+  List<BillingVehicle> _billingVehicles = [];
+  Map<String, BillingVehicle> _billingMap = {};
+  bool _isLoadingBilling = false;
 
   SingleDevice? sd;
   int expiryTime = 10;
@@ -59,15 +72,30 @@ class _DevicePageState extends State<DevicePage> {
   final RxInt _idleCount = 0.obs;
   final RxInt _stopCount = 0.obs;
   final RxInt _offlineCount = 0.obs;
+  final RxInt _expiredCount = 0.obs;
+  final RxInt _suspendedCount = 0.obs;
+
+  String _lastQuery = '';
+  int _lastFilterIndex = -1;
+
+  int _lastOnlyDevicesHash = 0;
+  List<DeviceItem> _cachedMergedDevices = [];
+  final Map<int, DeviceStatus> _cachedStatuses = {};
+  final Map<int, bool> _cachedEngineStates = {};
+  final Map<int, String> _cachedExpiryDates = {};
+  final Map<int, String> _cachedTimeLabels = {};
+  final Map<int, String> _cachedDurationLabels = {};
+  final Map<int, Color> _cachedDurationColors = {};
 
   // Colors
-  static const Color _primaryBlue = Color(0xFF3B82F6);
-  static const Color _greenColor = Color(0xFF22C55E);
-  static const Color _yellowColor = Color(0xFFF59E0B);
-  static const Color _redColor = Color(0xFFEF4444);
-  static const Color _greyColor = Color(0xFF6B7280);
+  static const Color _primaryBlue = CustomColor.primary; // Brand Red
+  static const Color _greenColor = Color(0xFF00C853);
+  static const Color _yellowColor = Color(0xFFFF9100);
+  static const Color _redColor = CustomColor.primary;
+  static const Color _greyColor = Color(0xFF475569);
 
-  Timer? _refreshTimer;
+  StreamSubscription? _onlyDevicesSubscription;
+  StreamSubscription? _isLoadingSubscription;
 
   void _safeSetState(VoidCallback fn) {
     if (mounted && !_isDisposed) setState(fn);
@@ -79,8 +107,8 @@ class _DevicePageState extends State<DevicePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !_isDisposed) {
         _loadDevices();
-        _startPeriodicRefresh();
         _loadDueAmount();
+        _loadBillingInfo();
       }
     });
   }
@@ -97,36 +125,281 @@ class _DevicePageState extends State<DevicePage> {
     }
   }
 
-  void _startPeriodicRefresh() {
-    _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      if (mounted && !_isDisposed) {
-        _calculateCounts();
-        _applyCurrentFilter();
-      }
+  /// Load billing info from payment service
+  Future<void> _loadBillingInfo() async {
+    if (_isDisposed || !mounted) return;
+    _safeSetState(() {
+      _isLoadingBilling = true;
     });
+
+    try {
+      final billingList = await PaymentService.getBillingVehicles();
+      if (billingList != null && mounted && !_isDisposed) {
+        _billingVehicles = billingList;
+        _billingMap = {for (var v in billingList) v.imei: v};
+        _lastOnlyDevicesHash = 0; // Force merge/recompute
+        debugPrint('LOADED BILLING MAP KEYS: ${_billingMap.keys.toList()}');
+      } else {
+        debugPrint('Billing list is null or empty');
+      }
+    } catch (e) {
+      debugPrint('Error loading billing info: $e');
+    } finally {
+      if (mounted && !_isDisposed) {
+        _safeSetState(() {
+          _isLoadingBilling = false;
+        });
+      }
+    }
+  }
+
+  bool _isDeviceSuspended(DeviceItem device) {
+    final imei = device.imei ?? device.deviceData?.imei;
+    if (imei == null) return false;
+    final billingInfo = _billingMap[imei];
+    if (billingInfo == null) return false;
+
+    // Suspend if explicitly marked inactive in billing
+    if (!billingInfo.isActive) {
+      return true;
+    }
+
+    // Check expiration date
+    if (billingInfo.expirationDate != null) {
+      try {
+        final expDate = DateTime.parse(billingInfo.expirationDate!);
+        if (expDate.isBefore(DateTime.now())) {
+          final daysPassed = DateTime.now().difference(expDate).inDays;
+          if (daysPassed > 10) {
+            return true;
+          }
+        }
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  String _formatBillingDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      return "${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}";
+    } catch (_) {
+      return dateString.split(' ').first;
+    }
+  }
+
+  void _showSuspendedDialog(DeviceItem device) {
+    final imei = device.imei ?? device.deviceData?.imei;
+    final billingInfo = imei != null ? _billingMap[imei] : null;
+    final monthlyBillStr = billingInfo?.monthlyBill != null
+        ? " (মান্থলি বিল: ৳${billingInfo!.monthlyBill!.toStringAsFixed(0)})"
+        : "";
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_clock_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('সেবা সাময়িকভাবে স্থগিত',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'আপনার "${device.name ?? 'ডিভাইস'}" গাড়িটির বিল বকেয়া থাকায় বা মেয়াদ শেষ হওয়ায় ট্র্যাকিং সাময়িকভাবে স্থগিত করা হয়েছে$monthlyBillStr। অবিলম্বে ট্র্যাকিং সচল করতে বকেয়া বিল পরিশোধ করুন।',
+          style: const TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('বন্ধ করুন',
+                style:
+                    TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Get.to(() => const PaymentListScreen())?.then((_) {
+                _loadDueAmount();
+                _loadBillingInfo();
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF22C55E),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('বিল পরিশোধ করুন',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _checkNoPermission(DeviceItem device) {
+    if (device.id != null && device.id! < 0) {
+      _showNoPermissionDialog(device);
+      return true;
+    }
+    return false;
+  }
+
+  void _showNoPermissionDialog(DeviceItem device) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('ট্র্যাকিং অনুমতি নেই',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'আপনার "${device.name ?? 'ডিভাইস'}" গাড়িটি দেখার পর্যাপ্ত অনুমতি জিপিএস ট্র্যাকিং সার্ভারে নেই। ম্যাপ বা লাইভ ট্র্যাকিং দেখতে অনুগ্রহ করে অ্যাডমিন প্যানেল থেকে অনুমতি সক্রিয় করুন।',
+          style: const TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('বন্ধ করুন',
+                style:
+                    TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _loadDevices() {
     if (_isDisposed || !mounted) return;
     controller.filterDevicesByStatus("all");
-    _calculateCounts();
-    _filterDevices("all");
   }
 
-  void _calculateCounts() {
-    if (_isDisposed || !mounted) return;
+  List<DeviceItem> _getMergedDevices() {
+    final trackingDevices = controller.onlyDevices.toList();
+    final List<DeviceItem> merged = List.from(trackingDevices);
 
-    final allDevices = controller.filteredDevices.toList();
+    final Set<String> trackingImeis = trackingDevices
+        .map((td) => td.imei ?? td.deviceData?.imei)
+        .whereType<String>()
+        .toSet();
 
-    int running = 0;
-    int idle = 0;
-    int stop = 0;
-    int offline = 0;
+    for (final bv in _billingVehicles) {
+      if (!trackingImeis.contains(bv.imei)) {
+        final mockDevice = DeviceItem(
+          id: -bv.id,
+          name: bv.name ?? 'ভেইকেল ${bv.id}',
+          imei: bv.imei,
+          online: 'offline',
+          iconColor: 'red',
+          speed: 0,
+          lat: null,
+          lng: null,
+          deviceData: DeviceData(
+            imei: bv.imei,
+          ),
+        );
+        merged.add(mockDevice);
+      }
+    }
+    return merged;
+  }
+
+  int _calculateDevicesHash(List<DeviceItem> list) {
+    int hash = 17;
+    for (final device in list) {
+      hash = 37 * hash + (device.id ?? 0);
+      hash = 37 * hash + (device.lat?.hashCode ?? 0);
+      hash = 37 * hash + (device.lng?.hashCode ?? 0);
+      hash = 37 * hash + (device.online?.hashCode ?? 0);
+      hash = 37 * hash + (device.speed?.hashCode ?? 0);
+      hash = 37 * hash + (device.iconColor?.hashCode ?? 0);
+    }
+    return hash;
+  }
+
+  void _updateDisplayDevicesAndCounts({bool force = false}) {
+    final onlyDevices = controller.onlyDevices.toList();
+    final onlyDevicesHash = _calculateDevicesHash(onlyDevices);
+    final query = _searchController.text;
+
+    bool needsRegenerateMerged = force ||
+        onlyDevicesHash != _lastOnlyDevicesHash ||
+        _cachedMergedDevices.isEmpty;
+
+    if (needsRegenerateMerged) {
+      _lastOnlyDevicesHash = onlyDevicesHash;
+      _cachedMergedDevices = _getMergedDevices();
+
+      // Recompute cached statuses, engine states, and labels on-demand
+      _cachedStatuses.clear();
+      _cachedEngineStates.clear();
+      _cachedExpiryDates.clear();
+      _cachedTimeLabels.clear();
+      _cachedDurationLabels.clear();
+      _cachedDurationColors.clear();
+    }
+
+    final allDevices = _cachedMergedDevices;
+
+    if (!force &&
+        !needsRegenerateMerged &&
+        query == _lastQuery &&
+        _selectedFilterIndex == _lastFilterIndex &&
+        _displayDevices.isNotEmpty) {
+      return;
+    }
+
+    _lastQuery = query;
+    _lastFilterIndex = _selectedFilterIndex;
+
+    debugPrint(
+        "DEVICES_PAGE _updateDisplayDevicesAndCounts: allDevices.length=${allDevices.length}");
+
+    int running = 0,
+        idle = 0,
+        stop = 0,
+        offline = 0,
+        expired = 0,
+        suspended = 0;
 
     for (var device in allDevices) {
-      final status = _getDeviceStatus(device);
-      switch (status) {
+      final imei = device.imei ?? device.deviceData?.imei;
+      final billing = imei != null ? _billingMap[imei] : null;
+      bool isExpired = false;
+      bool isSuspended = false;
+      if (billing != null) {
+        if (!billing.isActive) isSuspended = true;
+        if (billing.expirationDate != null) {
+          try {
+            final exp = DateTime.parse(billing.expirationDate!);
+            if (exp.isBefore(DateTime.now())) isExpired = true;
+          } catch (_) {}
+        }
+      }
+      if (isSuspended) {
+        suspended++;
+        continue;
+      }
+      if (isExpired) {
+        expired++;
+        continue;
+      }
+
+      final status = device.id != null
+          ? (_cachedStatuses[device.id!] ??= _getDeviceStatus(device))
+          : _getDeviceStatus(device);
+      if (device.id != null) {
+        _cachedEngineStates[device.id!] ??= _isEngineOn(device);
+      }
+      switch (status ?? DeviceStatus.offline) {
         case DeviceStatus.running:
           running++;
           break;
@@ -147,6 +420,85 @@ class _DevicePageState extends State<DevicePage> {
     _idleCount.value = idle;
     _stopCount.value = stop;
     _offlineCount.value = offline;
+    _expiredCount.value = expired;
+    _suspendedCount.value = suspended;
+
+    List<DeviceItem> filtered;
+    final filter = _getFilterName(_selectedFilterIndex);
+    switch (filter) {
+      case "running":
+        filtered = allDevices
+            .where((d) =>
+                (d.id != null ? _cachedStatuses[d.id] : _getDeviceStatus(d)) ==
+                DeviceStatus.running)
+            .toList();
+        break;
+      case "idle":
+        filtered = allDevices
+            .where((d) =>
+                (d.id != null ? _cachedStatuses[d.id] : _getDeviceStatus(d)) ==
+                DeviceStatus.idle)
+            .toList();
+        break;
+      case "stop":
+        filtered = allDevices
+            .where((d) =>
+                (d.id != null ? _cachedStatuses[d.id] : _getDeviceStatus(d)) ==
+                DeviceStatus.stop)
+            .toList();
+        break;
+      case "offline":
+        filtered = allDevices
+            .where((d) =>
+                (d.id != null ? _cachedStatuses[d.id] : _getDeviceStatus(d)) ==
+                DeviceStatus.offline)
+            .toList();
+        break;
+      case "expired":
+        filtered = allDevices.where((d) {
+          final imei = d.imei ?? d.deviceData?.imei;
+          final billing = imei != null ? _billingMap[imei] : null;
+          if (billing == null) return false;
+          if (billing.expirationDate == null) return false;
+          try {
+            return DateTime.parse(billing.expirationDate!)
+                .isBefore(DateTime.now());
+          } catch (_) {
+            return false;
+          }
+        }).toList();
+        break;
+      case "suspended":
+        filtered = allDevices.where((d) {
+          final imei = d.imei ?? d.deviceData?.imei;
+          final billing = imei != null ? _billingMap[imei] : null;
+          return billing != null && !billing.isActive;
+        }).toList();
+        break;
+      default:
+        filtered = allDevices;
+    }
+
+    if (query.isNotEmpty) {
+      final queryLower = query.toLowerCase();
+      filtered = filtered
+          .where((d) => (d.name?.toLowerCase() ?? '').contains(queryLower))
+          .toList();
+    }
+
+    filtered.sort((a, b) {
+      final aStatus =
+          a.id != null ? _cachedStatuses[a.id!] : _getDeviceStatus(a);
+      final bStatus =
+          b.id != null ? _cachedStatuses[b.id!] : _getDeviceStatus(b);
+      final aPriority = _getStatusPriority(aStatus ?? DeviceStatus.offline);
+      final bPriority = _getStatusPriority(bStatus ?? DeviceStatus.offline);
+      return aPriority.compareTo(bPriority);
+    });
+
+    _displayDevices = filtered;
+    debugPrint(
+        "DEVICES_PAGE _updateDisplayDevicesAndCounts: displayDevices.length=${_displayDevices.length} filtered=${filtered.length} allCount=${_allCount.value} running=${_runningCount.value} stop=${_stopCount.value} idle=${_idleCount.value} offline=${_offlineCount.value} expired=${_expiredCount.value}");
   }
 
   /// Check if device is online based on multiple factors
@@ -175,7 +527,7 @@ class _DevicePageState extends State<DevicePage> {
     if (device.timestamp != null && device.timestamp! > 0) {
       try {
         final lastUpdate =
-        DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
+            DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
         final difference = DateTime.now().difference(lastUpdate);
         return difference.inMinutes < 5;
       } catch (_) {
@@ -194,69 +546,28 @@ class _DevicePageState extends State<DevicePage> {
 
   /// Check if engine/ignition is on - MASTER ENGINE CHECK
   bool _isEngineOn(DeviceItem device) {
-    // 1. Check engineStatus field directly
     if (device.engineStatus != null) {
       final status = device.engineStatus;
       if (status is bool) return status;
       if (status is int) return status == 1;
       if (status is String) {
         final s = status.toLowerCase().trim();
-        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s))
-          return true;
-        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
-            .contains(s)) return false;
+        return s == 'on' || s == '1' || s == 'true';
       }
-    }
-
-    // 2. Check sensors for ignition/acc status
-    if (device.sensors != null && device.sensors!.isNotEmpty) {
-      for (var sensor in device.sensors!) {
-        try {
-          final type = (sensor['type'] ?? '').toString().toLowerCase();
-          final name = (sensor['name'] ?? '').toString().toLowerCase();
-          final value = sensor['value'];
-
-          // Check for ignition or ACC sensors
-          if (type == 'acc' ||
-              type == 'ignition' ||
-              type == 'engine' ||
-              name.contains('ignition') ||
-              name.contains('acc') ||
-              name.contains('engine')) {
-            if (value == null) continue;
-
-            if (value is bool) return value;
-            if (value is int) return value == 1;
-            if (value is String) {
-              final v = value.toLowerCase().trim();
-              if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
-                  .contains(v)) return true;
-              if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
-                  .contains(v)) return false;
-            }
-          }
-        } catch (e) {
-          continue;
+    } else {
+      final traccar = device.deviceData?.traccar;
+      if (traccar != null) {
+        final engineOnAt = traccar.engineOnAt;
+        final engineOffAt = traccar.engineOffAt;
+        if (engineOnAt != null && engineOffAt != null) {
+          try {
+            final onTime = DateTime.parse(engineOnAt);
+            final offTime = DateTime.parse(engineOffAt);
+            return onTime.isAfter(offTime);
+          } catch (_) {}
         }
       }
     }
-
-    // 3. If speed > 0, engine must be on
-    final speed = double.tryParse(device.speed.toString()) ?? 0;
-    if (speed > 0) {
-      return true;
-    }
-
-    // 4. Check iconColor as indicator
-    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
-    if (iconColor == 'yellow') {
-      return true; // Idle/Yellow = engine on but not moving
-    }
-    if (iconColor == 'green') {
-      return true; // Running/Green = engine on and moving
-    }
-
-    // Default: engine is off
     return false;
   }
 
@@ -291,97 +602,34 @@ class _DevicePageState extends State<DevicePage> {
     }
   }
 
-  void _applyCurrentFilter() {
-    _filterDevices(_getFilterName(_selectedFilterIndex));
-  }
-
-  void _filterDevices(String filter) {
-    if (_isDisposed || !mounted) return;
-
-    controller.filterDevicesByStatus("all");
-    final allDevices = controller.filteredDevices.toList();
-
-    // Recalculate counts
-    _calculateCounts();
-
-    switch (filter) {
-      case "running":
-        _displayDevices = allDevices
-            .where((d) => _getDeviceStatus(d) == DeviceStatus.running)
-            .toList();
-        _selectedFilterIndex = 1;
-        break;
-      case "idle":
-        _displayDevices = allDevices
-            .where((d) => _getDeviceStatus(d) == DeviceStatus.idle)
-            .toList();
-        _selectedFilterIndex = 2;
-        break;
-      case "stop":
-        _displayDevices = allDevices
-            .where((d) => _getDeviceStatus(d) == DeviceStatus.stop)
-            .toList();
-        _selectedFilterIndex = 3;
-        break;
-      case "offline":
-        _displayDevices = allDevices
-            .where((d) => _getDeviceStatus(d) == DeviceStatus.offline)
-            .toList();
-        _selectedFilterIndex = 4;
-        break;
-      default:
-        _displayDevices = allDevices;
-        _selectedFilterIndex = 0;
-    }
-    _safeSetState(() {});
-  }
-
-  void _searchDevices(String query) {
-    if (_isDisposed || !mounted) return;
-    if (query.isEmpty) {
-      _filterDevices(_getFilterName(_selectedFilterIndex));
-    } else {
-      controller.filterDevicesByStatus("all");
-      final allDevices = controller.filteredDevices.toList();
-
-      // Apply current filter first, then search
-      List<DeviceItem> filtered;
-      switch (_selectedFilterIndex) {
-        case 1:
-          filtered = allDevices
-              .where((d) => _getDeviceStatus(d) == DeviceStatus.running)
-              .toList();
-          break;
-        case 2:
-          filtered = allDevices
-              .where((d) => _getDeviceStatus(d) == DeviceStatus.idle)
-              .toList();
-          break;
-        case 3:
-          filtered = allDevices
-              .where((d) => _getDeviceStatus(d) == DeviceStatus.stop)
-              .toList();
-          break;
-        case 4:
-          filtered = allDevices
-              .where((d) => _getDeviceStatus(d) == DeviceStatus.offline)
-              .toList();
-          break;
-        default:
-          filtered = allDevices;
-      }
-
-      _displayDevices = filtered
-          .where((d) =>
-          (d.name?.toLowerCase() ?? '').contains(query.toLowerCase()))
-          .toList();
-      _safeSetState(() {});
+  int _getStatusPriority(DeviceStatus status) {
+    switch (status) {
+      case DeviceStatus.running:
+        return 1;
+      case DeviceStatus.idle:
+        return 2;
+      case DeviceStatus.stop:
+        return 3;
+      case DeviceStatus.offline:
+        return 4;
     }
   }
+
+  void _applyCurrentFilter() {}
+  void _filterDevices(String filter) {}
+  void _searchDevices(String query) {}
 
   String _getFilterName(int index) {
-    const names = ["all", "running", "idle", "stop", "offline"];
-    return names[index];
+    const names = [
+      "all",
+      "running",
+      "stop",
+      "idle",
+      "offline",
+      "expired",
+      "suspended"
+    ];
+    return index < names.length ? names[index] : "all";
   }
 
   Color _getStatusColor(DeviceStatus status) {
@@ -391,7 +639,7 @@ class _DevicePageState extends State<DevicePage> {
       case DeviceStatus.idle:
         return _yellowColor;
       case DeviceStatus.stop:
-        return _greyColor;
+        return _yellowColor;
       case DeviceStatus.offline:
         return _redColor;
     }
@@ -423,10 +671,149 @@ class _DevicePageState extends State<DevicePage> {
     }
   }
 
+  String? _getRawParameter(DeviceItem? device, String key) {
+    if (device == null) return null;
+
+    // 1. Try to search in device.sensors list
+    final sensors = device.sensors;
+    if (sensors != null) {
+      for (var s in sensors) {
+        if (s is Map) {
+          final name = (s['name'] ?? '').toString().toLowerCase();
+          if (name.contains(key.toLowerCase())) {
+            final val = s['value']?.toString();
+            if (val != null && val.trim().isNotEmpty) {
+              return val;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Try to search in deviceData.sensors
+    final ddSensors = device.deviceData?.sensors;
+    if (ddSensors != null) {
+      for (var s in ddSensors) {
+        if (s is Map) {
+          final name = (s['name'] ?? '').toString().toLowerCase();
+          if (name.contains(key.toLowerCase())) {
+            final val = s['value']?.toString();
+            if (val != null && val.trim().isNotEmpty) {
+              return val;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Try to extract from traccar.other (XML or JSON)
+    final other = device.deviceData?.traccar?.other;
+    if (other != null && other.isNotEmpty) {
+      final xmlMatch =
+          RegExp('<$key>(.*?)</$key>', caseSensitive: false).firstMatch(other);
+      if (xmlMatch != null && xmlMatch.group(1) != null) {
+        final val = xmlMatch.group(1);
+        if (val != null && val.trim().isNotEmpty) {
+          return val;
+        }
+      }
+      final jsonMatch = RegExp(
+              '["\']?$key["\']?\\s*:\\s*(true|false|"[^"]*"|\'[^\']*\'|\\d+\\.?\\d*)',
+              caseSensitive: false)
+          .firstMatch(other);
+      if (jsonMatch != null && jsonMatch.group(1) != null) {
+        final val = jsonMatch.group(1)!.replaceAll('"', '').replaceAll("'", '');
+        if (val.trim().isNotEmpty) {
+          return val;
+        }
+      }
+    }
+
+    // 4. Try from deviceData.parameters or currents
+    final params = device.deviceData?.parameters;
+    if (params != null && params.isNotEmpty) {
+      final jsonMatch = RegExp(
+              '["\']?$key["\']?\\s*:\\s*(true|false|"[^"]*"|\'[^\']*\'|\\d+\\.?\\d*)',
+              caseSensitive: false)
+          .firstMatch(params);
+      if (jsonMatch != null && jsonMatch.group(1) != null) {
+        final val = jsonMatch.group(1)!.replaceAll('"', '').replaceAll("'", '');
+        if (val.trim().isNotEmpty) {
+          return val;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  Widget _buildSignalWidget(DeviceItem? device) {
+    if (device == null) return const SizedBox.shrink();
+    final rssiVal = _getRawParameter(device, 'rssi') ??
+        _getRawParameter(device, 'signal') ??
+        _getRawParameter(device, 'gsm');
+    if (rssiVal == null || rssiVal.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    int bars = 0;
+    try {
+      final val = double.parse(rssiVal).toInt();
+      if (val > 20) {
+        bars = 5;
+      } else {
+        bars = val.clamp(0, 5);
+      }
+    } catch (_) {
+      bars = 4;
+    }
+
+    // Determine signal color based on strength
+    Color sigColor = Colors.grey;
+    if (bars >= 4) {
+      sigColor = const Color(0xFF10B981); // Green
+    } else if (bars == 3) {
+      sigColor = const Color(0xFFF59E0B); // Orange/Amber
+    } else {
+      sigColor = const Color(0xFFEF4444); // Red
+    }
+
+    IconData signalIcon = Icons.signal_cellular_alt;
+    if (bars == 0) {
+      signalIcon = Icons.signal_cellular_null;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(width: 8),
+        Container(
+          width: 1.5,
+          height: 10,
+          color: Colors.grey[300],
+        ),
+        const SizedBox(width: 8),
+        Icon(
+          signalIcon,
+          size: 14,
+          color: sigColor,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          rssiVal,
+          style: TextStyle(
+            color: sigColor,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   void dispose() {
     _isDisposed = true;
-    _refreshTimer?.cancel();
     _searchFocusNode.dispose();
     _searchController.dispose();
     _name.dispose();
@@ -434,82 +821,82 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: _buildAppBar(),
-      body: Obx(() {
-        if (controller.isLoading.value) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    super.build(context);
+    debugPrint(
+        "DEVICES_PAGE BUILD: controller=${controller.hashCode} onlyDevices=${controller.onlyDevices.length}");
+    return GetBuilder<DataController>(
+      init: controller,
+      builder: (dataCtrl) {
+        debugPrint(
+            "DEVICES_PAGE GETBUILDER: dataCtrl=${dataCtrl.hashCode} onlyDevices=${dataCtrl.onlyDevices.length} loading=${dataCtrl.isLoading.value}");
+        _updateDisplayDevicesAndCounts();
 
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !_isDisposed) {
-            _calculateCounts();
-            if (_searchController.text.isEmpty) {
-              _applyCurrentFilter();
-            }
-          }
-        });
-
-        return Column(
-          children: [
-            if (controller.isSearchVisible.value) _buildSearchBar(),
-            _buildFilterChips(),
-            Expanded(child: _buildDeviceList()),
-          ],
+        return Scaffold(
+          backgroundColor: const Color(0xFFF8FAFC),
+          appBar: _buildAppBar(),
+          body: dataCtrl.isLoading.value
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    _buildFilterChips(),
+                    if (dataCtrl.isSearchVisible.value) _buildSearchBar(),
+                    Expanded(child: _buildDeviceList()),
+                  ],
+                ),
         );
-      }),
+      },
     );
   }
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: Colors.white,
-      elevation: 1,
+      elevation: 0,
+      scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
-      title: Row(
-        mainAxisSize: MainAxisSize.max,
-        children: [
-          Text(
-            'vehicles'.tr,
-            style: const TextStyle(
-              color: Color(0xFF1F2937),
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Obx(() {
-            final due = totalDue.value;
-            if (due <= 0) return const SizedBox.shrink();
-
-            return TextButton(
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: () {
-                Get.to(() => PaymentListScreen())?.then((_) {
-                  _loadDueAmount();
-                });
-              },
-              child: Text(
-                'বকেয়া টাকা ৳${(due)}',
-                style: const TextStyle(
-                  color: Colors.red,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            );
-          }),
-        ],
+      systemOverlayStyle: const SystemUiOverlayStyle(
+        statusBarColor: Color(0xFFFF0000),
+        statusBarBrightness: Brightness.dark,
+        statusBarIconBrightness: Brightness.light,
+      ),
+      shape: const RoundedRectangleBorder(
+        side: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+      ),
+      titleSpacing: 0,
+      title: const Text(
+        'Vehicles',
+        style: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF1E293B),
+        ),
       ),
       centerTitle: true,
       actions: [
-        Obx(() => IconButton(
+        Obx(() {
+          final due = totalDue.value;
+          if (due <= 0) return const SizedBox.shrink();
+          return TextButton(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () {
+              Get.to(() => PaymentListScreen())?.then((_) => _loadDueAmount());
+            },
+            child: Text(
+              '৳${due.toStringAsFixed(0)}',
+              style: const TextStyle(
+                  color: Colors.red, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          );
+        }),
+        IconButton(
           icon: Icon(
             Icons.search,
             color: controller.isSearchVisible.value
@@ -517,7 +904,7 @@ class _DevicePageState extends State<DevicePage> {
                 : const Color(0xFF6B7280),
           ),
           onPressed: controller.toggleSearchVisibility,
-        )),
+        ),
       ],
     );
   }
@@ -527,7 +914,7 @@ class _DevicePageState extends State<DevicePage> {
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: Colors.grey[300]!),
       ),
       child: TextField(
@@ -539,121 +926,108 @@ class _DevicePageState extends State<DevicePage> {
           prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: () {
-              _searchController.clear();
-              _searchDevices('');
-            },
-          )
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {});
+                  },
+                )
               : null,
           border: InputBorder.none,
           contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
-        onChanged: _searchDevices,
+        onChanged: (val) {
+          setState(() {});
+        },
       ),
     );
   }
 
   Widget _buildFilterChips() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: SizedBox(
-        height: 40,
-        child: Obx(() => ListView(
-          scrollDirection: Axis.horizontal,
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const ClampingScrollPhysics(),
+        child: Row(
           children: [
-            _buildFilterChip(0, 'All', _allCount.value, _primaryBlue),
+            _buildFilterChip(0, 'All', _allCount.value, CustomColor.primary),
+            const SizedBox(width: 8),
             _buildFilterChip(
-                1, 'Running', _runningCount.value, _greenColor),
-            _buildFilterChip(2, 'Idle', _idleCount.value, _yellowColor),
-            _buildFilterChip(3, 'Parking', _stopCount.value, _greyColor),
-            _buildFilterChip(4, 'Offline', _offlineCount.value, _redColor),
+                1, 'Moving', _runningCount.value, const Color(0xFF16A34A)),
+            const SizedBox(width: 8),
+            _buildFilterChip(
+                2, 'Stop', _stopCount.value, const Color(0xFF475569)),
+            const SizedBox(width: 8),
+            _buildFilterChip(
+                3, 'Idle', _idleCount.value, const Color(0xFFD97706)),
+            const SizedBox(width: 8),
+            _buildFilterChip(
+                4, 'Offline', _offlineCount.value, const Color(0xFF64748B)),
+            const SizedBox(width: 8),
+            _buildFilterChip(
+                5, 'Expired', _expiredCount.value, const Color(0xFFDC2626)),
+            const SizedBox(width: 8),
+            _buildFilterChip(
+                6, 'Suspended', _suspendedCount.value, const Color(0xFF7C3AED)),
           ],
-        )),
+        ),
       ),
     );
   }
 
-  Widget _buildFilterChip(int index, String label, int count, Color color) {
+  Widget _buildFilterChip(int index, String label, int count,
+      [Color? chipColor]) {
     final isSelected = _selectedFilterIndex == index;
+    final activeColor = chipColor ?? CustomColor.primary;
     return GestureDetector(
       onTap: () {
         _searchController.clear();
-        _filterDevices(_getFilterName(index));
+        _selectedFilterIndex = index;
+        setState(() {});
       },
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeInOut,
+        width: index == 0 ? 65 : 60,
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? color : Colors.white,
+          color: isSelected ? activeColor : Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: isSelected ? color : Colors.grey[300]!),
-          boxShadow: isSelected
-              ? [
-            BoxShadow(
-              color: color.withValues(alpha: 0.3),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ]
-              : null,
+          border: Border.all(
+            color: isSelected ? activeColor : const Color(0xFFD1D5DB),
+            width: 1.5,
+          ),
         ),
-        child: Row(
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              _getStatusIconForFilter(index),
-              size: 14,
-              color: isSelected ? Colors.white : color,
-            ),
-            const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.grey[700],
-                fontWeight: FontWeight.w500,
-                fontSize: 13,
+                color: isSelected ? Colors.white : const Color(0xFF111827),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? Colors.white.withValues(alpha: 0.3)
-                    : color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                count.toString(),
-                style: TextStyle(
-                  color: isSelected ? Colors.white : color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+            const SizedBox(height: 2),
+            Text(
+              '$count',
+              style: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF0F172A),
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
               ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  IconData _getStatusIconForFilter(int index) {
-    switch (index) {
-      case 0:
-        return Icons.apps;
-      case 1:
-        return Icons.directions_car;
-      case 2:
-        return Icons.pause_circle;
-      case 3:
-        return Icons.local_parking;
-      case 4:
-        return Icons.signal_wifi_off;
-      default:
-        return Icons.apps;
-    }
   }
 
   Widget _buildDeviceList() {
@@ -681,6 +1055,7 @@ class _DevicePageState extends State<DevicePage> {
 
     return RefreshIndicator(
       onRefresh: () async {
+        await controller.getDevices();
         _loadDevices();
       },
       child: ListView.builder(
@@ -688,12 +1063,15 @@ class _DevicePageState extends State<DevicePage> {
         itemCount: _displayDevices.length,
         itemBuilder: (context, index) {
           final device = _displayDevices[index];
-          return Column(
-            children: [
-              if (index > 0 && index % 5 == 0) BannerAdWidget(),
-              _buildDeviceCard(device),
-              const Gap(12),
-            ],
+          return RepaintBoundary(
+            key: ValueKey(device.id ?? index),
+            child: Column(
+              children: [
+                if (index > 0 && index % 5 == 0) BannerAdWidget(),
+                _buildDeviceCard(device),
+                const Gap(12),
+              ],
+            ),
           );
         },
       ),
@@ -701,295 +1079,395 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   Widget _buildDeviceCard(DeviceItem device) {
-    final status = _getDeviceStatus(device);
+    if (device.icon != null) {
+      debugPrint("ICON_DEBUG: name='${device.name}' path='${device.icon?.path}' type='${device.icon?.type}' id='${device.icon?.id}'");
+    }
+    final status = device.id != null
+        ? (_cachedStatuses[device.id] ?? _getDeviceStatus(device))
+        : _getDeviceStatus(device);
     final statusColor = _getStatusColor(status);
-    final isEngineOn = _isEngineOn(device);
+    final isEngineOn = device.id != null
+        ? (_cachedEngineStates[device.id] ?? _isEngineOn(device))
+        : _isEngineOn(device);
+    final speed = double.tryParse(device.speed.toString())?.toInt() ?? 0;
+    final isExpanded =
+        device.id != null && _expandedDeviceIds.contains(device.id);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor, width: 0.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Card Content
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: InkWell(
-              onTap: () {
-                Get.to(() => TrackDevicePage(device.id, device.name, device));
-              },
-              child: Row(
-                children: [
-                  // Vehicle Icon with status indicator
-                  Stack(
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        // child: Image.asset(
-                        //   "assets/images/car-icon.png",
-                        //   fit: BoxFit.contain,
-                        //   errorBuilder: (_, __, ___) => Icon(
-                        //     Icons.directions_car,
-                        //     color: statusColor,
-                        //     size: 28,
-                        //   ),
-                        // ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(2.0),
-                          child: Image(
-                            image: CachedNetworkImageProvider(
-                              "${UserRepository.getServerUrl()}/${device.icon!.path!}",
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Status dot
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: Container(
-                          width: 14,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: statusColor,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 12),
+    final imei = device.imei ?? device.deviceData?.imei;
+    final expiryDate = device.id != null
+        ? _cachedExpiryDates.putIfAbsent(device.id!, () {
+            String exp = 'Unlimited';
+            final billingInfo = imei != null ? _billingMap[imei] : null;
+            if (billingInfo != null && billingInfo.expirationDate != null) {
+              exp = _formatBillingDate(billingInfo.expirationDate!);
+            } else if (device.deviceData?.expirationDate != null) {
+              exp = _formatBillingDate(device.deviceData!.expirationDate!.toString());
+            } else if (device.simExpirationDate != null) {
+              exp = _formatBillingDate(device.simExpirationDate!.toString());
+            }
+            return exp;
+          })
+        : 'Unlimited';
 
-                  // Device Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+    final timeLabel = device.id != null
+        ? _cachedTimeLabels.putIfAbsent(device.id!, () {
+            String label = '';
+            final rawTime = device.time ?? device.deviceData?.time ?? device.deviceData?.traccar?.time;
+            if (rawTime != null && rawTime.isNotEmpty) {
+              try {
+                final dt = DateTime.parse(rawTime).toLocal();
+                final d = '${dt.day.toString().padLeft(2, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.year}';
+                final h = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+                label = '$d $h';
+              } catch (_) {
+                label = rawTime;
+              }
+            }
+            return label;
+          })
+        : '';
+
+    final durationLabel = device.id != null
+        ? _cachedDurationLabels.putIfAbsent(device.id!, () {
+            String durLabel = '';
+            final statusColor = _getStatusColor(status);
+
+            String getCorrectDuration(DeviceItem dev) {
+              final sd = dev.stopDuration ?? '';
+              if (dev.movedTimestamp != null && dev.movedTimestamp! > 0) {
+                final int movedTime = dev.movedTimestamp!;
+                final DateTime lastMoved = movedTime > 1000000000000
+                    ? DateTime.fromMillisecondsSinceEpoch(movedTime)
+                    : DateTime.fromMillisecondsSinceEpoch(movedTime * 1000);
+                final diff = DateTime.now().difference(lastMoved.toLocal());
+                final double diffSec = diff.inSeconds.toDouble();
+
+                double serverStopSec = 0;
+                if (dev.stopDurationSec != null) {
+                  serverStopSec = dev.stopDurationSec!.toDouble();
+                } else if (sd.isNotEmpty) {
+                  serverStopSec = Util.parseDurationToSeconds(sd);
+                }
+
+                if (serverStopSec > 0 && diffSec < serverStopSec) {
+                  return Util.formatDuration(diff);
+                }
+              }
+              return sd.isNotEmpty ? Util.formatDurationString(sd) : '';
+            }
+
+            if (status == DeviceStatus.stop) {
+              final dur = getCorrectDuration(device);
+              if (dur.isNotEmpty) {
+                durLabel = 'Stopped: $dur';
+              } else {
+                final rawTime = device.time ?? device.deviceData?.time ?? device.deviceData?.traccar?.time;
+                if (rawTime != null && rawTime.isNotEmpty) {
+                  try {
+                    final dt = DateTime.parse(rawTime).toLocal();
+                    final diff = DateTime.now().difference(dt);
+                    durLabel = 'Stopped: ${Util.formatDuration(diff)}';
+                  } catch (_) {
+                    durLabel = 'Stopped: No GPS Data';
+                  }
+                } else {
+                  durLabel = 'Stopped: No GPS Data';
+                }
+              }
+            } else if (status == DeviceStatus.idle) {
+              final dur = getCorrectDuration(device);
+              if (dur.isNotEmpty) {
+                durLabel = 'Idle: $dur';
+              } else {
+                final rawTime = device.time ?? device.deviceData?.time ?? device.deviceData?.traccar?.time;
+                if (rawTime != null && rawTime.isNotEmpty) {
+                  try {
+                    final dt = DateTime.parse(rawTime).toLocal();
+                    final diff = DateTime.now().difference(dt);
+                    durLabel = 'Idle: ${Util.formatDuration(diff)}';
+                  } catch (_) {
+                    durLabel = 'Idle: No GPS Data';
+                  }
+                } else {
+                  durLabel = 'Idle: No GPS Data';
+                }
+              }
+            } else if (status == DeviceStatus.offline) {
+              final dur = getCorrectDuration(device);
+              if (dur.isNotEmpty) {
+                durLabel = 'Offline: $dur';
+              } else {
+                final rawTime = device.time ?? device.deviceData?.time ?? device.deviceData?.traccar?.time;
+                if (rawTime != null && rawTime.isNotEmpty) {
+                  try {
+                    final dt = DateTime.parse(rawTime).toLocal();
+                    final diff = DateTime.now().difference(dt);
+                    durLabel = 'Offline: ${Util.formatDuration(diff)}';
+                  } catch (_) {
+                    durLabel = 'Offline: No GPS Data';
+                  }
+                } else {
+                  durLabel = 'Offline: No GPS Data';
+                }
+              }
+            }
+            
+            _cachedDurationColors[device.id!] = statusColor;
+            return durLabel;
+          })
+        : '';
+
+    final durationColor = device.id != null
+        ? (_cachedDurationColors[device.id] ?? Colors.grey)
+        : Colors.grey;
+
+    return GestureDetector(
+      onTap: () {
+        if (_isDeviceSuspended(device)) {
+          _showSuspendedDialog(device);
+        } else if (!_checkNoPermission(device)) {
+          Get.to(() => TrackDevicePage(device.id, device.name, device));
+        }
+      },
+      onLongPress: () {
+        if (!_checkNoPermission(device)) {
+          _showDetailsSheet(device);
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Top row: avatar circle + info column ──
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Car avatar circle + speed
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Stack(
                       children: [
-                        Text(
-                          device.name ?? '',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                        Container(
+                          width: 62,
+                          height: 62,
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.10),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: statusColor.withValues(alpha: 0.30),
+                                width: 1.5),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          device.deviceData?.imei ?? '',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black54,
+                          child: Center(
+                            child: Util.getVehicleIconWidget(
+                              device.icon?.path,
+                              statusColor,
+                              size: 40,
+                              iconType: device.icon?.type ?? device.iconType,
+                              deviceName: device.name,
+                              deviceId: device.id,
+                              device: device,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Icon(
-                              isEngineOn ? Icons.power : Icons.power_off,
-                              size: 14,
-                              color: isEngineOn ? _greenColor.withValues(alpha: 0.4) : _redColor.withValues(alpha: 0.4),
-                            ),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                isEngineOn ? 'Engine On' : 'Engine Off',
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  IntrinsicWidth(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: statusColor),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // 🔹 Top part with status color background
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        Positioned(
+                          bottom: 2,
+                          right: 2,
+                          child: Container(
+                            width: 14,
+                            height: 14,
                             decoration: BoxDecoration(
                               color: statusColor,
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(2),
-                                topRight: Radius.circular(2),
-                              ),
-                            ),
-                            child: Text(
-                              _getStatusInfoTime(device, status),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  _getStatusText(status),
-                                  style: TextStyle(
-                                    color: statusColor,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
                                 ),
                               ],
                             ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$speed km/h',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: statusColor,
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                // Info column
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Vehicle name + engine status badge
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              device.name ?? 'Unknown Vehicle',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF2D3142),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          // Engine On/Off status badge
+                          GestureDetector(
+                            onTap: () {
+                              if (!_isDeviceSuspended(device) &&
+                                  !_checkNoPermission(device)) {
+                                Get.to(() => LockUnlockScreen(device: device));
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isEngineOn
+                                    ? _greenColor.withValues(alpha: 0.10)
+                                    : _redColor.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isEngineOn
+                                        ? Icons.lock_open_rounded
+                                        : Icons.lock_rounded,
+                                    size: 11,
+                                    color: isEngineOn
+                                        ? _greenColor
+                                        : _redColor,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    isEngineOn ? 'On' : 'Off',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isEngineOn
+                                          ? _greenColor
+                                          : _redColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      // IMEI row
+                      if (imei != null && imei.isNotEmpty)
+                        _buildCardInfoRow(Icons.tag, 'IMEI: $imei',
+                            color: const Color(0xFF475569)),
+                      const SizedBox(height: 3),
+                      // Expired row
+                      _buildCardInfoRow(
+                          Icons.calendar_today_outlined, 'Expired: $expiryDate',
+                          color: const Color(0xFF475569)),
+                      const SizedBox(height: 3),
+                      // Stopped/Idle/Offline duration row
+                      if (durationLabel.isNotEmpty)
+                        _buildCardInfoRow(Icons.timer_outlined, durationLabel,
+                            color: durationColor, bold: true),
+                      if (durationLabel.isNotEmpty) const SizedBox(height: 3),
+                      // Time row + expand chevron on same line
+                      Row(
+                        children: [
+                          Expanded(
+                            child: timeLabel.isNotEmpty
+                                ? _buildCardInfoRow(Icons.access_time_rounded,
+                                    'Time: $timeLabel',
+                                    color: const Color(0xFF475569))
+                                : const SizedBox.shrink(),
+                          ),
+                          // Expand/collapse chevron inline with time
+                          GestureDetector(
+                            onTap: () {
+                              if (device.id != null) {
+                                setState(() {
+                                  if (_expandedDeviceIds.contains(device.id)) {
+                                    _expandedDeviceIds.remove(device.id);
+                                  } else {
+                                    _expandedDeviceIds.add(device.id!);
+                                  }
+                                });
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Icon(
+                                isExpanded
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down,
+                                size: 16,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-
-                ],
-              ),
-            ),
-          ),
-
-          Divider(height: 1, color: Colors.grey[200]),
-
-          // Bottom Action Buttons
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              children: [
-                _buildBottomButton(
-                  icon: Icons.info_outline,
-                  label: 'details'.tr,
-                  onTap: () => _showDetailsSheet(device),
-                ),
-                _buildBottomButton(
-                  icon: Icons.description_outlined,
-                  label: 'Report'.tr,
-                  onTap: () => _showReport(device),
-                ),
-                _buildBottomButton(
-                  icon: Icons.my_location,
-                  label: 'tracking'.tr,
-                  onTap: () {
-                    AdMobService().showInterstitialAd();
-                    Get.to(
-                            () => TrackDevicePage(device.id, device.name, device));
-                  },
-                ),
-                _buildBottomButton(
-                  icon: Icons.play_circle_outline,
-                  label: 'playback'.tr,
-                  onTap: () {
-                    AdMobService().showInterstitialAd(ignoreFrequency: true);
-                    Get.to(() => PlaybackScreen(
-                      id: device.id,
-                      name: device.name,
-                      device: device,
-                    ));
-                  },
-                ),
-                _buildBottomButton(
-                  icon: Icons.more_horiz,
-                  label: 'more'.tr,
-                  onTap: () => _showMoreOptions(context, device),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  String _getStatusInfoTime(DeviceItem device, DeviceStatus status) {
-    switch (status) {
-      case DeviceStatus.running:
-        return convertSpeed(device.speed, device.distanceUnitHour ?? 'km/h');
-      case DeviceStatus.idle:
-        return device.stopDuration ?? "0s";
-      case DeviceStatus.stop:
-        return device.stopDuration ?? "";
-      case DeviceStatus.offline:
-        return _getLastSeen(device);
-    }
-  }
-
-  String _getLastSeen(DeviceItem device) {
-    if (device.timestamp == null || device.timestamp == 0) {
-      return 'Unknown';
-    }
-    try {
-      final lastUpdate =
-      DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
-      final difference = DateTime.now().difference(lastUpdate);
-
-      if (difference.inDays > 0) {
-        return '${difference.inDays}d ago';
-      } else if (difference.inHours > 0) {
-        return '${difference.inHours}h ago';
-      } else if (difference.inMinutes > 0) {
-        return '${difference.inMinutes}m ago';
-      }
-      return 'Just now';
-    } catch (_) {
-      return 'Unknown';
-    }
-  }
-
-  Widget _buildBottomButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20, color: Colors.black54),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w500,
-              ),
+            // ── Expanded action buttons ──
+            AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: isExpanded
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Divider(
+                            color: Color(0xFFE2E8F0), thickness: 1, height: 16),
+                        _buildCardActionButtons(device),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
             ),
           ],
         ),
@@ -997,7 +1475,58 @@ class _DevicePageState extends State<DevicePage> {
     );
   }
 
+  /// Small icon + text info row used inside vehicle card
+  Widget _buildCardInfoRow(IconData icon, String text,
+      {Color color = const Color(0xFF475569), bool bold = false}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 13,
+              color: color,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
 
+  Widget _buildMiniStatusIcon({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required Color activeColor,
+  }) {
+    final iconColor = isActive ? activeColor : const Color(0xFF94A3B8);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(
+          icon,
+          size: 18,
+          color: iconColor,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF94A3B8),
+          ),
+        ),
+      ],
+    );
+  }
 
   void _showDetailsSheet(DeviceItem device) {
     final status = _getDeviceStatus(device);
@@ -1168,7 +1697,37 @@ class _DevicePageState extends State<DevicePage> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        if (device.deviceData?.plateNumber != null)
+                        InkWell(
+                          onTap: () {
+                            if (device.id != null) {
+                              Navigator.pushNamed(
+                                context,
+                                '/deviceInfo',
+                                arguments: DeviceArguments(
+                                    device.id!, device.name ?? '', device),
+                              );
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: const Icon(
+                              Icons.info_outline,
+                              color: Color(0xFF64748B),
+                              size: 14,
+                            ),
+                          ),
+                        ),
+                        if (device.deviceData?.plateNumber != null &&
+                            device.deviceData!.plateNumber!
+                                .trim()
+                                .isNotEmpty) ...[
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
@@ -1179,13 +1738,14 @@ class _DevicePageState extends State<DevicePage> {
                             ),
                             child: Text(
                               device.deviceData!.plateNumber!,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.grey[700],
+                                color: Color(0xFF64748B),
                               ),
                             ),
                           ),
+                        ],
                       ],
                     ),
                   ],
@@ -1522,7 +2082,7 @@ class _DevicePageState extends State<DevicePage> {
                     GestureDetector(
                       onTap: () => _copyToClipboard(value),
                       child:
-                      Icon(Icons.copy, size: 14, color: Colors.grey[400]),
+                          Icon(Icons.copy, size: 14, color: Colors.grey[400]),
                     ),
                   ],
                 ],
@@ -1675,7 +2235,7 @@ class _DevicePageState extends State<DevicePage> {
           icon: Icons.explore_outlined,
           label: 'Course',
           value:
-          '${device.course ?? 0}° ${_getCourseDirection(device.course ?? 0)}',
+              '${device.course ?? 0}° ${_getCourseDirection(device.course ?? 0)}',
         ),
         _buildDivider(),
         InkWell(
@@ -1867,22 +2427,22 @@ class _DevicePageState extends State<DevicePage> {
       ));
     }
 
-    if (data.simActivationDate != null) {
+    if (data?.simActivationDate != null) {
       if (items.isNotEmpty) items.add(_buildDivider());
       items.add(_buildInfoRow(
         icon: Icons.calendar_today,
         label: 'SIM Activation',
-        value: _formatDate(data.simActivationDate),
+        value: _formatDate(data?.simActivationDate),
       ));
     }
 
-    if (data.simExpirationDate != null) {
+    if (data?.simExpirationDate != null) {
       if (items.isNotEmpty) items.add(_buildDivider());
       items.add(_buildInfoRow(
         icon: Icons.event_busy,
         label: 'SIM Expiration',
-        value: _formatDate(data.simExpirationDate),
-        valueColor: _isExpired(data.simExpirationDate) ? _redColor : null,
+        value: _formatDate(data?.simExpirationDate),
+        valueColor: _isExpired(data?.simExpirationDate) ? _redColor : null,
       ));
     }
 
@@ -2103,7 +2663,7 @@ class _DevicePageState extends State<DevicePage> {
 
     if (t == 'fuel') return '$value L';
     if (t == 'temperature') return '$value°C';
-    if (t == 'battery') return '$value%';
+    if (t == 'battery') return value.toString();
     if (t == 'speed') return '$value km/h';
     if (t == 'odometer') return '$value km';
 
@@ -2238,7 +2798,7 @@ class _DevicePageState extends State<DevicePage> {
         icon: Icons.event_busy,
         label: 'Expiration Date',
         value: _formatDate(data!.expirationDate),
-        valueColor: _isExpired(data.expirationDate) ? _redColor : null,
+        valueColor: _isExpired(data!.expirationDate) ? _redColor : null,
       ));
     }
 
@@ -2285,7 +2845,7 @@ class _DevicePageState extends State<DevicePage> {
                 icon: const Icon(Icons.gps_fixed, size: 18),
                 label: Text('Track Live'.tr),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _greenColor,
+                  backgroundColor: _primaryBlue,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -2308,12 +2868,12 @@ class _DevicePageState extends State<DevicePage> {
                 icon: const Icon(Icons.play_circle_outline, size: 18),
                 label: Text('Playback'.tr),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.orange,
+                  foregroundColor: _primaryBlue,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  side: const BorderSide(color: Colors.orange),
+                  side: BorderSide(color: _primaryBlue),
                 ),
               ),
             ),
@@ -2370,8 +2930,9 @@ class _DevicePageState extends State<DevicePage> {
   IconData _getVehicleIcon(DeviceItem device) {
     final iconType = device.deviceData?.iconType?.toLowerCase() ?? '';
     if (iconType.contains('truck')) return Icons.local_shipping;
-    if (iconType.contains('bike') || iconType.contains('motorcycle'))
+    if (iconType.contains('bike') || iconType.contains('motorcycle')) {
       return Icons.two_wheeler;
+    }
     if (iconType.contains('bus')) return Icons.directions_bus;
     return Icons.directions_car;
   }
@@ -2459,27 +3020,43 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   void _openPlayback(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     Get.to(() => PlaybackScreen(
-      id: device.id,
-      name: device.name,
-      device: device,
-    ));
+          id: device.id,
+          name: device.name,
+          device: device,
+        ));
   }
 
   void _openTracking(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     Get.to(() => TrackDevicePage(device.id, device.name, device));
   }
 
   void _openLockUnlock(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     Get.to(() => LockUnlockScreen(device: device));
   }
 
   void _openStreetView(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     if (device.lat == null || device.lng == null) return;
     Get.to(() => StreetViewScreen(
-      latitude: device.lat!,
-      longitude: device.lng!,
-    ));
+          latitude: device.lat!,
+          longitude: device.lng!,
+        ));
   }
 
   void _openInMaps(double? lat, double? lng) {
@@ -2489,6 +3066,10 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   void _openDirections(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     if (device.lat == null || device.lng == null) return;
     final url =
         'https://www.google.com/maps/dir/?api=1&destination=${device.lat},${device.lng}&travelmode=driving';
@@ -2503,13 +3084,17 @@ class _DevicePageState extends State<DevicePage> {
     launchUrl(Uri.parse('mailto:$email'));
   }
 
-  void _showMoreOptions(BuildContext context, DeviceItem device) {
+  void _showMoreOptions(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Container(
+      builder: (sheetContext) => Container(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2538,8 +3123,8 @@ class _DevicePageState extends State<DevicePage> {
                   Icons.description_outlined,
                   'Report',
                   Colors.indigo,
-                      () {
-                    Navigator.pop(context);
+                  () {
+                    Navigator.pop(sheetContext);
                     _showReport(device);
                   },
                 ),
@@ -2547,8 +3132,8 @@ class _DevicePageState extends State<DevicePage> {
                   Icons.phone_outlined,
                   'Call',
                   _greenColor,
-                      () {
-                    Navigator.pop(context);
+                  () {
+                    Navigator.pop(sheetContext);
                     _callDeviceSim(device);
                   },
                 ),
@@ -2556,8 +3141,8 @@ class _DevicePageState extends State<DevicePage> {
                   Icons.lock_outline,
                   'Lock',
                   _yellowColor,
-                      () {
-                    Navigator.pop(context);
+                  () {
+                    Navigator.pop(sheetContext);
                     Get.to(() => LockUnlockScreen(device: device));
                   },
                 ),
@@ -2565,8 +3150,8 @@ class _DevicePageState extends State<DevicePage> {
                   Icons.share_outlined,
                   'Share',
                   _primaryBlue,
-                      () {
-                    Navigator.pop(context);
+                  () {
+                    Navigator.pop(sheetContext);
                     _showShareDialog(context, device);
                   },
                 ),
@@ -2580,8 +3165,8 @@ class _DevicePageState extends State<DevicePage> {
                   Icons.navigation_outlined,
                   'Navigate',
                   Colors.teal,
-                      () {
-                    Navigator.pop(context);
+                  () {
+                    Navigator.pop(sheetContext);
                     _navigate(device);
                   },
                 ),
@@ -2589,12 +3174,32 @@ class _DevicePageState extends State<DevicePage> {
                   Icons.car_crash_outlined,
                   'Edit Device',
                   _greyColor,
-                      () {
-                    Navigator.pop(context);
-                    _getEditDeviceData(device.id);
+                  () {
+                    Navigator.pop(sheetContext);
+                    Future.delayed(const Duration(milliseconds: 200), () {
+                      _getEditDeviceData(device.id);
+                    });
                   },
                 ),
-                const SizedBox(width: 70),
+                _buildOptionItem(
+                  Icons.sos,
+                  'sosNumber'.tr,
+                  Colors.redAccent,
+                  () {
+                    Navigator.pop(sheetContext);
+                    _showSOSDialog(device);
+                  },
+                ),
+                _buildOptionItem(
+                  Icons.add_alert_outlined,
+                  'Add Alert',
+                  Theme.of(context).primaryColor,
+                  () {
+                    Navigator.pop(sheetContext);
+                    Navigator.pushNamed(context, "/alertList",
+                        arguments: device.id);
+                  },
+                ),
               ],
             ),
             const Gap(20),
@@ -2605,11 +3210,11 @@ class _DevicePageState extends State<DevicePage> {
   }
 
   Widget _buildOptionItem(
-      IconData icon,
-      String label,
-      Color color,
-      VoidCallback onTap,
-      ) {
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
@@ -2663,6 +3268,10 @@ class _DevicePageState extends State<DevicePage> {
   // }
 
   void _showReport(DeviceItem device) {
+    if (_isDeviceSuspended(device)) {
+      _showSuspendedDialog(device);
+      return;
+    }
     AdMobService().showInterstitialAd(ignoreFrequency: true);
 
     Navigator.push(
@@ -2688,6 +3297,251 @@ class _DevicePageState extends State<DevicePage> {
     }
   }
 
+  void _showSOSDialog(DeviceItem device) {
+    final TextEditingController phoneController = TextEditingController();
+    final TextEditingController commandController = TextEditingController();
+
+    // Common protocols/formats for GPS trackers
+    final List<Map<String, String>> protocols = [
+      {
+        'name': 'Concox / GT06 / TK103 (sos,A,number#)',
+        'format': 'sos,A,{phone}#',
+      },
+      {
+        'name': 'SinoTrack (101#number#)',
+        'format': '101#{phone}#',
+      },
+      {
+        'name': 'Coban / TK Star (admin123456 number)',
+        'format': 'admin123456 {phone}',
+      },
+      {
+        'name': 'Concox Alternative (SOS,1,number#)',
+        'format': 'SOS,1,{phone}#',
+      },
+      {
+        'name': 'Custom Command (Raw)',
+        'format': '{phone}',
+      },
+    ];
+
+    int selectedProtocolIndex = 0;
+
+    void updateCommandText() {
+      final phone = phoneController.text.trim();
+      final format = protocols[selectedProtocolIndex]['format']!;
+      if (phone.isEmpty) {
+        commandController.text = '';
+      } else {
+        commandController.text = format.replaceAll('{phone}', phone);
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.sos, color: Colors.redAccent, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'sosNumber'.tr,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Set up the phone number to receive emergency SOS alerts/calls from the tracker.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+                const Gap(16),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      updateCommandText();
+                    });
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'SOS Phone Number',
+                    hintText: 'Enter phone number...',
+                    prefixIcon: const Icon(Icons.phone_outlined),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                  ),
+                ),
+                const Gap(16),
+                DropdownButtonFormField<int>(
+                  value: selectedProtocolIndex,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'Tracker Command Format',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                  ),
+                  items: protocols.asMap().entries.map((entry) {
+                    return DropdownMenuItem<int>(
+                      value: entry.key,
+                      child: Text(
+                        entry.value['name']!,
+                        style: const TextStyle(fontSize: 13),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() {
+                        selectedProtocolIndex = value;
+                        updateCommandText();
+                      });
+                    }
+                  },
+                ),
+                const Gap(16),
+                TextField(
+                  controller: commandController,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'GPRS Command to Send',
+                    helperText: 'Verify the command before sending.',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child:
+                  Text('cancel'.tr, style: TextStyle(color: Colors.grey[600])),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final phone = phoneController.text.trim();
+                final command = commandController.text.trim();
+                if (phone.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Please enter a phone number.')),
+                  );
+                  return;
+                }
+                if (command.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Command cannot be empty.')),
+                  );
+                  return;
+                }
+
+                Navigator.pop(dialogContext);
+                showProgress(true, context);
+
+                try {
+                  final requestBody = <String, String>{
+                    'id': '',
+                    'device_id': device.id.toString(),
+                    'type': 'custom',
+                    'data': command,
+                  };
+
+                  final res = await APIService.sendCommands(requestBody);
+
+                  if (!mounted) return;
+                  showProgress(false, context);
+
+                  if (res.statusCode == 200) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            const Icon(Icons.check_circle, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Text('command_sent'.tr),
+                          ],
+                        ),
+                        backgroundColor: _greenColor,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            const Icon(Icons.error, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Text('errorMsg'.tr),
+                          ],
+                        ),
+                        backgroundColor: _redColor,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (!mounted) return;
+                  showProgress(false, context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.error, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text('connectionError'.tr),
+                        ],
+                      ),
+                      backgroundColor: _redColor,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.send, size: 16),
+              label: Text('sendCommand'.tr),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showShareDialog(BuildContext context, DeviceItem device) {
     final options = [
       {'label': '10 min', 'time': 10},
@@ -2702,7 +3556,7 @@ class _DevicePageState extends State<DevicePage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text('shareLocation'.tr),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2758,55 +3612,128 @@ class _DevicePageState extends State<DevicePage> {
     showProgress(true, context);
     APIService.editDeviceData({'device_id': deviceId.toString()}).then((value) {
       showProgress(false, context);
-      sd = SingleDevice.fromJson(json.decode(value.body.replaceAll("ï»¿", "")));
-      _name.text = sd!.item!["name"];
-      _showEditDialog(sd!.item);
+      try {
+        final decoded = json.decode(value.body.replaceAll("ï»¿", ""));
+        if (decoded is Map<String, dynamic> && decoded.containsKey('message')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(decoded['message'].toString())),
+          );
+          return;
+        }
+
+        sd = SingleDevice.fromJson(decoded);
+        if (sd != null && sd!.item != null) {
+          _name.text = sd!.item!["name"] ?? "";
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showEditDialog(sd!.item);
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Failed to parse device data")),
+          );
+        }
+      } catch (e) {
+        debugPrint("Error parsing edit device data: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    }).catchError((e) {
+      showProgress(false, context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to fetch device data: $e")),
+      );
     });
   }
 
   void _showEditDialog(dynamic device) {
+    final devId = device["id"] ?? device["device_id"];
+    
+    final List<Map<String, dynamic>> localIconsList = [
+      {"id": 87, "path": "assets/images/ambulance_toprunning.png", "name": "Ambulance"},
+      {"id": 93, "path": "assets/images/bike_toprunning.png", "name": "Bike"},
+      {"id": 92, "path": "assets/images/bus_toprunning.png", "name": "Bus"},
+      {"id": 59, "path": "assets/images/car_toprunning.png", "name": "Car"},
+      {"id": 56, "path": "assets/images/car_green.png", "name": "Green Car"},
+      {"id": 43, "path": "assets/images/crane_toprunning.png", "name": "Crane"},
+      {"id": 47, "path": "assets/images/garbage_toprunning.png", "name": "Garbage"},
+      {"id": 45, "path": "assets/images/mixer_toprunning.png", "name": "Mixer"},
+      {"id": 65, "path": "assets/images/muv_toprunning.png", "name": "MUV"},
+      {"id": 67, "path": "assets/images/pickup_toprunning.png", "name": "Pickup"},
+      {"id": 92, "path": "assets/images/school_toprunning.png", "name": "School Bus"},
+      {"id": 93, "path": "assets/images/scotty_toprunning.png", "name": "Scotty"},
+      {"id": 57, "path": "assets/images/suv_toprunning.png", "name": "SUV"},
+      {"id": 47, "path": "assets/images/tanker_toprunning.png", "name": "Tanker"},
+      {"id": 95, "path": "assets/images/tempotvr_toprunning.png", "name": "CNG"},
+      {"id": 47, "path": "assets/images/truck_toprunning.png", "name": "Truck"},
+    ];
+
+    String? tempSelectedPath = UserRepository.prefs?.getString("custom_icon_path_${devId}");
+    if (tempSelectedPath == null || tempSelectedPath.isEmpty) {
+      final currentIconPath = device["icon"]?["path"];
+      if (currentIconPath != null) {
+        final mapped = Util.getLocalMappedAsset(currentIconPath, iconType: device["icon"]?["type"] ?? device["icon_type"], deviceName: device["name"], deviceId: devId);
+        if (mapped != null) {
+          tempSelectedPath = mapped;
+        }
+      } else {
+        final currentIconId = device["icon_id"];
+        if (currentIconId != null) {
+          for (var item in localIconsList) {
+            if (item["id"] == currentIconId) {
+              tempSelectedPath = item["path"];
+              break;
+            }
+          }
+        }
+      }
+    }
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
               Icon(Icons.edit, color: _primaryBlue, size: 22),
               const SizedBox(width: 8),
               Text(
                 'reportDeviceName'.tr,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
             ],
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Name Input Field
-                TextField(
-                  controller: _name,
-                  decoration: InputDecoration(
-                    labelText: 'sharedName'.tr,
-                    prefixIcon: const Icon(Icons.label_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _primaryBlue, width: 2),
+          content: SizedBox(
+            width: 340,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name Input Field
+                  TextField(
+                    controller: _name,
+                    decoration: InputDecoration(
+                      labelText: 'sharedName'.tr,
+                      prefixIcon: const Icon(Icons.label_outline),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: _primaryBlue, width: 2),
+                      ),
                     ),
                   ),
-                ),
 
-                // Icon Selection Section
-                if (sd?.device_icons != null && sd!.device_icons!.isNotEmpty) ...[
+                  // Icon Selection Section
                   const SizedBox(height: 20),
                   Row(
                     children: [
@@ -2834,19 +3761,21 @@ class _DevicePageState extends State<DevicePage> {
                     child: GridView.builder(
                       shrinkWrap: true,
                       padding: const EdgeInsets.all(12),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 4,
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 10,
                         childAspectRatio: 0.95,
                       ),
-                      itemCount: sd!.device_icons!.length,
+                      itemCount: localIconsList.length,
                       itemBuilder: (context, index) {
-                        final icon = sd!.device_icons![index];
-                        final isSelected = selectedIconId == icon["id"];
+                        final icon = localIconsList[index];
+                        final isSelected = tempSelectedPath == icon["path"];
 
                         return GestureDetector(
-                          onTap: () => setState(() => selectedIconId = icon["id"]),
+                          onTap: () =>
+                              setState(() => tempSelectedPath = icon["path"]),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             decoration: BoxDecoration(
@@ -2862,30 +3791,23 @@ class _DevicePageState extends State<DevicePage> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: isSelected
                                   ? [
-                                BoxShadow(
-                                  color: _primaryBlue.withValues(alpha: 0.2),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
+                                      BoxShadow(
+                                        color: _primaryBlue.withValues(
+                                            alpha: 0.2),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
                                   : [],
                             ),
                             child: Stack(
                               children: [
                                 Center(
-                                  child: CachedNetworkImage(
-                                    imageUrl: "${APIService.serverURL ?? ''}/${icon["path"]}",
-                                    width: 55,
-                                    height: 55,
+                                  child: Image.asset(
+                                    icon["path"],
+                                    width: 45,
+                                    height: 45,
                                     fit: BoxFit.contain,
-                                    placeholder: (context, url) => const SizedBox(
-                                      width: 30,
-                                      height: 30,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    ),
-                                    errorWidget: (context, url, error) =>
-                                        Icon(Icons.image_not_supported,
-                                            color: Colors.grey[400]),
                                   ),
                                 ),
                                 if (isSelected)
@@ -2913,7 +3835,7 @@ class _DevicePageState extends State<DevicePage> {
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
           ),
           actions: [
@@ -2921,7 +3843,8 @@ class _DevicePageState extends State<DevicePage> {
               onPressed: () => Navigator.pop(context),
               style: TextButton.styleFrom(
                 foregroundColor: Colors.red,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -2933,11 +3856,23 @@ class _DevicePageState extends State<DevicePage> {
               ),
             ),
             ElevatedButton(
-              onPressed: () => _updateDevice(device["id"]),
+              onPressed: () {
+                int? fallbackIconId;
+                if (tempSelectedPath != null) {
+                  for (var item in localIconsList) {
+                    if (item["path"] == tempSelectedPath) {
+                      fallbackIconId = item["id"];
+                      break;
+                    }
+                  }
+                }
+                _updateDevice(devId, tempSelectedPath, fallbackIconId);
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _primaryBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -2948,7 +3883,8 @@ class _DevicePageState extends State<DevicePage> {
                 children: [
                   const Icon(Icons.check, size: 18),
                   const SizedBox(width: 4),
-                  Text('ok'.tr, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text('ok'.tr,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -2958,13 +3894,16 @@ class _DevicePageState extends State<DevicePage> {
     );
   }
 
-  void _updateDevice(deviceId) {
+  void _updateDevice(deviceId, String? customIconPath, int? iconId) {
     showProgress(true, context);
+    if (customIconPath != null) {
+      UserRepository.prefs?.setString("custom_icon_path_${deviceId}", customIconPath);
+    }
     Map<String, String> requestBody = {
       'name': _name.text,
       'fuel_measurement_id': sd!.item!["fuel_measurement_id"].toString(),
       'device_id': deviceId.toString(),
-      if (selectedIconId != null) 'icon_id': selectedIconId.toString(),
+      if (iconId != null) 'icon_id': iconId.toString(),
     };
 
     APIService.editDevice(requestBody).then((value) {
@@ -2984,7 +3923,8 @@ class _DevicePageState extends State<DevicePage> {
           ),
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -3003,9 +3943,98 @@ class _DevicePageState extends State<DevicePage> {
           ),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     });
+  }
+
+  Widget _buildBottomButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          color: Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20, color: Colors.black54),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardActionButtons(DeviceItem device) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          _buildBottomButton(
+            icon: Icons.info_outline,
+            label: 'details'.tr,
+            onTap: () {
+              if (!_checkNoPermission(device)) {
+                _showDetailsSheet(device);
+              }
+            },
+          ),
+          _buildBottomButton(
+            icon: Icons.description_outlined,
+            label: 'Report'.tr,
+            onTap: () {
+              if (!_checkNoPermission(device)) {
+                _showReport(device);
+              }
+            },
+          ),
+          _buildBottomButton(
+            icon: Icons.my_location,
+            label: 'tracking'.tr,
+            onTap: () {
+              if (!_checkNoPermission(device)) {
+                AdMobService().showInterstitialAd();
+                _openTracking(device);
+              }
+            },
+          ),
+          _buildBottomButton(
+            icon: Icons.play_circle_outline,
+            label: 'playback'.tr,
+            onTap: () {
+              if (!_checkNoPermission(device)) {
+                AdMobService().showInterstitialAd(ignoreFrequency: true);
+                _openPlayback(device);
+              }
+            },
+          ),
+          _buildBottomButton(
+            icon: Icons.more_horiz,
+            label: 'more'.tr,
+            onTap: () {
+              if (!_checkNoPermission(device)) {
+                _showMoreOptions(device);
+              }
+            },
+          ),
+        ],
+      ),
+    );
   }
 }

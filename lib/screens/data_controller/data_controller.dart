@@ -7,8 +7,14 @@ import 'package:gpspro/services/model/device.dart';
 import 'package:gpspro/services/model/device_item.dart';
 import 'package:gpspro/services/model/event.dart';
 import 'package:gpspro/services/api_service.dart';
+import 'package:gpspro/services/tracksolid_repository.dart';
 import 'package:gpspro/storage/user_repository.dart';
 import 'package:gpspro/services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:intl/intl.dart';
+import 'dart:convert';
+import 'package:gpspro/util/util.dart';
 
 class DataController extends GetxController {
   // Device Lists
@@ -33,6 +39,7 @@ class DataController extends GetxController {
 
   // Other data
   RxList<Event> events = <Event>[].obs;
+  RxList<Event> localEvents = <Event>[].obs;
   var counter = 0.obs;
   var markers = <Marker>{}.obs;
 
@@ -42,14 +49,23 @@ class DataController extends GetxController {
   // Notification service
   final NotificationService _notificationService = NotificationService();
 
+  // Maps to keep track of previous values for change detection
+  final Map<int, bool> _prevEngineStatus = {};
+  final Map<int, String> _prevOnlineStatus = {};
+  final Map<int, bool> _prevActualOnlineStatus = {};
+  final Map<int, DateTime> _lastOverspeedTime = {};
+  final Map<int, bool> _prevSOSStatus = {};
+
   @override
   Future<void> onInit() async {
     super.onInit();
+    _loadLocalEvents();
     updateDevices();
   }
 
   void updateDevices() {
-    if (UserRepository.getHash() != null) {
+    // Update based on whichever API mode is active (Traccar hash or Tracksolid token)
+    if (UserRepository.getHash() != null || UserRepository.isTracksolidMode()) {
       getDevices();
       getEvents();
     }
@@ -57,8 +73,11 @@ class DataController extends GetxController {
 
   @override
   Future<void> onReady() async {
-    Timer.periodic(const Duration(seconds: 8), (timer) {
-      if (UserRepository.getHash() != null) {
+    final interval = UserRepository.isTracksolidMode()
+        ? const Duration(seconds: 30)
+        : const Duration(seconds: 10);
+    Timer.periodic(interval, (timer) {
+      if (UserRepository.getHash() != null || UserRepository.isTracksolidMode()) {
         getDevices();
         getEvents();
       }
@@ -84,21 +103,187 @@ class DataController extends GetxController {
   }
 
   Future<void> getDevices() async {
+    debugPrint("DATA_CONTROLLER getDevices START: this=${hashCode} onlyDevices=${onlyDevices.length}");
     try {
-      final devicesResponse = await APIService.getDevices();
-      if (devicesResponse != null) {
-        devices.value = devicesResponse;
-        await _processDeviceItems(devicesResponse);
-        isLoading.value = false;
-        _updateStatusCounters();
-        _reapplyCurrentFilter();
+      // Choose API based on user preference
+      if (UserRepository.isTracksolidMode()) {
+        // Tracksolid path – repository handles token & mapping
+        final tracksolidRepo = TracksolidRepository();
+        final devicesResponse = await tracksolidRepo.getDevices();
+        debugPrint("Tracksolid devicesResponse: ${devicesResponse?.length}");
+        devices.value = devicesResponse ?? [];
+        await _processDeviceItems(devicesResponse ?? []);
+        debugPrint("Tracksolid onlyDevices: ${onlyDevices.length}");
+      } else {
+        // Existing Traccar / WOX server flow
+        final devicesResponse = await APIService.getDevices();
+        if (devicesResponse != null) {
+          debugPrint("Traccar devicesResponse: ${devicesResponse.length}");
+          devices.value = devicesResponse;
+          await _processDeviceItems(devicesResponse);
+          debugPrint("Traccar onlyDevices: ${onlyDevices.length}");
+        } else {
+          debugPrint("Traccar devicesResponse is NULL");
+        }
+      }
+      isLoading.value = false;
+      _updateStatusCounters();
+      _reapplyCurrentFilter();
+      _checkLocalAlerts(onlyDevices);
+      debugPrint("DATA_CONTROLLER getDevices SUCCESS: this=${hashCode} onlyDevices=${onlyDevices.length}");
+    } catch (e, s) {
+      debugPrint("Error fetching devices: $e");
+      debugPrint("Stack trace: $s");
+      isLoading.value = false;
+    }
+    update();
+  }
+
+  Future<void> _checkLocalAlerts(List<DeviceItem> deviceItems) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      for (var device in deviceItems) {
+        if (device.id == null) continue;
+        final devId = device.id!;
+
+        // 1. Engine Status Alert (Ignition On/Off)
+        final bool isEngineAlertEnabled = prefs.getBool('quick_alert_${devId}_ignition_duration') ?? 
+                                           prefs.getBool('quick_alert_all_ignition_duration') ?? false;
+        if (isEngineAlertEnabled) {
+          bool currentEngine = device.engineStatus == true || 
+                               device.engineStatus == 1 || 
+                               device.engineStatus.toString().toLowerCase() == 'true' ||
+                               device.engineStatus.toString() == '1';
+
+          if (_prevEngineStatus.containsKey(devId)) {
+            bool prevEngine = _prevEngineStatus[devId]!;
+            if (currentEngine != prevEngine) {
+              String statusStr = currentEngine ? "ON" : "OFF";
+              final String body = "Engine has been turned $statusStr";
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 1,
+                title: "🔑 Engine status: ${device.name}",
+                body: body,
+                channelId: 'alert_channel_v1',
+              );
+              _createAndSaveLocalEvent(
+                message: body,
+                device: device,
+              );
+            }
+          }
+          _prevEngineStatus[devId] = currentEngine;
+        }
+
+        // 2. Over Speed Alert
+        final bool isOverspeedEnabled = prefs.getBool('quick_alert_${devId}_overspeed') ?? 
+                                        prefs.getBool('quick_alert_all_overspeed') ?? false;
+        if (isOverspeedEnabled) {
+          double currentSpeed = double.tryParse(device.speed.toString()) ?? 0.0;
+          double speedLimit = prefs.getDouble('quick_alert_${devId}_overspeed_limit') ?? 
+                              prefs.getDouble('quick_alert_all_overspeed_limit') ?? 80.0;
+          if (currentSpeed > speedLimit) {
+            final now = DateTime.now();
+            final lastNotification = _lastOverspeedTime[devId];
+            if (lastNotification == null || now.difference(lastNotification).inMinutes >= 10) {
+              final String body = "Vehicle is moving at ${currentSpeed.toStringAsFixed(1)} km/h (Limit: ${speedLimit.toInt()} km/h)";
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 2,
+                title: "⚡ Over Speed: ${device.name}",
+                body: body,
+                channelId: 'alert_channel_v1',
+              );
+              _lastOverspeedTime[devId] = now;
+              _createAndSaveLocalEvent(
+                message: body,
+                device: device,
+              );
+            }
+          }
+        }
+
+        // 3. SOS Alarm Alert
+        final bool isSosEnabled = prefs.getBool('quick_alert_${devId}_sos') ?? 
+                                  prefs.getBool('quick_alert_all_sos') ?? false;
+        if (isSosEnabled) {
+          bool currentSOS = device.alarm == 1 || device.alarm.toString() == "sos";
+          if (_prevSOSStatus.containsKey(devId)) {
+            bool prevSOS = _prevSOSStatus[devId]!;
+            if (currentSOS && !prevSOS) {
+              final String body = "Emergency SOS button triggered!";
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 3,
+                title: "🆘 SOS Alarm: ${device.name}",
+                body: body,
+                channelId: 'sos_channel_v1',
+                priority: Priority.max,
+                importance: Importance.max,
+              );
+              _createAndSaveLocalEvent(
+                message: body,
+                device: device,
+              );
+            }
+          }
+          _prevSOSStatus[devId] = currentSOS;
+        }
+
+        // 4. Offline Alert
+        final bool isOfflineEnabled = prefs.getBool('quick_alert_${devId}_offline_duration') ?? 
+                                       prefs.getBool('quick_alert_all_offline_duration') ?? false;
+        if (isOfflineEnabled) {
+          final bool isOnline = Util.isDeviceOnline(device);
+          if (_prevActualOnlineStatus.containsKey(devId)) {
+            final bool prevOnline = _prevActualOnlineStatus[devId]!;
+            if (!isOnline && prevOnline) {
+              final String body = "Vehicle went offline";
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 4,
+                title: "❌ Offline Alert: ${device.name}",
+                body: body,
+                channelId: 'alert_channel_v1',
+              );
+              _createAndSaveLocalEvent(
+                message: body,
+                device: device,
+              );
+            }
+          }
+          _prevActualOnlineStatus[devId] = isOnline;
+        }
+
+        // 5. Movement Alert
+        final bool isMovementEnabled = prefs.getBool('quick_alert_${devId}_start_of_movement') ?? 
+                                       prefs.getBool('quick_alert_all_start_of_movement') ?? false;
+        if (isMovementEnabled) {
+          String currentOnline = device.iconColor ?? 'green';
+          if (_prevOnlineStatus.containsKey(devId)) {
+            String prevOnline = _prevOnlineStatus[devId]!;
+            if (currentOnline == 'green' && prevOnline != 'green') {
+              final String body = "Vehicle has started moving";
+              _notificationService.showLocalNotification(
+                id: devId * 10 + 5,
+                title: "Directions Movement: ${device.name}",
+                body: body,
+                channelId: 'event_channel_v1',
+              );
+              _createAndSaveLocalEvent(
+                message: body,
+                device: device,
+              );
+            }
+          }
+          _prevOnlineStatus[devId] = currentOnline;
+        }
       }
     } catch (e) {
-      isLoading.value = false;
+      debugPrint("Error checking local alerts: $e");
     }
   }
 
   Future<void> _processDeviceItems(List<Device> deviceGroups) async {
+    debugPrint("DATA_CONTROLLER _processDeviceItems: clearing onlyDevices (size was ${onlyDevices.length})");
     onlyDevices.clear();
     for (var group in deviceGroups) {
       if (group.items != null) {
@@ -106,6 +291,7 @@ class DataController extends GetxController {
       }
     }
     filteredDevices.assignAll(onlyDevices);
+    debugPrint("DATA_CONTROLLER _processDeviceItems: cleared and added. New size is ${onlyDevices.length}");
   }
 
   void _updateStatusCounters() {
@@ -128,6 +314,7 @@ class DataController extends GetxController {
     if (searchText.isNotEmpty) {
       searchDevices(searchText.value);
     }
+    update();
   }
 
   int _getFilterIndex(String status) {
@@ -151,6 +338,7 @@ class DataController extends GetxController {
     if (text.isEmpty) {
       searchedDevices.clear();
       _applyFilters();
+      update();
       return;
     }
 
@@ -159,6 +347,7 @@ class DataController extends GetxController {
         .where((device) =>
     device.name?.toLowerCase().contains(searchLower) ?? false)
         .toList());
+    update();
   }
 
   void _applyFilters() {
@@ -177,33 +366,152 @@ class DataController extends GetxController {
       searchText.value = '';
       searchedDevices.clear();
     }
+    update();
   }
 
-  void getEvents() async {
+  void _loadLocalEvents() {
+    try {
+      final prefs = UserRepository.prefs;
+      if (prefs != null) {
+        final String? localEventsStr = prefs.getString('local_notifications_history');
+        if (localEventsStr != null && localEventsStr.isNotEmpty) {
+          final List<dynamic> decoded = json.decode(localEventsStr);
+          final List<Event> loaded = decoded.map((e) => Event.fromJson(e)).toList();
+          localEvents.value = loaded;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error loading local events: $e");
+    }
+  }
+
+  void _saveLocalEvent(Event event) {
+    try {
+      final prefs = UserRepository.prefs;
+      if (prefs != null) {
+        localEvents.insert(0, event);
+        if (localEvents.length > 100) {
+          localEvents.removeLast();
+        }
+        _saveAllLocalEvents();
+      }
+    } catch (e) {
+      debugPrint("Error saving local event: $e");
+    }
+  }
+
+  void _saveAllLocalEvents() {
+    try {
+      final prefs = UserRepository.prefs;
+      if (prefs != null) {
+        final List<Map<String, dynamic>> jsonList = localEvents.map((e) => {
+          'id': e.id,
+          'message': e.message,
+          'latitude': e.latitude,
+          'longitude': e.longitude,
+          'device_name': e.device_name,
+          'time': e.time,
+          'speed': e.speed,
+        }).toList();
+        prefs.setString('local_notifications_history', json.encode(jsonList));
+      }
+    } catch (e) {
+      debugPrint("Error saving all local events: $e");
+    }
+  }
+
+  void deleteLocalEvent(dynamic id) {
+    localEvents.removeWhere((e) => e.id == id);
+    _saveAllLocalEvents();
+    update();
+  }
+
+  void clearLocalEvents() {
+    localEvents.clear();
+    final prefs = UserRepository.prefs;
+    prefs?.remove('local_notifications_history');
+    update();
+  }
+
+  void _createAndSaveLocalEvent({required String message, required DeviceItem device}) {
+    final event = Event(
+      id: DateTime.now().millisecondsSinceEpoch,
+      message: message,
+      device_name: device.name,
+      latitude: device.lat,
+      longitude: device.lng,
+      speed: device.speed,
+    )..time = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+
+    _saveLocalEvent(event);
+
+    final merged = <Event>[];
+    merged.addAll(localEvents);
+    merged.addAll(events.where((e) {
+      final idVal = e.id;
+      if (idVal is int && idVal >= 1700000000000) return false;
+      return true;
+    }));
+
+    merged.sort((a, b) => _parseEventTime(b.time).compareTo(_parseEventTime(a.time)));
+    events.value = merged;
+  }
+
+  DateTime _parseEventTime(String? timeStr) {
+    if (timeStr == null || timeStr.isEmpty) return DateTime.fromMillisecondsSinceEpoch(0);
+    try {
+      return DateTime.parse(timeStr);
+    } catch (_) {
+      try {
+        return DateFormat('yyyy-MM-dd HH:mm:ss').parse(timeStr);
+      } catch (_) {
+        return DateTime.fromMillisecondsSinceEpoch(0);
+      }
+    }
+  }
+
+  void getEvents({bool showError = false}) async {
     try {
       isEventLoading.value = true;
 
-      final eventsResponse = await APIService.getEventList();
+      List<Event>? eventsResponse;
 
-      if (eventsResponse != null && eventsResponse.isNotEmpty) {
-        // Check for new events and show notifications
-        _checkForNewEvents(eventsResponse);
-        events.value = eventsResponse;
+      if (UserRepository.isTracksolidMode()) {
+        // Tracksolid mode – fetch alarms/events via repository
+        final repo = TracksolidRepository();
+        eventsResponse = await repo.getAlarms();
       } else {
-        // Handle empty events
-        events.value = <Event>[].obs;
+        // Existing Traccar / WOX flow
+        eventsResponse = await APIService.getEventList();
       }
 
-    } on SocketException catch (e) {
-      _showError('No internet connection. Please check your network.');
-    } on TimeoutException catch (e) {
-      _showError('Connection timeout. Please try again.');
-    } on Exception catch (e) {
-      _showError(e.toString().replaceAll('Exception: ', ''));
+      final List<Event> merged = [];
+      merged.addAll(localEvents);
+
+      if (eventsResponse != null && eventsResponse.isNotEmpty) {
+        _checkForNewEvents(eventsResponse);
+        merged.addAll(eventsResponse);
+      }
+
+      merged.sort((a, b) => _parseEventTime(b.time).compareTo(_parseEventTime(a.time)));
+      events.value = merged;
+
     } catch (e) {
-      _showError('An unexpected error occurred');
+      // Periodic background polling should fail silently. We only show error popups if explicitly requested.
+      if (showError) {
+        String message = 'An unexpected error occurred';
+        if (e is SocketException) {
+          message = 'No internet connection. Please check your network.';
+        } else if (e is TimeoutException) {
+          message = 'Connection timeout. Please try again.';
+        } else {
+          message = e.toString().replaceAll('Exception: ', '');
+        }
+        _showError(message);
+      }
     } finally {
       isEventLoading.value = false;
+      update();
     }
   }
 
@@ -246,6 +554,7 @@ class DataController extends GetxController {
 
   void setExpandedIndex(int index) {
     expandedIndex.value = expandedIndex.value == index ? -1 : index;
+    update();
   }
 
   // Manual notification trigger (for testing)

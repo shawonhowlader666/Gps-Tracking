@@ -14,10 +14,13 @@ import 'package:gpspro/services/model/login.dart';
 import 'package:gpspro/screens/data_controller/data_controller.dart';
 import 'package:gpspro/services/api_service.dart';
 import 'package:gpspro/storage/user_repository.dart';
+import 'package:gpspro/services/tracksolid_repository.dart';
 import 'package:gpspro/config.dart';
 import 'package:gpspro/constants/app_constants.dart';
+import 'package:gpspro/widgets/scale_button.dart';
+import 'package:gpspro/theme/custom_color.dart';
 
-const Color kPrimaryOrange = Color(0xFF3E6FB8);
+const Color kPrimaryOrange = CustomColor.primary;
 const Color kLightGrey = Color(0xFFE0E0E0);
 
 class LoginPage extends StatefulWidget {
@@ -38,8 +41,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final TextEditingController _emailFilter = TextEditingController();
   final TextEditingController _passwordFilter = TextEditingController();
 
-  static const Color _primaryColor = Color(0xFF1D4888);
-  static const Color _lightAccent = Color(0xFFE4B34E);
+  static const Color _primaryColor = CustomColor.primary;
+  static const Color _lightAccent = Color(0xFFFF5252);
 
   FocusNode? emailAddressFocusNode;
   late bool passwordVisibility;
@@ -174,13 +177,32 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             List<dynamic> serverList = [];
 
             if (urlData is List) {
-              serverList = urlData;
+              serverList = List.from(urlData);
             } else if (urlData is String) {
               try {
-                serverList = jsonDecode(urlData) as List;
+                serverList = List.from(jsonDecode(urlData) as List);
               } catch (e) {}
             }
 
+            if (spytrackConfig.containsKey('all_urls')) {
+              final allUrlsData = spytrackConfig['all_urls'];
+              List<dynamic> additionalServers = [];
+              if (allUrlsData is List) {
+                additionalServers = allUrlsData;
+              } else if (allUrlsData is String) {
+                try {
+                  additionalServers = jsonDecode(allUrlsData) as List;
+                } catch (e) {}
+              }
+              for (var server in additionalServers) {
+                final exists = serverList.any((s) => s['url'] == server['url']);
+                if (!exists) {
+                  serverList.add(server);
+                }
+              }
+            }
+
+            print("FETCHED SERVERS FROM FIREBASE: $serverList");
             SERVER_URL = serverList;
             SHOW_ADS = (spytrackConfig['ads'] as bool? ?? false) && serverType == 'free';
             WHATS_APP = spytrackConfig['whatsapp'] as String? ?? '';
@@ -221,7 +243,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           }
         }
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       setState(() {
         isLoadingServers = false;
         availableServers = [];
@@ -282,7 +304,25 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         final spytrackConfig = data['spytrack'] as Map<String, dynamic>;
 
         if (spytrackConfig['url'] is List) {
-          SERVER_URL = spytrackConfig['url'] as List;
+          SERVER_URL = List.from(spytrackConfig['url'] as List);
+        }
+
+        if (spytrackConfig.containsKey('all_urls')) {
+          final allUrlsData = spytrackConfig['all_urls'];
+          List<dynamic> additionalServers = [];
+          if (allUrlsData is List) {
+            additionalServers = allUrlsData;
+          } else if (allUrlsData is String) {
+            try {
+              additionalServers = jsonDecode(allUrlsData) as List;
+            } catch (e) {}
+          }
+          for (var server in additionalServers) {
+            final exists = SERVER_URL.any((s) => s['url'] == server['url']);
+            if (!exists) {
+              SERVER_URL.add(server);
+            }
+          }
         }
 
         SHOW_ADS = (spytrackConfig['ads'] as bool) && serverType == 'free';
@@ -531,8 +571,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light.copyWith(
-      statusBarColor: Colors.transparent,
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: CustomColor.primary,
+      statusBarBrightness: Brightness.dark,
+      statusBarIconBrightness: Brightness.light,
     ));
 
     return Scaffold(
@@ -554,19 +596,22 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           // Admin Button (Add Server)
-                          GestureDetector(
-                            // onTap: _showAddServerDialog,
-                            onTap: (){},
+                          ScaleButton(
+                            onTap: () {},
                             child: Container(
-                              padding: const EdgeInsets.all(8),
+                              width: 40,
+                              height: 40,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: kLightGrey, width: 1),
+                                border: Border.all(color: kLightGrey, width: 1.5),
+                                color: Colors.grey.shade50,
                               ),
-                              child: const Icon(
-                                Icons.settings,
-                                size: 20,
-                                color: kPrimaryOrange,
+                              child: const Center(
+                                child: Icon(
+                                  Icons.settings,
+                                  size: 22,
+                                  color: kPrimaryOrange,
+                                ),
                               ),
                             ),
                           ),
@@ -579,7 +624,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                             child: Row(
                               children: [
-                                GestureDetector(
+                                ScaleButton(
                                   onTap: () {
                                     setState(() {
                                       _selectedLanguageIndex = 0;
@@ -607,7 +652,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                     ),
                                   ),
                                 ),
-                                GestureDetector(
+                                ScaleButton(
                                   onTap: () {
                                     setState(() {
                                       _selectedLanguageIndex = 1;
@@ -640,7 +685,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           ),
 
                           // Support Button
-                          GestureDetector(
+                          ScaleButton(
                             onTap: () async {
                               if (WHATS_APP.isNotEmpty) {
                                 await _openWhatsAppSupport();
@@ -651,16 +696,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               }
                             },
                             child: Container(
-                              width: 30,
-                              height: 30,
+                              width: 40,
+                              height: 40,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: kLightGrey, width: 1),
+                                border: Border.all(color: kLightGrey, width: 1.5),
+                                color: Colors.grey.shade50,
                               ),
                               child: const Center(
                                 child: Icon(
                                   Icons.support_agent_outlined,
-                                  size: 20,
+                                  size: 22,
                                   color: kPrimaryOrange,
                                 ),
                               ),
@@ -745,14 +791,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       const Gap(10),
 
                       Center(
-                        child: TextButton(
-                          onPressed: () {},
-                          child: Text(
-                            'Forgot Password',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: kPrimaryOrange,
-                              decoration: TextDecoration.underline,
+                        child: ScaleButton(
+                          onTap: () {},
+                          child: TextButton(
+                            onPressed: () {},
+                            child: Text(
+                              'Forgot Password',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: kPrimaryOrange,
+                                decoration: TextDecoration.underline,
+                              ),
                             ),
                           ),
                         ),
@@ -767,61 +816,40 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           ),
         ),
       ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.only(bottom: 20.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              'images/btrc.png',
-              height: 30,
-              width: 30,
+      bottomNavigationBar: _buildBtrcApproval(),
+    );
+  }
+
+  Widget _buildBtrcApproval() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'images/asthax.png',
+            height: 30,
+            width: 30,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Approved By AsthaX',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
             ),
-            const SizedBox(width: 8),
-            Text(
-              'Approved By BTRC',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildAppTitle() {
-    return AnimatedBuilder(
-      animation: _shimmerAnimation,
-      builder: (context, child) {
-        return ShaderMask(
-          shaderCallback: (bounds) {
-            return LinearGradient(
-              colors: const [
-                _primaryColor,
-                _lightAccent,
-                _primaryColor,
-              ],
-              stops: [
-                (_shimmerAnimation.value - 0.3).clamp(0.0, 1.0),
-                _shimmerAnimation.value.clamp(0.0, 1.0),
-                (_shimmerAnimation.value + 0.3).clamp(0.0, 1.0),
-              ],
-            ).createShader(bounds);
-          },
-          child: const Text(
-            AppConstants.appName,
-            style: TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: 8,
-            ),
-          ),
-        );
-      },
+    return Image.asset(
+      'images/asthax.png',
+      height: 45,
+      fit: BoxFit.contain,
     );
   }
 
@@ -912,34 +940,37 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   Widget _buildLoginButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : _loginPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isLoading ? Colors.grey.shade400 : kPrimaryOrange,
-          disabledBackgroundColor: Colors.grey.shade400,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+    return ScaleButton(
+      onTap: isLoading ? null : _loginPressed,
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton(
+          onPressed: isLoading ? null : () {},
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isLoading ? Colors.grey.shade400 : kPrimaryOrange,
+            disabledBackgroundColor: Colors.grey.shade400,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 0,
           ),
-          elevation: 0,
-        ),
-        child: isLoading
-            ? const SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.5,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-          ),
-        )
-            : const Text(
-          'Sign In →',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
+          child: isLoading
+              ? const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          )
+              : const Text(
+            'Sign In →',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
@@ -947,9 +978,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   void updateToken() async {
+    if (UserRepository.isTracksolidMode()) return;
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     await messaging.getToken().then((value) => {_notificationToken = value!});
-    APIService.getUserData().then((value) => {APIService.activateFCM(_notificationToken)});
+    APIService.getUserData().then((user) {
+      if (user != null) {
+        if (user.id != null) UserRepository.setUserId(user.id.toString());
+        if (user.email != null) UserRepository.setEmail(user.email!);
+        if (user.username != null) UserRepository.setName(user.username!);
+      }
+      APIService.activateFCM(_notificationToken);
+    });
   }
 
   void _loginPressed() async {
@@ -979,6 +1018,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     Map<String, dynamic>? successfulServer;
     int? lastStatusCode;
 
+    String? apiErrorMessage;
+
     try {
       final List<dynamic> activeServers = availableServers
           .where((s) => s['message'] == null || s['message'].toString().isEmpty)
@@ -994,36 +1035,79 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         return;
       }
 
+      print("ACTIVE SERVERS TO TRY: $activeServers");
       for (final server in activeServers) {
         try {
-          final response = await APIService.login(server['url'], _email, _password);
+          final isTracksolid = (server['mode'] == 'tracksolid') ||
+              (server['url']?.toString().toLowerCase().contains('tracksolid') ?? false) ||
+              (server['name']?.toString().toLowerCase().contains('tracksolid') ?? false) ||
+              (_email.toLowerCase().trim() == 'spytrackbd') ||
+              (!_email.contains('@'));
+          print("Attempting login on server: ${server['name']} (${server['url']}) - isTracksolid: $isTracksolid");
 
-          if (response == null) continue;
+          if (isTracksolid) {
+            final trackRepo = TracksolidRepository();
+            final success = await trackRepo.login(_email, _password);
+            if (success) {
+              UserRepository.setServerUrl(server['url']);
+              prefs?.setString('serverType', server['type'] ?? 'free');
 
-          lastStatusCode = response.statusCode;
+              // Always keep password in memory for payment service (session only)
+              UserRepository.setSessionPassword(_password);
 
-          if (response.statusCode == 200) {
-            final user = UserLogin.fromJson(
-              jsonDecode(response.body.replaceAll("ï»¿", "")),
-            );
+              if (_rememberMe) {
+                UserRepository.setEmail(_email);
+                UserRepository.setPassword(_password);
+                prefs?.setBool('rememberMe', true);
+              } else {
+                prefs?.remove('email');
+                prefs?.remove('password');
+                prefs?.setBool('rememberMe', false);
+              }
 
-            UserRepository.setServerUrl(server['url']);
-            UserRepository.setHash(user.userApiHash!);
-            prefs?.setString('serverType', server['type'] ?? 'free');
-
-            if (_rememberMe) {
-              UserRepository.setEmail(_email);
-              UserRepository.setPassword(_password);
-              prefs?.setBool('rememberMe', true);
+              successfulServer = server;
+              loginSuccess = true;
+              break;
             } else {
-              prefs?.remove('email');
-              prefs?.remove('password');
-              prefs?.setBool('rememberMe', false);
+              lastStatusCode = 401;
+              continue;
             }
+          } else {
+            final response = await APIService.login(server['url'], _email, _password);
 
-            successfulServer = server;
-            loginSuccess = true;
-            break;
+            if (response == null) continue;
+
+            lastStatusCode = response.statusCode;
+
+            if (response.statusCode == 200) {
+              final jsonMap = jsonDecode(response.body.replaceAll("ï»¿", ""));
+              final user = UserLogin.fromJson(jsonMap);
+
+              if (user.userApiHash != null) {
+                UserRepository.setServerUrl(server['url']);
+                UserRepository.setHash(user.userApiHash!);
+                prefs?.setString('serverType', server['type'] ?? 'free');
+
+                // Always keep password in memory for payment service (session only)
+                UserRepository.setSessionPassword(_password);
+
+                if (_rememberMe) {
+                  UserRepository.setEmail(_email);
+                  UserRepository.setPassword(_password);
+                  prefs?.setBool('rememberMe', true);
+                } else {
+                  prefs?.remove('email');
+                  prefs?.remove('password');
+                  prefs?.setBool('rememberMe', false);
+                }
+
+                successfulServer = server;
+                loginSuccess = true;
+                break;
+              } else {
+                apiErrorMessage = jsonMap['message']?.toString();
+              }
+            }
           }
         } catch (_) {
           continue;
@@ -1057,7 +1141,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
       Get.offAndToNamed('/home');
     } else {
-      String message = 'Login failed. Please check credentials.';
+      String message = apiErrorMessage ?? 'Login failed. Please check credentials.';
 
       if (lastStatusCode == 401 || lastStatusCode == 400) {
         message = 'Invalid email or password';
