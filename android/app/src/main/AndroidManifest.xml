@@ -4,46 +4,26 @@
 
     <!-- ============ PERMISSIONS ============ -->
 
-    <!-- Location -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-
-    <!-- Storage -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28"/>
+        android:maxSdkVersion="32"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
-
-    <!-- Network -->
+    <!-- Network permissions -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
-    <!-- Notifications & Display -->
+    <!-- ✅ NOTIFICATION PERMISSIONS - ALL REQUIRED -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
-
-    <!-- Boot & Wake -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
-
-    <!-- Foreground Service -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
-
-    <!-- Battery -->
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
-
-    <!-- ✅ FIX 1: Exact Alarm পারমিশন যোগ করা হয়েছে -->
-    <!-- App বন্ধ থাকলেও scheduled notification ঠিকমতো আসার জন্য দরকার -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
 
-    <!-- DATA_SYNC সরিয়ে দাও — plugin থেকে আসলেও remove হবে -->
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
-        tools:node="remove"/>
+    <!-- ✅ IMPORTANT: Prevent Doze mode from stopping notifications -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <!-- ============ APPLICATION ============ -->
     <application
