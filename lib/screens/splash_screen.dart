@@ -25,8 +25,8 @@ class SplashScreenPage extends StatefulWidget {
 class _SplashScreenPageState extends State<SplashScreenPage>
     with TickerProviderStateMixin {
   // ─── Timing ──────────────────────────────────────────────────────────────
-  static const Duration _minimumSplashDuration = Duration(seconds: 2);
-  static const Duration _initialDelay = Duration(milliseconds: 400);
+  static const Duration _minimumSplashDuration = Duration(milliseconds: 800);
+  static const Duration _initialDelay = Duration(milliseconds: 100);
 
   // Cache TTL: re-fetch Firestore config only after 10 seconds to ensure Maintenance Mode and Force Update take effect promptly
   static const int _configCacheTtlMs = 10 * 1000;
@@ -111,7 +111,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
     if (_configLoaded && _minimumTimeReached) {
       setState(() => _showCheckmark = true);
       _checkController.forward();
-      Future.delayed(const Duration(milliseconds: 800), checkPreference);
+      Future.delayed(const Duration(milliseconds: 400), checkPreference);
     }
   }
 
