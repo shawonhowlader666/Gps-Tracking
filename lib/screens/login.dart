@@ -239,7 +239,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   Future<void> _openYoutube() async {
-    final Uri uri = Uri.parse('https://www.youtube.com');
+    final Uri uri = Uri.parse('https://youtube.com/@m.a.h.swapon');
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
