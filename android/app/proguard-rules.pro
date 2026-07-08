@@ -46,4 +46,8 @@
 -dontwarn javax.annotation.**
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
--dontwarn org.openjsse.**
+-dontwarn org.openjsse.**
+
+# ── Geolocator & Permission Handler ──────────────────────
+-keep class com.baseflow.geolocator.** { *; }
+-keep class com.baseflow.permissionhandler.** { *; }

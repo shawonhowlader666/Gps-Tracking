@@ -610,14 +610,10 @@ class Util {
       final String? savedAsset = UserRepository.prefs
           ?.getString("custom_icon_path_${deviceId.toString()}");
       if (savedAsset != null && savedAsset.isNotEmpty) {
-        debugPrint(
-            "getLocalMappedAsset PREFERENCE matched: '$savedAsset' for device ID '$deviceId'");
         return savedAsset;
       }
     }
 
-    debugPrint(
-        "getLocalMappedAsset CALLED with imagePath: '$imagePath', iconType: '$iconType', deviceName: '$deviceName', deviceId: '$deviceId'");
     final path =
         "${imagePath?.toLowerCase() ?? ''} ${iconType?.toLowerCase() ?? ''} ${deviceName?.toLowerCase() ?? ''}"
             .trim();
@@ -743,8 +739,6 @@ class Util {
     // Default fallback
     result ??= 'assets/images/car_toprunning.png';
 
-    debugPrint(
-        "getLocalMappedAsset RESULT: '$result' for path: '$imagePath', iconType: '$iconType', deviceName: '$deviceName'");
     return result;
   }
 

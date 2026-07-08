@@ -979,40 +979,68 @@ class _TrackDeviceState extends State<TrackDevicePage>
     final devId = element.id;
     if (devId == null) return;
 
-    final sensors = element.sensors;
-    if (sensors == null || sensors.isEmpty) return;
-
     Map? batterySensor;
     Map? voltageSensor;
 
-    // Search for battery and voltage/ADC/analog sensors in the list
-    for (var s in sensors) {
-      if (s is! Map) continue;
-      final type = (s['type'] ?? '').toString().toLowerCase().trim();
-      final name = (s['name'] ?? '').toString().toLowerCase().trim();
+    final sensors = element.sensors;
+    if (sensors != null && sensors.isNotEmpty) {
+      // Search for battery and voltage/ADC/analog sensors in the list
+      for (var s in sensors) {
+        if (s is! Map) continue;
+        final type = (s['type'] ?? '').toString().toLowerCase().trim();
+        final name = (s['name'] ?? '').toString().toLowerCase().trim();
 
-      if (type == 'battery' || name.contains('battery')) {
-        batterySensor = s;
-      } else if (type == 'voltage' ||
-          name.contains('voltage') ||
-          name.contains('power') ||
-          type.contains('adc') ||
-          name.contains('adc') ||
-          name.contains('analog')) {
-        voltageSensor = s;
+        if (type == 'battery' || name.contains('battery')) {
+          batterySensor = s;
+        } else if (type == 'voltage' ||
+            name.contains('voltage') ||
+            name.contains('power') ||
+            type.contains('adc') ||
+            name.contains('adc') ||
+            name.contains('analog')) {
+          voltageSensor = s;
+        }
       }
     }
 
-    // Use battery sensor if available, otherwise fallback to voltage/ADC sensor
+    String type = '';
+    String name = '';
+    String formattedValue = '';
+    dynamic rawVal;
+
     final sensor = batterySensor ?? voltageSensor;
-    if (sensor == null) return;
+    if (sensor != null) {
+      type = (sensor['type'] ?? '').toString().toLowerCase().trim();
+      name = (sensor['name'] ?? '').toString().toLowerCase().trim();
+      rawVal = sensor['val'];
+      formattedValue = sensor['value']?.toString() ?? '';
+    } else {
+      // Fallback to XML other parsing
+      final otherXml = element.deviceData?.traccar?.other;
+      if (otherXml != null && otherXml.isNotEmpty) {
+        try {
+          final parsed = Util.convertXmlToJson(otherXml);
+          String? batVal = parsed['battery'] ?? parsed['batteryLevel'] ?? parsed['battery_level'] ?? parsed['bat'] ?? parsed['charge'];
+          String? voltVal = parsed['voltage'] ?? parsed['power'] ?? parsed['adc'];
+          
+          if (batVal != null && batVal.isNotEmpty) {
+            type = 'battery';
+            name = 'battery';
+            formattedValue = batVal;
+            rawVal = batVal;
+          } else if (voltVal != null && voltVal.isNotEmpty) {
+            type = 'voltage';
+            name = 'voltage';
+            formattedValue = voltVal;
+            rawVal = voltVal;
+          }
+        } catch (_) {}
+      }
+    }
 
-    final type = (sensor['type'] ?? '').toString().toLowerCase().trim();
-    final name = (sensor['name'] ?? '').toString().toLowerCase().trim();
-
-    // Extract text value
-    final rawVal = sensor['val'];
-    var formattedValue = sensor['value']?.toString() ?? '';
+    if (formattedValue.isEmpty && rawVal == null) {
+      return;
+    }
 
     // Normalize format: if it is just a number, append unit based on type
     if (formattedValue.isNotEmpty && formattedValue != 'null') {

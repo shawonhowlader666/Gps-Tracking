@@ -459,12 +459,7 @@ class _DevicePageState extends State<DevicePage> {
                 .toList();
             break;
           default:
-            displayDevices = List<DeviceItem>.from(all)
-              ..sort((a, b) {
-                final statusA = _getDeviceStatus(a);
-                final statusB = _getDeviceStatus(b);
-                return statusA.index.compareTo(statusB.index);
-              });
+            displayDevices = all;
         }
 
         return Column(

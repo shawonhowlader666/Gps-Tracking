@@ -79,6 +79,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         _isLoading = false;
         _errorMessage = _getErrorMessage(e);
       });
+      _showErrorSnackBar(_getErrorMessage(e));
     }
   }
 
@@ -592,10 +593,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_errorMessage != null && _bills.isEmpty) {
-      return _buildErrorWidget();
     }
 
     final email = UserRepository.getEmail()?.toLowerCase() ?? '';

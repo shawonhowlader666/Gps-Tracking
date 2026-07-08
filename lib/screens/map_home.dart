@@ -173,13 +173,23 @@ class _MapPageState extends State<MapPage> {
     });
   }
 
-  void _onMapCreated() async {
-    Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
-    //_pc.close();
-    setState(() {
-      _location = LatLng(position.latitude, position.longitude);
-    });
+  Future<void> _onMapCreated() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
+        Position position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high);
+        setState(() {
+          _location = LatLng(position.latitude, position.longitude);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error getting current location in _onMapCreated: $e');
+    }
   }
 
   void addMarker(DataController controller) {
@@ -899,6 +909,9 @@ class _MapPageState extends State<MapPage> {
           onMapCreated: (GoogleMapController controller) {
             _controller.complete(controller);
             mapController = controller;
+            if (_mapStyle != null) {
+              mapController!.setMapStyle(_mapStyle);
+            }
             _onMapCreated();
             if (first && dataController.devices.isNotEmpty) {
               addMarker(dataController);
@@ -926,13 +939,27 @@ class _MapPageState extends State<MapPage> {
                 FloatingActionButton(
                   heroTag: "mapTypeLocation",
                   mini: true,
-                  onPressed: () {
-                    CameraPosition cPosition = CameraPosition(
-                      target: _location!,
-                      zoom: currentZoom,
-                    );
-                    mapController!.animateCamera(
-                        CameraUpdate.newCameraPosition(cPosition));
+                  onPressed: () async {
+                    if (_location == null) {
+                      await _onMapCreated();
+                    }
+                    if (_location != null) {
+                      CameraPosition cPosition = CameraPosition(
+                        target: _location!,
+                        zoom: currentZoom,
+                      );
+                      mapController!.animateCamera(
+                          CameraUpdate.newCameraPosition(cPosition));
+                    } else {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('অবস্থান পাওয়া যায়নি। অনুগ্রহ করে লোকেশন পারমিশন দিন।'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }
                   },
                   materialTapTargetSize: MaterialTapTargetSize.padded,
                   foregroundColor: CustomColor.primaryColor,

@@ -34,7 +34,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   String _debugCommandsText = "Loading GPRS commands...";
 
   // Selected tracker protocol
-  String _selectedProtocol = 'SinoTrack';
+  String _selectedProtocol = 'Standard GPRS (Auto)';
 
   void _loadSelectedProtocol() {
     final devId = widget.device.id;
@@ -334,18 +334,54 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
   Future<void> _sendCommand(String commandType,
       {required bool lockAfter}) async {
-    setState(() => _isLoading = true);
+    final bool previousLocked = _isLocked;
+    final bool previousEngineOn = _isEngineOn;
+
+    // 1. Optimistic Update: instantly transition UI & cache state
+    setState(() {
+      _isLocked = lockAfter;
+      _isEngineOn = !lockAfter;
+      _isLoading = true; // Prevents double-taps
+    });
+
+    final devId = widget.device.id;
+    if (devId != null) {
+      DataController.setLocalStatusOverride(
+        devId,
+        engineStatus: lockAfter ? 'off' : 'on',
+        lockStatus: lockAfter ? 'locked' : 'unlocked',
+      );
+    }
+    _syncStateToDevice();
+
     try {
-      // Send raw SinoTrack GPRS commands to directly control the tracker hardware:
-      // 9400000 = Cut off engine (Lock)
-      // 9500000 = Restore engine (Unlock)
       final Map<String, String> requestBody = {
         'id': '',
         'device_id': widget.device.id.toString(),
-        'type': 'custom',
-        'command': lockAfter ? '9400000' : '9500000',
-        'data': lockAfter ? '9400000' : '9500000',
       };
+
+      if (_selectedProtocol == 'Standard GPRS (Auto)') {
+        requestBody['type'] = lockAfter ? 'engineStop' : 'engineResume';
+      } else if (_selectedProtocol == 'SinoTrack') {
+        requestBody['type'] = 'custom';
+        requestBody['command'] = lockAfter ? '9400000' : '9500000';
+        requestBody['data'] = lockAfter ? '9400000' : '9500000';
+      } else if (_selectedProtocol == 'Concox / Jimi') {
+        requestBody['type'] = 'custom';
+        requestBody['command'] = lockAfter ? 'RELAY,1#' : 'RELAY,0#';
+        requestBody['data'] = lockAfter ? 'RELAY,1#' : 'RELAY,0#';
+      } else if (_selectedProtocol == 'Micodus') {
+        requestBody['type'] = 'custom';
+        requestBody['command'] = lockAfter ? 'DYD,000000#' : 'HFYD,000000#';
+        requestBody['data'] = lockAfter ? 'DYD,000000#' : 'HFYD,000000#';
+      } else if (_selectedProtocol == 'Coban') {
+        requestBody['type'] = 'custom';
+        requestBody['command'] = lockAfter ? 'stop123456' : 'resume123456';
+        requestBody['data'] = lockAfter ? 'stop123456' : 'resume123456';
+      } else {
+        requestBody['type'] = lockAfter ? 'engineStop' : 'engineResume';
+      }
+
       final res = await APIService.sendCommands(requestBody);
       if (res.statusCode == 200) {
         Map<String, dynamic>? responseJson;
@@ -355,32 +391,10 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
         if (responseJson != null && responseJson.containsKey('status') && responseJson['status'] == 0) {
           final errMsg = responseJson['message'] ?? 'Failed to control engine';
-          Fluttertoast.showToast(
-            msg: '❌ $errMsg',
-            toastLength: Toast.LENGTH_LONG,
-            gravity: ToastGravity.BOTTOM,
-            backgroundColor: _dangerColor,
-            textColor: Colors.white,
-          );
-          return;
+          throw Exception(errMsg);
         }
 
-        setState(() {
-          _isLocked = lockAfter;
-          _isEngineOn = !lockAfter;
-        });
-
-        // Set local overrides in DataController to avoid UI bouncing on rapid background polls
-        final devId = widget.device.id;
-        if (devId != null) {
-          DataController.setLocalStatusOverride(
-            devId,
-            engineStatus: lockAfter ? 'off' : 'on',
-            lockStatus: lockAfter ? 'locked' : 'unlocked',
-          );
-        }
-
-        _syncStateToDevice();
+        // Action succeeded, show animation and toast
         await _showSuccessAnimation(lockAfter);
         Fluttertoast.showToast(
           msg: lockAfter
@@ -392,17 +406,26 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           textColor: Colors.white,
         );
       } else {
-        Fluttertoast.showToast(
-          msg: 'Command failed (${res.statusCode}). Please try again.',
-          toastLength: Toast.LENGTH_LONG,
-          gravity: ToastGravity.BOTTOM,
-          backgroundColor: _dangerColor,
-          textColor: Colors.white,
-        );
+        throw Exception('Command failed (Status: ${res.statusCode})');
       }
     } catch (e) {
+      // 2. Rollback on Failure
+      setState(() {
+        _isLocked = previousLocked;
+        _isEngineOn = previousEngineOn;
+      });
+      if (devId != null) {
+        DataController.setLocalStatusOverride(
+          devId,
+          engineStatus: previousEngineOn ? 'on' : 'off',
+          lockStatus: previousLocked ? 'locked' : 'unlocked',
+        );
+      }
+      _syncStateToDevice();
+
+      final displayError = e.toString().replaceFirst('Exception: ', '');
       Fluttertoast.showToast(
-        msg: 'Connection error. Check your network.',
+        msg: '❌ $displayError',
         toastLength: Toast.LENGTH_LONG,
         gravity: ToastGravity.BOTTOM,
         backgroundColor: _dangerColor,
@@ -415,7 +438,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
   String _getCommandString(String commandType) {
     if (commandType == 'accalm') {
-      if (_selectedProtocol == 'SinoTrack') return 'CALLSET,1#; ACCALM,ON,3,1#';
+      if (_selectedProtocol == 'SinoTrack' || _selectedProtocol == 'Standard GPRS (Auto)') return 'CALLSET,1#; ACCALM,ON,3,1#';
       if (_selectedProtocol == 'Concox / Jimi') return 'CALL,ON#';
       if (_selectedProtocol == 'Micodus') return 'CALLALM,ON#';
       if (_selectedProtocol == 'Coban') return 'callalarm123456 on';
@@ -588,7 +611,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     final onGprsTap = () async {
       setState(() => _isLoading = true);
       try {
-        if (commandType == 'accalm' && _selectedProtocol == 'SinoTrack') {
+        if (commandType == 'accalm' && (_selectedProtocol == 'SinoTrack' || _selectedProtocol == 'Standard GPRS (Auto)')) {
           final res1 = await APIService.sendCommands({
             'id': '',
             'device_id': widget.device.id.toString(),
@@ -687,7 +710,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     final onServerSMSTap = () async {
       setState(() => _isLoading = true);
       try {
-        if (commandType == 'accalm' && _selectedProtocol == 'SinoTrack') {
+        if (commandType == 'accalm' && (_selectedProtocol == 'SinoTrack' || _selectedProtocol == 'Standard GPRS (Auto)')) {
           final res1 = await APIService.sendCommands({
             'id': '',
             'device_id': widget.device.id.toString(),
@@ -813,7 +836,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     }
 
     String command = '';
-    if (_selectedProtocol == 'SinoTrack' || _selectedProtocol == 'Concox / Jimi' || _selectedProtocol == 'Micodus') {
+    if (_selectedProtocol == 'SinoTrack' || _selectedProtocol == 'Concox / Jimi' || _selectedProtocol == 'Micodus' || _selectedProtocol == 'Standard GPRS (Auto)') {
       command = 'SOS,A,${cleanNumber}#';
     } else if (_selectedProtocol == 'Coban') {
       command = 'admin123456 ${cleanNumber}';
@@ -1011,7 +1034,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                     _buildCustomCommandSection(),
                     const SizedBox(height: 28),
                     _buildSecurityCard(),
-                    _buildDebugCommandsCard(),
                   ],
                 ),
               ),
@@ -1684,7 +1706,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                 icon: const m.Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
                 dropdownColor: Colors.white,
                 style: const TextStyle(color: Color(0xFF1E293B), fontSize: 13, fontWeight: m.FontWeight.w600),
-                items: ['SinoTrack', 'Concox / Jimi', 'Micodus', 'Coban']
+                items: ['Standard GPRS (Auto)', 'SinoTrack', 'Concox / Jimi', 'Micodus', 'Coban']
                     .map((String value) {
                   return DropdownMenuItem<String>(
                     value: value,

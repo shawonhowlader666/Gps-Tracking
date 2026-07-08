@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:smart_lock/services/payment_service.dart';
+import 'package:smart_lock/screens/manual_payment_screen.dart';
 
 class PaymentDueCountdownCard extends StatefulWidget {
   /// Called when the user taps "Pay Now".
@@ -130,17 +131,16 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
   }
 
   // ── pay ──────────────────────────────────────────────────────────────────────
-  Future<void> _handlePayNow() async {
-    if (_isPaying) return;
-    setState(() => _isPaying = true);
-    try {
-      final url = await PaymentService.initiateSslPayment();
-      widget.onPayNow?.call(url);
-    } catch (_) {
-      widget.onPayNow?.call(null);
-    } finally {
-      if (mounted) setState(() => _isPaying = false);
-    }
+  void _handlePayNow() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ManualPaymentScreen(
+          dueAmount: _due,
+          isAfter10th: false,
+          packageType: 'due_payment',
+        ),
+      ),
+    );
   }
 
   // ── build ───────────────────────────────────────────────────────────────────

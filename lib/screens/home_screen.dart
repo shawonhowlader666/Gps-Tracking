@@ -7,6 +7,8 @@ import 'package:smart_lock/screens/home/home_controller.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 import '../widgets/payment_due_card.dart';
 import 'data_controller/data_controller.dart';
+import 'package:smart_lock/screens/web_view.dart';
+import 'package:smart_lock/screens/payment_list.dart';
 
 // ── inactive সরানো হয়েছে ──
 enum VehicleStatus { running, idle, stop, offline, expired }
@@ -246,17 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _buildImageSlider(),
             const SizedBox(height: 16),
-            PaymentDueCountdownCard(
-              onPayNow: (gatewayUrl) async {
-                if (gatewayUrl != null) {
-                  debugPrint('Gateway: $gatewayUrl');
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('পেমেন্ট শুরু করা যায়নি')),
-                  );
-                }
-              },
-            ),
+            const PaymentDueCountdownCard(),
             const SizedBox(height: 16),
             RepaintBoundary(child: _buildStatusCard()),
             const SizedBox(height: 16),

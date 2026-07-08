@@ -8,6 +8,7 @@ import 'package:smart_lock/services/model/payment_package.dart';
 import 'package:smart_lock/services/model/payment_stats.dart';
 import 'package:smart_lock/services/payment_service.dart';
 import 'package:smart_lock/storage/user_repository.dart';
+import 'package:smart_lock/theme/custom_color.dart';
 
 class DeviceExpiredBlockingDialog extends StatelessWidget {
   final DeviceItem device;
@@ -237,6 +238,61 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 20),
 
+                                // ✅ Pay Now Button (for the exact due amount)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 50,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.of(context).pop(); // Close dialog
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => ManualPaymentScreen(
+                                            dueAmount: displayedDue,
+                                            isAfter10th: false,
+                                            packageType: 'due_payment',
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1B6B3A),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    icon: const m.Icon(Icons.credit_card_rounded, size: 20, color: Colors.white),
+                                    label: const Text(
+                                      'এখনই পরিশোধ করুন',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                // Divider
+                                const Row(
+                                  children: [
+                                    Expanded(child: Divider(color: Color(0xFFEEEEEE))),
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 10),
+                                      child: Text(
+                                        'অথবা প্যাকেজ সিলেক্ট করুন',
+                                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                                      ),
+                                    ),
+                                    Expanded(child: Divider(color: Color(0xFFEEEEEE))),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 16),
+
                                 // Action Buttons - Recommended Packages
                                 Row(
                                   children: [
@@ -289,8 +345,8 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                           );
                                         },
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF980E04), // Primary Red
-                                          foregroundColor: Colors.white,            // White text
+                                          backgroundColor: const Color(0xFFE4B34E),
+                                          foregroundColor: Colors.black,
                                           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                                           shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(10),

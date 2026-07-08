@@ -6,6 +6,7 @@ import 'package:smart_lock/screens/manual_payment_screen.dart';
 import 'package:smart_lock/services/model/payment_stats.dart';
 import 'package:smart_lock/services/model/payment_package.dart';
 import 'package:smart_lock/services/payment_service.dart';
+import 'package:smart_lock/theme/custom_color.dart';
 
 Future<String?> showPaymentDuePopupIfNeeded(BuildContext context) async {
   try {
@@ -335,6 +336,53 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
 
           const SizedBox(height: 20),
 
+          // ✅ Pay Now Button (for the exact due amount)
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _isPaymentLoading
+                  ? null
+                  : () => _handlePay(widget.stats.due, 'due_payment'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B6B3A),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFF1B6B3A).withValues(alpha: 0.6),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.credit_card_rounded, size: 20),
+              label: const Text(
+                'এখনই পরিশোধ করুন',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Divider
+          const Row(
+            children: [
+              Expanded(child: Divider(color: Color(0xFFEEEEEE))),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  'অথবা প্যাকেজ সিলেক্ট করুন',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ),
+              Expanded(child: Divider(color: Color(0xFFEEEEEE))),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
           // ✅ Package options row (Dynamically loaded, defaults instantly)
           FutureBuilder<DuePopupData>(
             future: loadDuePopupData(widget.stats.unpaidBillsCount),
@@ -394,10 +442,10 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                             ? null
                             : () => _handlePay(pkg2.finalPrice, pkg2.key),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF980E04), // Primary Red
-                          foregroundColor: Colors.white,            // White text
+                          backgroundColor: const Color(0xFFE4B34E),
+                          foregroundColor: Colors.black,
                           disabledBackgroundColor:
-                              const Color(0xFF980E04).withValues(alpha: 0.6),
+                              const Color(0xFFE4B34E).withValues(alpha: 0.6),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
