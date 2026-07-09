@@ -318,6 +318,9 @@
                                                 @endif
                                             </button>
                                             <input type="hidden" name="servers[{{ $index }}][active]" value="{{ $isActive ? '1' : '0' }}" class="node-active-input">
+                                            <input type="hidden" name="servers[{{ $index }}][mode]" value="{{ $server['mode'] ?? 'traccar' }}" class="node-mode-input">
+                                            <input type="hidden" name="servers[{{ $index }}][app_key]" value="{{ $server['app_key'] ?? '' }}" class="node-key-input">
+                                            <input type="hidden" name="servers[{{ $index }}][app_secret]" value="{{ $server['app_secret'] ?? '' }}" class="node-secret-input">
                                         </td>
                                         <td style="text-align: right;">
                                             <button type="button" class="edit-node-btn" style="margin-right: 8px;">
@@ -520,6 +523,24 @@
                 </select>
             </div>
 
+            <div class="form-group">
+                <label for="modal-node-mode" class="form-label">API Integration Mode</label>
+                <select id="modal-node-mode" class="form-control" style="background-color: var(--bg-primary); cursor: pointer;">
+                    <option value="traccar">Traccar / Wox Server</option>
+                    <option value="tracksolid">Tracksolid / Jimi IoT API</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="modal-node-key" class="form-label">API App Key (Tracksolid Mode only)</label>
+                <input type="text" id="modal-node-key" class="form-control" placeholder="Enter App Key">
+            </div>
+
+            <div class="form-group">
+                <label for="modal-node-secret" class="form-label">API App Secret (Tracksolid Mode only)</label>
+                <input type="text" id="modal-node-secret" class="form-control" placeholder="Enter App Secret">
+            </div>
+
             <div class="form-group" style="margin-bottom: 24px;">
                 <label class="form-check">
                     <input type="checkbox" id="modal-node-ads" value="1" class="form-check-input" checked>
@@ -584,6 +605,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('modal-node-url').value = '';
             document.getElementById('modal-node-type').value = 'free';
             document.getElementById('modal-node-ads').checked = true;
+            document.getElementById('modal-node-mode').value = 'traccar';
+            document.getElementById('modal-node-key').value = '';
+            document.getElementById('modal-node-secret').value = '';
 
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
@@ -647,6 +671,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const url = row.querySelector('.node-url-input').value;
             const type = row.querySelector('.node-type-input').value;
             const ads = row.querySelector('.node-ads-input').value === '1';
+            const mode = row.querySelector('.node-mode-input')?.value || 'traccar';
+            const key = row.querySelector('.node-key-input')?.value || '';
+            const secret = row.querySelector('.node-secret-input')?.value || '';
 
             modal.setAttribute('data-edit-index', index);
             modalTitle.innerHTML = '<i class="fa-solid fa-server" style="color: var(--accent);"></i>Edit Server Gateway Node';
@@ -656,6 +683,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('modal-node-url').value = url;
             document.getElementById('modal-node-type').value = type;
             document.getElementById('modal-node-ads').checked = ads;
+            document.getElementById('modal-node-mode').value = mode;
+            document.getElementById('modal-node-key').value = key;
+            document.getElementById('modal-node-secret').value = secret;
 
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
@@ -689,6 +719,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const url = document.getElementById('modal-node-url').value.trim();
             const type = document.getElementById('modal-node-type').value;
             const ads = document.getElementById('modal-node-ads').checked;
+            const mode = document.getElementById('modal-node-mode').value;
+            const key = document.getElementById('modal-node-key').value.trim();
+            const secret = document.getElementById('modal-node-secret').value.trim();
 
             if (!url) {
                 alert('Please enter a valid connection URL!');
@@ -729,6 +762,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         adsBadge.style.color = 'var(--text-muted)';
                     }
                     row.querySelector('.node-ads-input').value = ads ? '1' : '0';
+
+                    // Update dynamic API mode, key and secret
+                    row.querySelector('.node-mode-input').value = mode;
+                    row.querySelector('.node-key-input').value = key;
+                    row.querySelector('.node-secret-input').value = secret;
                 }
             } else {
                 // ADD NEW ROW
@@ -781,6 +819,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             <span class="badge badge-success status-badge-indicator">Active</span>
                         </button>
                         <input type="hidden" name="servers[${nextIndex}][active]" value="1" class="node-active-input">
+                        <input type="hidden" name="servers[${nextIndex}][mode]" value="${mode}" class="node-mode-input">
+                        <input type="hidden" name="servers[${nextIndex}][app_key]" value="${key}" class="node-key-input">
+                        <input type="hidden" name="servers[${nextIndex}][app_secret]" value="${secret}" class="node-secret-input">
                     </td>
                     <td style="text-align: right;">
                         <button type="button" class="edit-node-btn" style="margin-right: 8px;">

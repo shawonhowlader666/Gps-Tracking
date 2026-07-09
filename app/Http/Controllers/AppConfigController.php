@@ -29,6 +29,9 @@ class AppConfigController extends Controller
             'type' => ['required', 'string', 'in:free,pro,paid,premium'],
             'showBannerAds' => ['nullable'],
             'message' => ['nullable', 'string', 'max:255'],
+            'mode' => ['nullable', 'string', 'in:traccar,tracksolid'],
+            'app_key' => ['nullable', 'string', 'max:255'],
+            'app_secret' => ['nullable', 'string', 'max:255'],
         ]);
 
         $servers = $this->firebaseService->getSpytrackServers();
@@ -40,6 +43,9 @@ class AppConfigController extends Controller
             'showBannerAds' => $request->has('showBannerAds') ? (bool)$request->boolean('showBannerAds') : true,
             'message' => $data['message'] ?: '',
             'active' => true,
+            'mode' => $data['mode'] ?? 'traccar',
+            'app_key' => $data['app_key'] ?? '',
+            'app_secret' => $data['app_secret'] ?? '',
         ];
 
         // Append to the end of the array (bottom in Firebase)
@@ -61,6 +67,9 @@ class AppConfigController extends Controller
             'type' => ['required', 'string', 'in:free,pro,paid,premium'],
             'showBannerAds' => ['nullable'],
             'message' => ['nullable', 'string', 'max:255'],
+            'mode' => ['nullable', 'string', 'in:traccar,tracksolid'],
+            'app_key' => ['nullable', 'string', 'max:255'],
+            'app_secret' => ['nullable', 'string', 'max:255'],
         ]);
 
         $servers = $this->firebaseService->getSpytrackServers();
@@ -78,6 +87,9 @@ class AppConfigController extends Controller
             'showBannerAds' => $request->has('showBannerAds') ? (bool)$request->boolean('showBannerAds') : true,
             'message' => $data['message'] ?: '',
             'active' => $isActive,
+            'mode' => $data['mode'] ?? 'traccar',
+            'app_key' => $data['app_key'] ?? '',
+            'app_secret' => $data['app_secret'] ?? '',
         ];
 
         try {

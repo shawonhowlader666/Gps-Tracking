@@ -133,6 +133,9 @@ class WhitelabelAppController extends Controller
                 'type' => $srv['type'] ?? 'free',
                 'show_ads' => !empty($srv['show_ads']),
                 'active' => $isActive,
+                'mode' => $srv['mode'] ?? 'traccar',
+                'app_key' => $srv['app_key'] ?? '',
+                'app_secret' => $srv['app_secret'] ?? '',
             ];
             
             $allServers[] = $serverItem;

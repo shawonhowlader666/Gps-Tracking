@@ -87,7 +87,7 @@
                                     </form>
                                 </td>
                                 <td style="text-align: right;">
-                                    <div style="display: inline-flex; gap: 8px; justify-content: flex-end; align-items: center;">
+                                     <div style="display: inline-flex; gap: 8px; justify-content: flex-end; align-items: center;">
                                          <!-- Edit button populated with data attributes -->
                                          <button type="button" class="edit-server-btn" 
                                                  data-index="{{ $index }}"
@@ -96,6 +96,9 @@
                                                  data-type="{{ $server['type'] ?? 'free' }}"
                                                  data-ads="{{ !empty($server['showBannerAds']) ? '1' : '0' }}"
                                                  data-message="{{ $server['message'] ?? '' }}"
+                                                 data-mode="{{ $server['mode'] ?? 'traccar' }}"
+                                                 data-key="{{ $server['app_key'] ?? '' }}"
+                                                 data-secret="{{ $server['app_secret'] ?? '' }}"
                                                  style="color: #60a5fa; background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.15); padding: 5px 8px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s; cursor: pointer;"
                                                  title="Edit Server">
                                              <i class="fa-solid fa-pen-to-square"></i>
@@ -136,6 +139,22 @@
                                                     <span style="color: var(--text-secondary);">Banner Ads:</span>
                                                     <span style="font-weight: 700; color: var(--text-primary);">{{ !empty($server['showBannerAds']) ? 'Enabled' : 'Disabled' }}</span>
                                                 </div>
+                                                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
+                                                    <span style="color: var(--text-secondary);">API Mode:</span>
+                                                    <span style="font-weight: 700; color: var(--text-primary); text-transform: uppercase;">{{ $server['mode'] ?? 'traccar' }}</span>
+                                                </div>
+                                                @if(!empty($server['app_key']))
+                                                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
+                                                        <span style="color: var(--text-secondary);">App Key:</span>
+                                                        <span style="font-weight: 600; color: var(--text-primary); font-family: monospace; font-size: 11px;">{{ substr($server['app_key'], 0, 12) }}...</span>
+                                                    </div>
+                                                @endif
+                                                @if(!empty($server['app_secret']))
+                                                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
+                                                        <span style="color: var(--text-secondary);">App Secret:</span>
+                                                        <span style="font-weight: 600; color: var(--text-primary); font-family: monospace; font-size: 11px;">{{ substr($server['app_secret'], 0, 12) }}...</span>
+                                                    </div>
+                                                @endif
                                             </div>
                                         </div>
 
@@ -201,6 +220,24 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="add-mode" class="form-label">API Integration Mode</label>
+                    <select name="mode" id="add-mode" class="form-control" style="background-color: var(--bg-primary); cursor: pointer;">
+                        <option value="traccar" {{ old('mode') == 'traccar' ? 'selected' : '' }}>Traccar / Wox Server</option>
+                        <option value="tracksolid" {{ old('mode') == 'tracksolid' ? 'selected' : '' }}>Tracksolid / Jimi IoT API</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="add-key" class="form-label">API App Key (Tracksolid Mode only)</label>
+                    <input type="text" name="app_key" id="add-key" class="form-control" placeholder="Enter App Key" value="{{ old('app_key') }}">
+                </div>
+
+                <div class="form-group">
+                    <label for="add-secret" class="form-label">API App Secret (Tracksolid Mode only)</label>
+                    <input type="text" name="app_secret" id="add-secret" class="form-control" placeholder="Enter App Secret" value="{{ old('app_secret') }}">
+                </div>
+
+                <div class="form-group">
                     <label class="form-check">
                         <input type="checkbox" name="showBannerAds" id="add-ads" value="1" class="form-check-input" checked>
                         <span>Enable Mobile Ads on this Node</span>
@@ -258,6 +295,24 @@
                         <option value="pro">Pro Node</option>
                         <option value="premium">Premium Node</option>
                     </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit-mode" class="form-label">API Integration Mode</label>
+                    <select name="mode" id="edit-mode" class="form-control" style="background-color: var(--bg-primary); cursor: pointer;">
+                        <option value="traccar">Traccar / Wox Server</option>
+                        <option value="tracksolid">Tracksolid / Jimi IoT API</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit-key" class="form-label">API App Key (Tracksolid Mode only)</label>
+                    <input type="text" name="app_key" id="edit-key" class="form-control" placeholder="Enter App Key">
+                </div>
+
+                <div class="form-group">
+                    <label for="edit-secret" class="form-label">API App Secret (Tracksolid Mode only)</label>
+                    <input type="text" name="app_secret" id="edit-secret" class="form-control" placeholder="Enter App Secret">
                 </div>
 
                 <div class="form-group">
@@ -341,6 +396,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const type = this.getAttribute('data-type');
             const ads = this.getAttribute('data-ads') === '1';
             const message = this.getAttribute('data-message');
+            const mode = this.getAttribute('data-mode') || 'traccar';
+            const key = this.getAttribute('data-key') || '';
+            const secret = this.getAttribute('data-secret') || '';
 
             // Set Form action dynamically to /apps/{index}
             editForm.action = `/apps/${index}`;
@@ -351,6 +409,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit-type').value = type;
             document.getElementById('edit-ads').checked = ads;
             document.getElementById('edit-message').value = message;
+            document.getElementById('edit-mode').value = mode;
+            document.getElementById('edit-key').value = key;
+            document.getElementById('edit-secret').value = secret;
 
             openModal(editModal);
         });
