@@ -1,14 +1,29 @@
-FROM richarvey/nginx-php-fpm:3.1.6
+FROM mlocati/php-extension-installer:latest AS installer
+FROM php:8.3-fpm
 
-# Set Nginx web root directory to Laravel public folder
-ENV WEBROOT /var/www/html/public
+COPY --from=installer /usr/bin/install-php-extensions /usr/bin/
 
-# Copy application source code
+RUN apt-get update && apt-get install -y \
+    git curl libpng-dev libonig-dev libxml2-dev \
+    libzip-dev libicu-dev zip unzip nodejs npm \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# install-php-extensions downloads pre-built binaries — no compilation
+RUN install-php-extensions grpc protobuf intl gd zip bcmath pdo_mysql mbstring exif pcntl
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www
+
+COPY composer.json composer.lock* ./
+RUN composer install --no-scripts --no-autoloader --prefer-dist
+
 COPY . .
+RUN composer dump-autoload --optimize
 
-# Run Composer installation automatically during container boot/build
-ENV COMPOSER_AS_ROOT 1
-ENV SKIP_COMPOSER 0
+RUN chown -R www-data:www-data /var/www \
+    && chmod -R 755 /var/www/storage \
+    && chmod -R 755 /var/www/bootstrap/cache
 
-# Set write permissions for Laravel storage and cache
-RUN chmod -R 777 storage bootstrap/cache
+EXPOSE 9000
+CMD ["php-fpm"]
