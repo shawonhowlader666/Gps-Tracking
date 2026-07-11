@@ -15,6 +15,7 @@ import '../constants/app_constants.dart';
 import '../services/payment_service.dart';
 import '../widgets/device_expired_dialog.dart';
 import '../widgets/address.dart';
+import '../widgets/payment_due_popup.dart';
 
 // ─── Status enum ────────────────────────────────────────────────────────────
 enum DeviceStatus { running, idle, stop, offline, expired }
@@ -80,6 +81,7 @@ class _DevicePageState extends State<DevicePage> {
   // ── Data helpers ──────────────────────────────────────────────────────────
   Future<void> _loadDueAmount() async {
     try {
+      await PaymentService.updateBillingExpirationStatus().catchError((_) {});
       final stats = await PaymentService.getStats();
       if (stats != null && mounted && !_isDisposed) {
         totalDue.value = stats.due;
@@ -350,8 +352,7 @@ class _DevicePageState extends State<DevicePage> {
     return speed > 0;
   }
 
-  /// Whether the device's subscription has expired.
-  bool _isExpired(DeviceItem device) {
+  bool _isDeviceExpired(DeviceItem device) {
     try {
       final expiry = device.deviceData?.expirationDate?.toString();
       if (expiry == null || expiry.isEmpty) return false;
@@ -361,6 +362,25 @@ class _DevicePageState extends State<DevicePage> {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Billing API says is_expired: true → hard block
+  bool _isExpired(DeviceItem device) {
+    if (!PaymentService.enableBillAlert) return false;
+    final id = device.id;
+    if (id == null) return false;
+    return PaymentService.isVehicleExpired(id);
+  }
+
+  /// Billing API says is_expired: false BUT days_remaining <= 7 → show warning popup.
+  /// Also shows popup if due > 0 (handled inside showPaymentDuePopupIfNeeded).
+  bool _isExpiringToday(DeviceItem device) {
+    if (!PaymentService.enableBillAlert) return false;
+    final id = device.id;
+    if (id == null) return false;
+    if (PaymentService.isVehicleExpired(id)) return false; // already hard-blocked
+    final days = PaymentService.vehicleDaysRemaining(id);
+    return days <= 7; // warning window: 7 days before expiry
   }
 
   /// Main status resolver — priority order matters:
@@ -677,13 +697,19 @@ class _DevicePageState extends State<DevicePage> {
     final statusText = _getStatusText(status);
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         if (_isExpired(device)) {
           showDialog(
             context: context,
             barrierDismissible: false,
             builder: (context) => DeviceExpiredBlockingDialog(device: device),
           );
+        } else if (_isExpiringToday(device)) {
+          final result = await showPaymentDuePopupIfNeeded(context, forceShow: true);
+          // X বা snooze চাপলে ট্র্যাকিং পেজে নিয়ে যাও
+          if (result != 'go_to_payment' && result != 'payment_done' && context.mounted) {
+            Get.to(() => TrackDevicePage(device.id, device.name, device));
+          }
         } else {
           Get.to(() => TrackDevicePage(device.id, device.name, device));
         }

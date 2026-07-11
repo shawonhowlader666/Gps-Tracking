@@ -182,26 +182,27 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                           builder: (context, snapshot) {
                             final data = snapshot.data ?? ExpiredDialogData(
                               null,
-                              getRecommendedPackages(1),
+                              [],
                             );
 
                             final stats = data.stats;
                             final due = stats?.due ?? 0.0;
                             final unpaidBillsCount = stats?.unpaidBillsCount ?? 1;
 
-                            final pkg1 = data.packages[0];
-                            final pkg2 = data.packages[1];
+                            final hasPackages = data.packages.isNotEmpty;
+                            final pkg1 = hasPackages ? data.packages[0] : null;
+                            final pkg2 = hasPackages && data.packages.length > 1 ? data.packages[1] : pkg1;
 
-                            // Always show at least 200.00 BDT for outstanding expired dues
-                            final displayedDue = due > 0 ? due : 200.0;
+                            // Display exact due amount from server
+                            final displayedDue = due;
 
                             final dynamicDescription = due > 0
-                                ? 'কানেকশন সচল রাখতে অনুগ্রহ করে বিল পরিশোধ করুন। আপনার মোট $unpaidBillsCount মাসের বিল (৳${due.toStringAsFixed(0)}) বকেয়া রয়েছে।'
+                                  ? 'কানেকশন সচল রাখতে অনুগ্রহ করে বিল পরিশোধ করুন। আপনার মোট $unpaidBillsCount মাসের বিল (৳${due.toStringAsFixed(0)}) বকেয়া রয়েছে।'
                                 : 'কানেকশন সচল রাখতে অনুগ্রহ করে বিল পরিশোধ করুন। ১ বছরের অগ্রিম পেমেন্টে ২৫% ডিসকাউন্ট রয়েছে।';
 
                             return Column(
                               children: [
-                                // Due Amount Row (Always visible, defaults to ৳200)
+                                // Due Amount Row (Always visible)
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 16),
                                   child: Row(
@@ -274,97 +275,99 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                   ),
                                 ),
 
-                                const SizedBox(height: 16),
+                                if (hasPackages) ...[
+                                  const SizedBox(height: 16),
 
-                                // Divider
-                                const Row(
-                                  children: [
-                                    Expanded(child: Divider(color: Color(0xFFEEEEEE))),
-                                    Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 10),
-                                      child: Text(
-                                        'অথবা প্যাকেজ সিলেক্ট করুন',
-                                        style: TextStyle(fontSize: 11, color: Colors.grey),
-                                      ),
-                                    ),
-                                    Expanded(child: Divider(color: Color(0xFFEEEEEE))),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 16),
-
-                                // Action Buttons - Recommended Packages
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        onPressed: () {
-                                          Navigator.of(context).pop(); // Close dialog
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (_) => ManualPaymentScreen(
-                                                dueAmount: pkg1.finalPrice,
-                                                isAfter10th: false,
-                                                packageType: pkg1.key,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF1B6B3A),
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10),
-                                          ),
-                                          elevation: 0,
-                                        ),
+                                  // Divider
+                                  const Row(
+                                    children: [
+                                      Expanded(child: Divider(color: Color(0xFFEEEEEE))),
+                                      Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 10),
                                         child: Text(
-                                          pkg1.buttonText,
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          textAlign: TextAlign.center,
+                                          'অথবা প্যাকেজ সিলেক্ট করুন',
+                                          style: TextStyle(fontSize: 11, color: Colors.grey),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        onPressed: () {
-                                          Navigator.of(context).pop(); // Close dialog
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (_) => ManualPaymentScreen(
-                                                dueAmount: pkg2.finalPrice,
-                                                isAfter10th: false,
-                                                packageType: pkg2.key,
+                                      Expanded(child: Divider(color: Color(0xFFEEEEEE))),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 16),
+
+                                  // Action Buttons - Recommended Packages
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () {
+                                            Navigator.of(context).pop(); // Close dialog
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => ManualPaymentScreen(
+                                                  dueAmount: pkg1!.finalPrice,
+                                                  isAfter10th: false,
+                                                  packageType: pkg1.key,
+                                                ),
                                               ),
+                                            );
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF1B6B3A),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(10),
                                             ),
-                                          );
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFE4B34E),
-                                          foregroundColor: Colors.black,
-                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10),
+                                            elevation: 0,
                                           ),
-                                          elevation: 0,
-                                        ),
-                                        child: Text(
-                                          pkg2.buttonText,
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
+                                          child: Text(
+                                            pkg1!.buttonText,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
                                           ),
-                                          textAlign: TextAlign.center,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () {
+                                            Navigator.of(context).pop(); // Close dialog
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => ManualPaymentScreen(
+                                                  dueAmount: pkg2!.finalPrice,
+                                                  isAfter10th: false,
+                                                  packageType: pkg2.key,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFFE4B34E),
+                                            foregroundColor: Colors.black,
+                                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            elevation: 0,
+                                          ),
+                                          child: Text(
+                                            pkg2!.buttonText,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
                             );
                           },
@@ -458,3 +461,188 @@ Future<ExpiredDialogData> loadExpiredDialogData() async {
   final packages = await fetchAndRecommendPackages(unpaidBillsCount);
   return ExpiredDialogData(stats, packages);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DeviceExpiryReminderDialog — shown when device expires today (days remaining = 0)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class DeviceExpiryReminderDialog extends StatelessWidget {
+  final DeviceItem device;
+
+  const DeviceExpiryReminderDialog({super.key, required this.device});
+
+  Future<void> _launchWhatsApp(BuildContext context, String number) async {
+    if (number.isEmpty) return;
+    final String clean = number.replaceAll(RegExp(r'[^0-9]'), '');
+    final String rawIdentifier = UserRepository.getEmail() ?? '';
+    String cleanIdentifier = rawIdentifier;
+    if (rawIdentifier.contains(')')) {
+      cleanIdentifier = rawIdentifier.substring(0, rawIdentifier.indexOf(')')).trim();
+    } else if (rawIdentifier.contains(' - ')) {
+      cleanIdentifier = rawIdentifier.substring(0, rawIdentifier.indexOf(' - ')).trim();
+    } else if (rawIdentifier.contains('@')) {
+      cleanIdentifier = rawIdentifier.split('@').first.trim();
+    }
+    final String message =
+        "Hello, I need help renewing my device: ${device.name ?? ''} ($cleanIdentifier) — expires today!";
+    final Uri uri = Uri.parse('https://wa.me/$clean?text=${Uri.encodeComponent(message)}');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('WhatsApp launch error: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String whatsapp = WHATS_APP;
+
+    return PopScope(
+      canPop: true,
+      child: Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.orange.withValues(alpha: 0.25),
+                  blurRadius: 30,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF2C2C3E), Color(0xFFE65100)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        const m.Icon(
+                          Icons.access_time_rounded,
+                          color: Color(0xFFFFD700),
+                          size: 48,
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'মেয়াদ শেষ হচ্ছে আজ!',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Expires Today',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Body
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        Text(
+                          device.name ?? 'Device',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF212121),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF3E0),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE65100).withValues(alpha: 0.4)),
+                          ),
+                          child: const Text(
+                            'এই ডিভাইসটির সার্ভিসের মেয়াদ আজ শেষ হয়ে যাচ্ছে।\nবিল পরিশোধ না করলে ডিভাইসটি বন্ধ হয়ে যাবে।',
+                            style: TextStyle(
+                              color: Color(0xFFE65100),
+                              fontSize: 13,
+                              height: 1.5,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // WhatsApp button
+                        if (whatsapp.isNotEmpty)
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _launchWhatsApp(context, whatsapp),
+                              icon: const m.Icon(Icons.chat_rounded, size: 18),
+                              label: const Text('WhatsApp-এ যোগাযোগ করুন'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF25D366),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                        const SizedBox(height: 10),
+
+                        // Remind in 7 days button
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const m.Icon(Icons.notifications_outlined, size: 18),
+                            label: const Text('৭ দিন পর মনে করিয়ে দিন'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF757575),
+                              side: const BorderSide(color: Color(0xFFBDBDBD)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

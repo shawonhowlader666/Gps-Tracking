@@ -152,7 +152,7 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
       case _CardState.noDue:
         return const SizedBox.shrink(); // hide if no due
       case _CardState.error:
-        return _buildShell(child: _buildError());
+        return const SizedBox.shrink(); // hide on error/offline
       case _CardState.due:
         return _buildShell(child: _buildDueContent());
     }

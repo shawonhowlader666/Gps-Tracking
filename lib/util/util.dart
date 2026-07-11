@@ -16,6 +16,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:smart_lock/theme/custom_color.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 import 'package:smart_lock/screens/data_controller/data_controller.dart';
+import 'package:smart_lock/services/payment_service.dart';
 
 class Util {
   static final Map<String, BitmapDescriptor> _markerIconCache = {};
@@ -851,7 +852,7 @@ class Util {
     }
   }
 
-  static bool isExpired(DeviceItem device) {
+  static bool _isDeviceExpired(DeviceItem device) {
     try {
       final expiry = device.deviceData?.expirationDate?.toString();
       if (expiry == null || expiry.isEmpty) return false;
@@ -861,6 +862,14 @@ class Util {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Billing API says is_expired: true for this vehicle → hard block
+  static bool isExpired(DeviceItem device) {
+    if (!PaymentService.enableBillAlert) return false;
+    final id = device.id;
+    if (id == null) return false;
+    return PaymentService.isVehicleExpired(id);
   }
 
   static bool isDeviceOnline(DeviceItem device) {

@@ -8,12 +8,30 @@ import 'package:smart_lock/services/model/payment_package.dart';
 import 'package:smart_lock/services/payment_service.dart';
 import 'package:smart_lock/theme/custom_color.dart';
 
-Future<String?> showPaymentDuePopupIfNeeded(BuildContext context) async {
+Future<String?> showPaymentDuePopupIfNeeded(BuildContext context,
+    {bool forceShow = false}) async {
   try {
     final stats = await PaymentService.getStats();
-    final expirationInfo = await _fetchExpirationInfo();
 
-    if (!context.mounted) return null;
+    debugPrint('[POPUP] stats: due=${stats?.due}, enableBillAlert=${stats?.enableBillAlert}');
+
+    if (!PaymentService.enableBillAlert) {
+      debugPrint('[POPUP] BLOCKED: enableBillAlert is false (from service)');
+      return null;
+    }
+
+    if (stats != null && !stats.enableBillAlert) {
+      debugPrint('[POPUP] BLOCKED: stats.enableBillAlert is false');
+      return null;
+    }
+
+    final expirationInfo = await _fetchExpirationInfo();
+    debugPrint('[POPUP] expirationInfo: $expirationInfo');
+
+    if (!context.mounted) {
+      debugPrint('[POPUP] BLOCKED: context not mounted');
+      return null;
+    }
 
     int daysRemaining = 999;
     bool isExpired = false;
@@ -24,48 +42,30 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context) async {
     }
 
     final double due = stats?.due ?? 0;
+    debugPrint('[POPUP] due=$due, isExpired=$isExpired, daysRemaining=$daysRemaining, forceShow=$forceShow');
 
-    // Alert triggers if there is a due balance OR if expiration is within 5 days OR is already expired
-    final bool shouldAlert = due > 0 || isExpired || (daysRemaining <= 5);
-    if (!shouldAlert) return null;
+    // Alert triggers: server says due balance OR server says expired OR days running out (server-driven: days_remaining <= 0)
+    // forceShow=true bypasses this (e.g. called from device tap when WOX says expired)
+    final bool shouldAlert =
+        forceShow || due > 0 || isExpired || daysRemaining <= 0;
+    if (!shouldAlert) {
+      debugPrint('[POPUP] BLOCKED: shouldAlert is false');
+      return null;
+    }
 
     // Use stats fallback if stats was null
     final resolvedStats = stats ??
-        PaymentStats(due: 0, totalBilled: 0, totalPaid: 0, unpaidBillsCount: 0);
-
-    final todayDay = DateTime.now().day;
-    final bool isAfter10th = todayDay > 10;
-
-    // ✅ After 10th: loop — ManualPaymentScreen থেকে back করলে আবার popup দেখাবে
-    if (isAfter10th) {
-      while (true) {
-        if (!context.mounted) return null;
-
-        final result = await showGeneralDialog<String>(
-          context: context,
-          barrierDismissible: false,
-          barrierColor: Colors.black.withValues(alpha: 0.75),
-          barrierLabel: 'PaymentDue',
-          transitionDuration: const Duration(milliseconds: 350),
-          transitionBuilder: (ctx, anim, _, child) {
-            return ScaleTransition(
-              scale: CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
-              child: FadeTransition(opacity: anim, child: child),
-            );
-          },
-          pageBuilder: (ctx, _, __) => PaymentDuePopup(
-            stats: resolvedStats,
-            expirationInfo: expirationInfo,
-            isAfter10th: true,
-          ),
+        PaymentStats(
+          due: 0,
+          totalBilled: 0,
+          totalPaid: 0,
+          unpaidBillsCount: 0,
+          enableBillAlert: true,
         );
 
-        // ✅ 'payment_done' = WhatsApp এ send হয়েছে → loop break
-        if (result == 'payment_done') return 'payment_done';
-      }
-    }
+    // Final warning mode: server says is_expired = true (no hardcoded day threshold)
+    final bool isAfter10th = isExpired;
 
-    // ✅ 1–10 তারিখ: একবার দেখাও, snooze করা যাবে
     return await showGeneralDialog<String>(
       context: context,
       barrierDismissible: false,
@@ -81,14 +81,11 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context) async {
       pageBuilder: (ctx, _, __) => PaymentDuePopup(
         stats: resolvedStats,
         expirationInfo: expirationInfo,
-        isAfter10th: false,
+        isAfter10th: isAfter10th,
       ),
     );
-  } on TimeoutException {
-    return null;
-  } on SocketException {
-    return null;
-  } catch (_) {
+  } catch (e) {
+    debugPrint('Error showing payment due popup: $e');
     return null;
   }
 }
@@ -165,15 +162,13 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
   }
 
   void _handleSnooze() {
-    if (!widget.isAfter10th) {
-      Navigator.of(context).pop('snoozed');
-    }
+    Navigator.of(context).pop('snoozed');
   }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !widget.isAfter10th,
+      canPop: false,
       onPopInvoked: (didPop) {},
       child: Center(
         child: Material(
@@ -193,11 +188,34 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: Stack(
                 children: [
-                  _buildHeader(),
-                  _buildBody(),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildHeader(),
+                      _buildBody(),
+                    ],
+                  ),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: _handleSnooze,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -261,7 +279,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                 border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
               ),
               child: const Text(
-                '⛔  বিল পরিশোধ না করলে এই বার্তা বন্ধ হবে না',
+                '⛔  বিল পরিশোধ না করলে লাইভ ট্র্যাকিং বন্ধ থাকবে',
                 style: TextStyle(
                   color: Color(0xFFFF8A80),
                   fontSize: 11,
@@ -387,11 +405,12 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
           FutureBuilder<DuePopupData>(
             future: loadDuePopupData(widget.stats.unpaidBillsCount),
             builder: (context, snapshot) {
-              final data = snapshot.data ?? DuePopupData(
-                getRecommendedPackages(widget.stats.unpaidBillsCount),
-              );
+              final data = snapshot.data;
+              if (data == null || data.packages.isEmpty) {
+                return const SizedBox.shrink();
+              }
               final pkg1 = data.packages[0];
-              final pkg2 = data.packages[1];
+              final pkg2 = data.packages.length > 1 ? data.packages[1] : pkg1;
 
               return Row(
                 children: [
@@ -403,7 +422,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                             ? null
                             : () => _handlePay(pkg1.finalPrice, pkg1.key),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1B6B3A),
+                           backgroundColor: const Color(0xFF1B6B3A),
                           foregroundColor: Colors.white,
                           disabledBackgroundColor:
                               const Color(0xFF1B6B3A).withValues(alpha: 0.6),
@@ -479,30 +498,30 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
 
           const SizedBox(height: 10),
 
-          // Snooze: শুধু 1–10 তারিখ
-          if (!widget.isAfter10th)
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton.icon(
-                onPressed: _handleSnooze,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF555555),
-                  side: const BorderSide(color: Color(0xFFDDDDDD)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                icon: const Icon(Icons.access_time, size: 18),
-                label: const Text(
-                  '৭ দিন পরে পুনরায় মনে করিয়ে দিন',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          // Snooze
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: _handleSnooze,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF555555),
+                side: const BorderSide(color: Color(0xFFDDDDDD)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
+              icon: const Icon(Icons.access_time, size: 18),
+              label: const Text(
+                'পরে মনে করিয়ে দিন',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
             ),
+          ),
 
           // After 10th: forced warning
-          if (widget.isAfter10th)
+          if (widget.isAfter10th) ...[
+            const SizedBox(height: 10),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -531,6 +550,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                 ],
               ),
             ),
+          ],
         ],
       ),
     );

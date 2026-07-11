@@ -12,12 +12,79 @@ class PaymentService {
   static String? _token;
   static bool _isLoggingIn = false;
 
+  static bool _isUserExpired = false;
+  static DateTime? _userExpirationDate;
+  static int _daysRemaining = 999;
+  static bool _enableBillAlert = true;
+
+  static bool get isUserExpired => _isUserExpired;
+  static set isUserExpired(bool val) => _isUserExpired = val;
+  static DateTime? get userExpirationDate => _userExpirationDate;
+  static int get daysRemaining => _daysRemaining;
+  static set daysRemaining(int val) => _daysRemaining = val;
+
+  static bool get enableBillAlert => _enableBillAlert;
+  static set enableBillAlert(bool val) => _enableBillAlert = val;
+
+  static bool _sessionSnoozed = false;
+  static bool get sessionSnoozed => _sessionSnoozed;
+  static set sessionSnoozed(bool val) => _sessionSnoozed = val;
+
+  static bool get isForcedBlocked => _isUserExpired && _enableBillAlert;
+
+  // ── Per-vehicle expiration cache (from billing API) ───────────────────────
+  // Key: GPSWOX device ID (int)
+  // Value: {is_expired: bool, days_remaining: int}
+  static final Map<int, Map<String, dynamic>> _vehicleExpirationCache = {};
+
+  /// Returns true if billing API says this vehicle is expired.
+  /// Falls back to false if not yet fetched.
+  static bool isVehicleExpired(int vehicleId) {
+    if (!_enableBillAlert) return false;
+    final cached = _vehicleExpirationCache[vehicleId];
+    if (cached == null) return false;
+    return cached['is_expired'] == true;
+  }
+
+  /// Returns days_remaining for this vehicle. 999 if not fetched.
+  static int vehicleDaysRemaining(int vehicleId) {
+    final cached = _vehicleExpirationCache[vehicleId];
+    return (cached?['days_remaining'] as int?) ?? 999;
+  }
+
+  /// Fetch expiration info for a single vehicle and cache it.
+  static Future<void> updateVehicleExpiration(int vehicleId) async {
+    try {
+      final data = await _getJson('/vehicle/$vehicleId/expiration');
+      if (data != null) {
+        _vehicleExpirationCache[vehicleId] = {
+          'is_expired': data['is_expired'] == true || data['is_expired'] == 'true',
+          'days_remaining': (data['days_remaining'] as int?) ?? 999,
+          'expiration_date': data['expiration_date'],
+          'human_readable': data['human_readable'],
+        };
+      }
+    } catch (_) {
+      // Keep previous cache entry on failure — do not clear
+    }
+  }
+
+  /// Fetch expiration info for ALL vehicles concurrently.
+  /// Called after device list loads — runs in background, does NOT block UI.
+  static Future<void> updateAllVehicleExpirations(List<int> vehicleIds) async {
+    if (vehicleIds.isEmpty) return;
+    await Future.wait(
+      vehicleIds.map((id) => updateVehicleExpiration(id)),
+    );
+  }
+
   /// Login to payment server
   static Future<bool> login() async {
     if (_isLoggingIn) {
       await Future.delayed(const Duration(milliseconds: 500));
       if (_token == null) {
-        throw const HttpException("Already logging in, but no token acquired yet.");
+        throw const HttpException(
+            "Already logging in, but no token acquired yet.");
       }
       return true;
     }
@@ -26,7 +93,8 @@ class PaymentService {
       final email = UserRepository.getEmail();
       final password = UserRepository.getPassword();
       if (email == null || password == null) {
-        throw const HttpException("User email or password is not saved in preferences.");
+        throw const HttpException(
+            "User email or password is not saved in preferences.");
       }
 
       final response = await http
@@ -45,7 +113,8 @@ class PaymentService {
         _token = jsonDecode(response.body)['token'];
         return true;
       }
-      throw HttpException("Billing Auth Failed (Status: ${response.statusCode}, Response: ${response.body})");
+      throw HttpException(
+          "Billing Auth Failed (Status: ${response.statusCode}, Response: ${response.body})");
     } on TimeoutException {
       rethrow;
     } on SocketException {
@@ -94,7 +163,8 @@ class PaymentService {
     }
 
     if (response.statusCode == 200) return jsonDecode(response.body);
-    throw HttpException("Server Error (Status: ${response.statusCode}, Response: ${response.body})");
+    throw HttpException(
+        "Server Error (Status: ${response.statusCode}, Response: ${response.body})");
   }
 
   /// Generic POST with auto-retry on 401
@@ -123,14 +193,19 @@ class PaymentService {
     }
 
     if (response.statusCode == 200) return jsonDecode(response.body);
-    throw HttpException("Server Error (Status: ${response.statusCode}, Response: ${response.body})");
+    throw HttpException(
+        "Server Error (Status: ${response.statusCode}, Response: ${response.body})");
   }
 
   /// Get payment statistics
   static Future<PaymentStats?> getStats() async {
     try {
       final data = await _getJson('/stats');
-      if (data != null) return PaymentStats.fromJson(data);
+      if (data != null) {
+        final stats = PaymentStats.fromJson(data);
+        _enableBillAlert = stats.enableBillAlert;
+        return stats;
+      }
     } on TimeoutException {
       rethrow;
     } on SocketException {
@@ -177,13 +252,47 @@ class PaymentService {
   /// Returns: { expiration_date, is_expired, days_remaining, human_readable }
   static Future<Map<String, dynamic>?> getExpirationInfo() async {
     try {
-      return await _getJson('/user/expiration');
+      final info = await _getJson('/user/expiration');
+      if (info != null) {
+        _isUserExpired =
+            info['is_expired'] == true || info['is_expired'] == 'true';
+        final rawDate = info['expiration_date']?.toString();
+        if (rawDate != null) {
+          _userExpirationDate = DateTime.tryParse(rawDate);
+        }
+        _daysRemaining = (info['days_remaining'] as int?) ?? 999;
+      }
+      return info;
     } on TimeoutException {
       rethrow;
     } on SocketException {
       rethrow;
     } catch (e) {
       rethrow;
+    }
+  }
+
+  /// Update cached billing expiration status of user
+  static Future<void> updateBillingExpirationStatus() async {
+    try {
+      final info = await getExpirationInfo();
+      if (info != null) {
+        _isUserExpired =
+            info['is_expired'] == true || info['is_expired'] == 'true';
+        final rawDate = info['expiration_date']?.toString();
+        if (rawDate != null) {
+          _userExpirationDate = DateTime.tryParse(rawDate);
+        }
+        _daysRemaining = (info['days_remaining'] as int?) ?? 999;
+      } else {
+        _isUserExpired = false;
+        _userExpirationDate = null;
+        _daysRemaining = 999;
+      }
+    } catch (_) {
+      _isUserExpired = false;
+      _userExpirationDate = null;
+      _daysRemaining = 999;
     }
   }
 

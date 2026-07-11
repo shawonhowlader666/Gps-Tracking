@@ -9,6 +9,7 @@ import '../widgets/payment_due_card.dart';
 import 'data_controller/data_controller.dart';
 import 'package:smart_lock/screens/web_view.dart';
 import 'package:smart_lock/screens/payment_list.dart';
+import 'package:smart_lock/services/payment_service.dart';
 
 // ── inactive সরানো হয়েছে ──
 enum VehicleStatus { running, idle, stop, offline, expired }
@@ -215,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return iconColor == 'yellow' || iconColor == 'green';
   }
 
-  bool _isExpired(DeviceItem device) {
+  bool _isDeviceExpired(DeviceItem device) {
     try {
       final expiry = device.deviceData?.expirationDate?.toString();
       if (expiry == null || expiry.isEmpty) return false;
@@ -225,6 +226,14 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Billing API says is_expired: true → hard block
+  bool _isExpired(DeviceItem device) {
+    if (!PaymentService.enableBillAlert) return false;
+    final id = device.id;
+    if (id == null) return false;
+    return PaymentService.isVehicleExpired(id);
   }
 
   // ══════════════════════════════════════════════════════
@@ -238,6 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: _buildAppBar(),
       body: RefreshIndicator(
         onRefresh: () async {
+          await PaymentService.updateBillingExpirationStatus().catchError((_) {});
           await homeController.refreshData();
           _calculateStatusCounts();
         },

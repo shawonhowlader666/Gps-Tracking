@@ -22,6 +22,8 @@ import 'package:smart_lock/services/road_snap_service.dart';
 import 'package:smart_lock/util/util.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:smart_lock/storage/user_repository.dart';
+import 'package:smart_lock/services/payment_service.dart';
+import 'package:smart_lock/widgets/device_expired_dialog.dart';
 
 import 'common_method.dart';
 
@@ -428,6 +430,38 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
     _loadMapStyle();
     _initializeAll();
+
+    // ── Billing expiration guard ────────────────────────────────────────
+    // Fresh fetch on entry (fixes race condition from tap-time cache miss)
+    // + periodic check every 30s — kicks user out if admin expires the device
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkExpiration());
+    _expirationTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _checkExpiration(),
+    );
+  }
+
+  Timer? _expirationTimer;
+
+  Future<void> _checkExpiration() async {
+    final id = widget.id;
+    if (id == null || !mounted || _isDisposed) return;
+    // Fetch fresh data from billing server
+    await PaymentService.updateVehicleExpiration(id);
+    if (!mounted || _isDisposed) return;
+    if (PaymentService.isVehicleExpired(id)) {
+      // Kick out: go back and show blocking dialog
+      Navigator.of(context).pop();
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => DeviceExpiredBlockingDialog(
+            device: widget.device ?? DeviceItem(),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _initializeAll() async {

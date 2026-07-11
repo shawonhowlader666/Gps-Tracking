@@ -13,8 +13,10 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:smart_lock/storage/user_repository.dart';
 import 'package:smart_lock/widgets/device_expired_dialog.dart';
+import 'package:smart_lock/widgets/payment_due_popup.dart';
 import 'package:smart_lock/util/util.dart';
 import 'package:smart_lock/screens/data_controller/data_controller.dart';
+import 'package:smart_lock/services/payment_service.dart';
 
 class DeviceDetailsScreen extends StatefulWidget {
   final DeviceItem device;
@@ -306,7 +308,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
     Get.to(() => PlaybackScreen(id: d.id, name: d.name, device: d));
   }
 
-  bool _isExpired(DeviceItem device) {
+  bool _isDeviceExpired(DeviceItem device) {
     try {
       final expiry = device.deviceData?.expirationDate?.toString();
       if (expiry == null || expiry.isEmpty) return false;
@@ -318,13 +320,36 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
     }
   }
 
-  void _openTracking(DeviceItem d) {
+  /// Billing API says is_expired: true → hard block
+  bool _isExpired(DeviceItem device) {
+    if (!PaymentService.enableBillAlert) return false;
+    final id = device.id;
+    if (id == null) return false;
+    return PaymentService.isVehicleExpired(id);
+  }
+
+  /// Billing API says days_remaining <= 7 → show warning popup
+  bool _isExpiringNow(DeviceItem device) {
+    if (!PaymentService.enableBillAlert) return false;
+    final id = device.id;
+    if (id == null) return false;
+    if (PaymentService.isVehicleExpired(id)) return false;
+    return PaymentService.vehicleDaysRemaining(id) <= 7;
+  }
+
+  Future<void> _openTracking(DeviceItem d) async {
     if (_isExpired(d)) {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => DeviceExpiredBlockingDialog(device: d),
       );
+    } else if (_isExpiringNow(d)) {
+      final result = await showPaymentDuePopupIfNeeded(context, forceShow: true);
+      // X বা snooze চাপলে tracking তে যাবে
+      if (result != 'go_to_payment' && result != 'payment_done' && context.mounted) {
+        Get.to(() => TrackDevicePage(d.id, d.name, d));
+      }
     } else {
       Get.to(() => TrackDevicePage(d.id, d.name, d));
     }
@@ -388,7 +413,15 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
               _Row(
                 icon: Icons.access_time_outlined,
                 label: 'Expiration',
-                value: _formatDate(d.deviceData?.expirationDate),
+                value: d.deviceData?.expirationDate != null
+                    ? (() {
+                        final raw = d.deviceData!.expirationDate.toString();
+                        final date = DateTime.tryParse(raw);
+                        return date != null
+                            ? DateFormat('dd/MM/yyyy').format(date)
+                            : raw;
+                      })()
+                    : 'Unlimited',
               ),
               _Row(
                 icon: Icons.sim_card_outlined,
@@ -416,6 +449,13 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                 ),
                 onTap: () => Get.to(() => DeviceSettingPage(device: d)),
               ),
+              if (d.deviceData?.additionalNotes != null && d.deviceData!.additionalNotes!.trim().isNotEmpty)
+                _Row(
+                  icon: Icons.note_alt_outlined,
+                  label: 'Note',
+                  value: d.deviceData!.additionalNotes!,
+                  onTap: () => _copyToClipboard(d.deviceData!.additionalNotes!),
+                ),
             ]),
 
             const _Separator(),

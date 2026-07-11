@@ -10,6 +10,7 @@ import 'package:smart_lock/screens/report/recent_events.dart';
 import 'package:smart_lock/screens/settings.dart';
 import 'package:smart_lock/screens/data_controller/data_controller.dart';
 import 'package:smart_lock/widgets/payment_due_popup.dart';
+import 'package:smart_lock/services/payment_service.dart';
 
 class MainBottomNav extends StatefulWidget {
   const MainBottomNav({super.key});
@@ -44,18 +45,13 @@ class _MainBottomNavState extends State<MainBottomNav> {
   }
 
   Future<void> _checkPaymentDue() async {
-    final prefs = await SharedPreferences.getInstance();
-    final snoozeUntil = prefs.getInt('payment_snooze_until');
-    if (snoozeUntil != null) {
-      final snoozeDate = DateTime.fromMillisecondsSinceEpoch(snoozeUntil);
-      if (DateTime.now().isBefore(snoozeDate)) return;
-    }
+    if (PaymentService.sessionSnoozed) return;
     if (!mounted) return;
     final result = await showPaymentDuePopupIfNeeded(context);
     if (result == 'snoozed') {
-      final until = DateTime.now().add(const Duration(days: 7));
-      await prefs.setInt('payment_snooze_until', until.millisecondsSinceEpoch);
+      PaymentService.sessionSnoozed = true;
     }
+    if (mounted) setState(() {});
   }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);

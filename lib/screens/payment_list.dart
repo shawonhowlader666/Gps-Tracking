@@ -79,7 +79,6 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
         _isLoading = false;
         _errorMessage = _getErrorMessage(e);
       });
-      _showErrorSnackBar(_getErrorMessage(e));
     }
   }
 
@@ -487,6 +486,10 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
     } else if (errorString.contains('socket') ||
         errorString.contains('connection')) {
       return 'Network error. Please check your internet connection.';
+    } else if (errorString.contains('auth failed') ||
+        errorString.contains('status: 401') ||
+        errorString.contains('status: 422')) {
+      return 'আপনার অ্যাকাউন্টটি বিলিং সার্ভারে রেজিস্টার্ড নয় বা পাসওয়ার্ড মিলছে না।';
     } else {
       return 'Something went wrong. Please try again.';
     }

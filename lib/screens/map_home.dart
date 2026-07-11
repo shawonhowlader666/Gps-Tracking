@@ -21,8 +21,10 @@ import 'package:smart_lock/storage/user_repository.dart';
 import 'package:smart_lock/theme/custom_color.dart';
 import 'package:smart_lock/util/util.dart';
 import 'package:smart_lock/widgets/device_expired_dialog.dart';
+import 'package:smart_lock/widgets/payment_due_popup.dart';
 import 'package:label_marker/label_marker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smart_lock/services/payment_service.dart';
 import 'package:flutter/material.dart' as m;
 
 class MapPage extends StatefulWidget {
@@ -414,7 +416,7 @@ class _MapPageState extends State<MapPage> {
                 icon: icon,
                 anchor: const Offset(0.5, 0.5),
                 flat: true,
-                onTap: () {
+                onTap: () async {
                   device = element;
                   if (_isExpired(device!)) {
                     showDialog(
@@ -423,6 +425,12 @@ class _MapPageState extends State<MapPage> {
                       builder: (context) =>
                           DeviceExpiredBlockingDialog(device: device!),
                     );
+                  } else if (_isExpiringToday(device!)) {
+                    final result = await showPaymentDuePopupIfNeeded(context, forceShow: true);
+                    if (result != 'go_to_payment' && result != 'payment_done' && context.mounted) {
+                      Get.to(() =>
+                          TrackDevicePage(device!.id, device!.name, device));
+                    }
                   } else {
                     Get.to(() =>
                         TrackDevicePage(device!.id, device!.name, device));
@@ -758,7 +766,7 @@ class _MapPageState extends State<MapPage> {
     }
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         device = d;
         if (_isExpired(d)) {
           showDialog(
@@ -766,6 +774,12 @@ class _MapPageState extends State<MapPage> {
             barrierDismissible: false,
             builder: (context) => DeviceExpiredBlockingDialog(device: d),
           );
+        } else if (_isExpiringToday(d)) {
+          final result = await showPaymentDuePopupIfNeeded(context, forceShow: true);
+          if (result != 'go_to_payment' && result != 'payment_done' && context.mounted) {
+            moveToMarker();
+            Get.to(() => TrackDevicePage(d.id, d.name, d));
+          }
         } else {
           moveToMarker();
           Get.to(() => TrackDevicePage(d.id, d.name, d));
@@ -882,7 +896,7 @@ class _MapPageState extends State<MapPage> {
     });
   }
 
-  bool _isExpired(DeviceItem device) {
+  bool _isDeviceExpired(DeviceItem device) {
     try {
       final expiry = device.deviceData?.expirationDate?.toString();
       if (expiry == null || expiry.isEmpty) return false;
@@ -892,6 +906,24 @@ class _MapPageState extends State<MapPage> {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Billing API says is_expired: true → hard block
+  bool _isExpired(DeviceItem device) {
+    if (!PaymentService.enableBillAlert) return false;
+    final id = device.id;
+    if (id == null) return false;
+    return PaymentService.isVehicleExpired(id);
+  }
+
+  /// Billing API says is_expired: false BUT days_remaining <= 7 → show warning popup
+  bool _isExpiringToday(DeviceItem device) {
+    if (!PaymentService.enableBillAlert) return false;
+    final id = device.id;
+    if (id == null) return false;
+    if (PaymentService.isVehicleExpired(id)) return false;
+    final days = PaymentService.vehicleDaysRemaining(id);
+    return days <= 7;
   }
 
   Widget buildMap() {

@@ -100,11 +100,11 @@ Future<List<PaymentPackage>> fetchAndRecommendPackages(int unpaidBillsCount) asy
       }
     }
   } catch (e) {
-    // Fail silently and use local recommendations
+    // Fail silently
   }
 
-  // Fallback to local default logic
-  return getRecommendedPackages(unpaidBillsCount);
+  // Do not fall back to local packages when the server is offline/error
+  return [];
 }
 
 int _getMonthCountFromKey(String key) {

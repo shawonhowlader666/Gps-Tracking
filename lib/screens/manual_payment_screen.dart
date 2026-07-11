@@ -79,30 +79,31 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
   // ── Payment methods ──────────────────────────────────────────────────────────
   List<_PayMethod> get _methods => [
         _PayMethod(
-          id: 'bkash',
-          label: 'bKash',
-          number: bkashNumber.isNotEmpty ? bkashNumber : PHONE_NO,
+          id: 'bkash_payment',
+          label: 'Bkash Payment',
+          number: rocketNumber.isNotEmpty ? rocketNumber : '01888043132',
           color: _bkashColor,
           instruction:
-              'bKash অ্যাপ খুলুন → Send Money → নম্বর দিন → Amount → PIN',
+              'Bkash অ্যাপ খুলুন → Send Money → নম্বর দিন → Amount → PIN',
+          imagePath: 'assets/icons/bkash.png',
+        ),
+        _PayMethod(
+          id: 'bkash',
+          label: 'Bkash',
+          number: bkashNumber.isNotEmpty ? bkashNumber : '01717887766',
+          color: _bkashColor,
+          instruction:
+              'Bkash অ্যাপ খুলুন → Send Money → নম্বর দিন → Amount → PIN',
           imagePath: 'assets/icons/bkash.png',
         ),
         _PayMethod(
           id: 'nagad',
           label: 'Nagad',
-          number: nagadNumber.isNotEmpty ? nagadNumber : PHONE_NO,
+          number: nagadNumber.isNotEmpty ? nagadNumber : '01717887766',
           color: _nagadColor,
           instruction:
               'Nagad অ্যাপ খুলুন → Send Money → নম্বর দিন → Amount → PIN',
           imagePath: 'assets/icons/nogod.png',
-        ),
-        _PayMethod(
-          id: 'rocket',
-          label: 'Rocket',
-          number: rocketNumber.isNotEmpty ? rocketNumber : PHONE_NO,
-          color: _rocketColor,
-          instruction: 'Dial *322# → Send Money → নম্বর দিন → Amount → PIN',
-          imagePath: 'assets/icons/rocket.png',
         ),
       ];
 

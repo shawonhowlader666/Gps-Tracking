@@ -12,6 +12,7 @@ import 'package:smart_lock/storage/user_repository.dart';
 import 'package:smart_lock/services/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_lock/util/util.dart';
+import 'package:smart_lock/services/payment_service.dart';
 
 class DataController extends GetxController {
   // Overrides to prevent UI bouncing after sending lock/unlock commands
@@ -242,7 +243,12 @@ class DataController extends GetxController {
 
   Future<void> getDevices() async {
     try {
-      final devicesResponse = await APIService.getDevices();
+      // Run billing update in parallel with device fetch — real-time, no added latency
+      final results = await Future.wait([
+        PaymentService.updateBillingExpirationStatus().catchError((_) {}),
+        APIService.getDevices(),
+      ]);
+      final devicesResponse = results[1] as List<Device>?;
       if (devicesResponse != null) {
         devices.value = devicesResponse;
         await _processDeviceItems(devicesResponse);
@@ -251,18 +257,46 @@ class DataController extends GetxController {
         _reapplyCurrentFilter();
         // ← device data update হলে local alerts check করো
         await _checkLocalAlerts(onlyDevices);
+
+        // ── Billing API: per-vehicle is_expired status update (background) ──
+        // প্রতিটি vehicle এর is_expired billing server থেকে আনবে, UI block হবে না
+        final vehicleIds = onlyDevices
+            .map((d) => d.id)
+            .whereType<int>()
+            .toList();
+        PaymentService.updateAllVehicleExpirations(vehicleIds).catchError((_) {});
       }
     } catch (e) {
       isLoading.value = false;
     }
   }
 
+  bool _isDeviceExpired(DeviceItem device) {
+    try {
+      final expiry = device.deviceData?.expirationDate?.toString();
+      if (expiry == null || expiry.isEmpty) return false;
+      final date = DateTime.tryParse(expiry);
+      if (date == null) return false;
+      return date.isBefore(DateTime.now());
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _processDeviceItems(List<Device> deviceGroups) async {
+    final oldDevicesMap = {for (var d in onlyDevices) d.id: d};
     onlyDevices.clear();
     for (var group in deviceGroups) {
       if (group.items != null) {
-        for (var element in group.items!) {
+        for (var rawElement in group.items!) {
+          var element = rawElement;
           final devId = element.id;
+          if (devId != null && PaymentService.isForcedBlocked && _isDeviceExpired(element)) {
+            final oldElement = oldDevicesMap[devId];
+            if (oldElement != null) {
+              element = oldElement;
+            }
+          }
           if (devId != null) {
             final hasEngineOverride =
                 _localEngineStatusOverrides.containsKey(devId);
