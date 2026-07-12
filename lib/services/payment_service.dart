@@ -43,7 +43,8 @@ class PaymentService {
     if (!_enableBillAlert) return false;
     final cached = _vehicleExpirationCache[vehicleId];
     if (cached == null) return false;
-    return cached['is_expired'] == true;
+    final int days = (cached['days_remaining'] as int?) ?? 999;
+    return days <= 0;
   }
 
   /// Returns days_remaining for this vehicle. 999 if not fetched.
@@ -66,6 +67,15 @@ class PaymentService {
       }
     } catch (_) {
       // Keep previous cache entry on failure — do not clear
+    }
+  }
+
+  /// Get raw vehicle expiration details from server
+  static Future<Map<String, dynamic>?> getVehicleExpiration(int vehicleId) async {
+    try {
+      return await _getJson('/vehicle/$vehicleId/expiration');
+    } catch (_) {
+      return null;
     }
   }
 
@@ -234,6 +244,47 @@ class PaymentService {
     return null;
   }
 
+  /// Get bills for a specific vehicle
+  static Future<List<dynamic>?> getVehicleBills(int vehicleId) async {
+    try {
+      final data = await _getJson('/vehicle/$vehicleId/bills');
+      if (data != null) {
+        return data['data'] as List?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Get raw bills data from server
+  static Future<Map<String, dynamic>?> getBillsRaw() async {
+    try {
+      return await _getJson('/bills?per_page=15');
+    } catch (e) {
+      print("ERROR IN getBillsRaw: $e");
+      return null;
+    }
+  }
+
+  /// Get raw invoices data from server
+  static Future<Map<String, dynamic>?> getInvoicesRaw() async {
+    try {
+      return await _getJson('/invoices');
+    } catch (e) {
+      print("ERROR IN getInvoicesRaw: $e");
+      return null;
+    }
+  }
+
+  /// Get raw singular invoice data from server
+  static Future<Map<String, dynamic>?> getInvoiceSingularRaw() async {
+    try {
+      return await _getJson('/invoice');
+    } catch (e) {
+      print("ERROR IN getInvoiceSingularRaw: $e");
+      return null;
+    }
+  }
+
   /// Initiate SSL payment and get gateway URL
   static Future<String?> initiateSslPayment() async {
     try {
@@ -299,7 +350,7 @@ class PaymentService {
   /// Get all billing packages from the server
   static Future<List<Map<String, dynamic>>?> getBillingPackages() async {
     try {
-      final data = await _getJson('/billing-packages');
+      final data = await _getJson('/subscription-packages');
       if (data != null && data['data'] != null) {
         return List<Map<String, dynamic>>.from(data['data']);
       }

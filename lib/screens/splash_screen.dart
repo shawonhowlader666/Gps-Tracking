@@ -34,16 +34,12 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   // ─── State ────────────────────────────────────────────────────────────────
   bool _configLoaded = false;
   bool _minimumTimeReached = false;
-  bool _showCheckmark = false;
   bool _isSystemBlockActive = false;
 
   // ─── Animation controllers ────────────────────────────────────────────────
   late AnimationController _logoController;
-  late AnimationController _checkController;
   late Animation<double> _logoScale;
   late Animation<double> _logoFade;
-  late Animation<double> _checkScale;
-  late Animation<double> _checkFade;
 
   static const Color _primaryColor = Color(0xFF1D4888);
 
@@ -79,17 +75,6 @@ class _SplashScreenPageState extends State<SplashScreenPage>
       CurvedAnimation(parent: _logoController, curve: Curves.easeOut),
     );
 
-    _checkController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _checkScale = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _checkController, curve: Curves.elasticOut),
-    );
-    _checkFade = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _checkController, curve: Curves.easeOut),
-    );
-
     _logoController.forward();
   }
 
@@ -100,7 +85,6 @@ class _SplashScreenPageState extends State<SplashScreenPage>
   @override
   void dispose() {
     _logoController.dispose();
-    _checkController.dispose();
     super.dispose();
   }
 
@@ -109,9 +93,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
     if (!mounted) return;
     if (_isSystemBlockActive) return;
     if (_configLoaded && _minimumTimeReached) {
-      setState(() => _showCheckmark = true);
-      _checkController.forward();
-      Future.delayed(const Duration(milliseconds: 400), checkPreference);
+      checkPreference();
     }
   }
 
@@ -408,7 +390,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
               left: 0,
               right: 0,
               child: Center(
-                child: _showCheckmark ? _buildCheckmark() : _buildLoader(),
+                child: _buildLoader(),
               ),
             ),
           ],
@@ -430,30 +412,4 @@ class _SplashScreenPageState extends State<SplashScreenPage>
     );
   }
 
-  Widget _buildCheckmark() {
-    return AnimatedBuilder(
-      animation: _checkController,
-      builder: (context, _) {
-        return FadeTransition(
-          opacity: _checkFade,
-          child: ScaleTransition(
-            scale: _checkScale,
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(
-                color: _primaryColor,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.check_rounded,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }

@@ -11,7 +11,31 @@ import 'package:smart_lock/theme/custom_color.dart';
 Future<String?> showPaymentDuePopupIfNeeded(BuildContext context,
     {bool forceShow = false}) async {
   try {
-    final stats = await PaymentService.getStats();
+    if (forceShow) {
+      debugPrint('[POPUP] forceShow is true, opening dialog instantly');
+      return await showGeneralDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black.withValues(alpha: 0.75),
+        barrierLabel: 'PaymentDue',
+        transitionDuration: const Duration(milliseconds: 350),
+        transitionBuilder: (ctx, anim, _, child) {
+          return ScaleTransition(
+            scale: CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
+            child: FadeTransition(opacity: anim, child: child),
+          );
+        },
+        pageBuilder: (ctx, _, __) => const PaymentDuePopup(),
+      );
+    }
+
+    // Load stats and expirationInfo in parallel to speed up popup display
+    final results = await Future.wait([
+      PaymentService.getStats(),
+      _fetchExpirationInfo(),
+    ]);
+    final stats = results[0] as PaymentStats?;
+    final expirationInfo = results[1] as Map<String, dynamic>?;
 
     debugPrint('[POPUP] stats: due=${stats?.due}, enableBillAlert=${stats?.enableBillAlert}');
 
@@ -25,7 +49,6 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context,
       return null;
     }
 
-    final expirationInfo = await _fetchExpirationInfo();
     debugPrint('[POPUP] expirationInfo: $expirationInfo');
 
     if (!context.mounted) {
@@ -104,15 +127,15 @@ Future<Map<String, dynamic>?> _fetchExpirationInfo() async {
 // ─────────────────────────────────────────────
 
 class PaymentDuePopup extends StatefulWidget {
-  final PaymentStats stats;
+  final PaymentStats? stats;
   final Map<String, dynamic>? expirationInfo;
-  final bool isAfter10th;
+  final bool? isAfter10th;
 
   const PaymentDuePopup({
     super.key,
-    required this.stats,
+    this.stats,
     this.expirationInfo,
-    required this.isAfter10th,
+    this.isAfter10th,
   });
 
   @override
@@ -122,13 +145,60 @@ class PaymentDuePopup extends StatefulWidget {
 class _PaymentDuePopupState extends State<PaymentDuePopup> {
   final bool _isPaymentLoading = false;
   String? _errorMessage;
+  late Future<DuePopupData> _duePopupDataFuture;
+
+  PaymentStats? _loadedStats;
+  Map<String, dynamic>? _loadedExpirationInfo;
+  bool? _loadedIsAfter10th;
+  bool _isLoading = false;
+  bool _hasError = false;
+
+  PaymentStats get _stats => _loadedStats ?? widget.stats!;
+  Map<String, dynamic>? get _expirationInfo => _loadedExpirationInfo ?? widget.expirationInfo;
+  bool get _isAfter10th => _loadedIsAfter10th ?? widget.isAfter10th!;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.stats != null) {
+      _duePopupDataFuture = loadDuePopupData(widget.stats!.unpaidBillsCount);
+    } else {
+      _loadDataAsync();
+    }
+  }
+
+  void _loadDataAsync() {
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
+    loadCombinedDuePopupData().then((data) {
+      if (mounted) {
+        setState(() {
+          _loadedStats = data.stats;
+          _loadedExpirationInfo = data.expirationInfo;
+          _loadedIsAfter10th = data.expirationInfo?['is_expired'] == true ||
+              data.expirationInfo?['is_expired'] == 'true';
+          _duePopupDataFuture = Future.value(DuePopupData(data.packages));
+          _isLoading = false;
+        });
+      }
+    }).catchError((e) {
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _isLoading = false;
+        });
+      }
+    });
+  }
 
   int get _daysRemaining =>
-      (widget.expirationInfo?['days_remaining'] as int?) ?? 0;
+      (_expirationInfo?['days_remaining'] as int?) ?? 0;
 
   bool get _isExpired =>
-      widget.expirationInfo?['is_expired'] == true ||
-      widget.expirationInfo?['is_expired'] == 'true';
+      _expirationInfo?['is_expired'] == true ||
+      _expirationInfo?['is_expired'] == 'true';
 
   int get _overdueBlocks {
     if (_isExpired) return 10;
@@ -140,7 +210,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
   Future<void> _handlePay(double amount, String packageType) async {
     if (!mounted) return;
 
-    final bool isAfter10th = widget.isAfter10th;
+    final bool isAfter10th = _isAfter10th;
     final nav = Navigator.of(context, rootNavigator: true);
 
     // ✅ আগে ManualPaymentScreen push করো, তারপর popup pop করো
@@ -190,13 +260,44 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
               borderRadius: BorderRadius.circular(24),
               child: Stack(
                 children: [
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildHeader(),
-                      _buildBody(),
-                    ],
-                  ),
+                  _isLoading
+                      ? Container(
+                          height: 250,
+                          alignment: Alignment.center,
+                          child: const CircularProgressIndicator(
+                            color: Color(0xFFE53935),
+                          ),
+                        )
+                      : _hasError
+                          ? Container(
+                              height: 250,
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.cloud_off_rounded, color: Colors.grey, size: 40),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'বকেয়া বিল লোড করা যায়নি।',
+                                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton(
+                                    onPressed: _loadDataAsync,
+                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE53935)),
+                                    child: const Text('Retry'),
+                                  )
+                                ],
+                              ),
+                            )
+                          : Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildHeader(),
+                                _buildBody(),
+                              ],
+                            ),
                   Positioned(
                     top: 12,
                     right: 12,
@@ -250,8 +351,8 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                 ),
               ),
               Icon(
-                widget.isAfter10th ? Icons.lock_outline : Icons.lock_clock,
-                color: widget.isAfter10th
+                _isAfter10th ? Icons.lock_outline : Icons.lock_clock,
+                color: _isAfter10th
                     ? const Color(0xFFFF5252)
                     : const Color(0xFFFF8A65),
                 size: 42,
@@ -260,7 +361,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
           ),
           const SizedBox(height: 12),
           Text(
-            widget.isAfter10th ? 'সেবা স্থগিত' : 'পেমেন্ট বকেয়া',
+            _isAfter10th ? 'সেবা স্থগিত' : 'পেমেন্ট বকেয়া',
             style: const TextStyle(
               color: Color(0xFFFFD700),
               fontSize: 22,
@@ -268,7 +369,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
               letterSpacing: 0.5,
             ),
           ),
-          if (widget.isAfter10th) ...[
+          if (_isAfter10th) ...[
             const SizedBox(height: 6),
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -326,7 +427,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
               ),
               const SizedBox(width: 2),
               Text(
-                widget.stats.due.toStringAsFixed(2),
+                _stats.due.toStringAsFixed(2),
                 style: const TextStyle(
                   color: Color(0xFFE53935),
                   fontSize: 48,
@@ -361,7 +462,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
             child: ElevatedButton.icon(
               onPressed: _isPaymentLoading
                   ? null
-                  : () => _handlePay(widget.stats.due, 'due_payment'),
+                  : () => _handlePay(_stats.due, 'due_payment'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1B6B3A),
                 foregroundColor: Colors.white,
@@ -403,7 +504,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
 
           // ✅ Package options row (Dynamically loaded, defaults instantly)
           FutureBuilder<DuePopupData>(
-            future: loadDuePopupData(widget.stats.unpaidBillsCount),
+            future: _duePopupDataFuture,
             builder: (context, snapshot) {
               final data = snapshot.data;
               if (data == null || data.packages.isEmpty) {
@@ -411,6 +512,45 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
               }
               final pkg1 = data.packages[0];
               final pkg2 = data.packages.length > 1 ? data.packages[1] : pkg1;
+
+              if (pkg1 == pkg2) {
+                return SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _isPaymentLoading
+                        ? null
+                        : () => _handlePay(pkg1.finalPrice, pkg1.key),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE4B34E),
+                      foregroundColor: Colors.black,
+                      disabledBackgroundColor:
+                          const Color(0xFFE4B34E).withValues(alpha: 0.6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _isPaymentLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            pkg1.buttonText,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                  ),
+                );
+              }
 
               return Row(
                 children: [
@@ -520,7 +660,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
           ),
 
           // After 10th: forced warning
-          if (widget.isAfter10th) ...[
+          if (_isAfter10th) ...[
             const SizedBox(height: 10),
             Container(
               width: double.infinity,
@@ -600,7 +740,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
   }
 
   Widget _buildWarningMessage() {
-    if (widget.isAfter10th) {
+    if (_isAfter10th) {
       return const Text(
         'আপনার বিল পরিশোধের সময়সীমা পেরিয়ে গেছে।\nসেবা স্থগিত রয়েছে।',
         textAlign: TextAlign.center,
@@ -641,6 +781,21 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
       ),
     );
   }
+}
+
+class DuePopupDataCombined {
+  final PaymentStats? stats;
+  final Map<String, dynamic>? expirationInfo;
+  final List<PaymentPackage> packages;
+  DuePopupDataCombined(this.stats, this.expirationInfo, this.packages);
+}
+
+Future<DuePopupDataCombined> loadCombinedDuePopupData() async {
+  final stats = await PaymentService.getStats();
+  final expirationInfo = await PaymentService.getExpirationInfo();
+  final unpaidBillsCount = stats?.unpaidBillsCount ?? 1;
+  final packages = await fetchAndRecommendPackages(unpaidBillsCount);
+  return DuePopupDataCombined(stats, expirationInfo, packages);
 }
 
 class DuePopupData {

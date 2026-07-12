@@ -443,13 +443,30 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   Timer? _expirationTimer;
 
+  bool _isDeviceExpired(DeviceItem? device) {
+    try {
+      final expiry = device?.deviceData?.expirationDate?.toString();
+      if (expiry == null || expiry.isEmpty) return false;
+      final date = DateTime.tryParse(expiry);
+      if (date == null) return false;
+      return date.isBefore(DateTime.now());
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _checkExpiration() async {
     final id = widget.id;
     if (id == null || !mounted || _isDisposed) return;
     // Fetch fresh data from billing server
     await PaymentService.updateVehicleExpiration(id);
     if (!mounted || _isDisposed) return;
-    if (PaymentService.isVehicleExpired(id)) {
+
+    final isBillingExpired = PaymentService.isVehicleExpired(id);
+    final days = PaymentService.vehicleDaysRemaining(id);
+    final isGpswoxExpired = _isDeviceExpired(widget.device);
+
+    if (isBillingExpired || days <= 0 || isGpswoxExpired) {
       // Kick out: go back and show blocking dialog
       Navigator.of(context).pop();
       if (context.mounted) {

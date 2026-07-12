@@ -561,6 +561,18 @@ class Util {
         }
       }
 
+      final bool isArrow = path.contains('arrow');
+      if (isArrow) {
+        final tintColor = _getColorFromStatus(statusColor, imagePath);
+        final Uint8List? bytes =
+            await getTintedBytesFromAsset('assets/images/car_toprunning.png', physicalSize, tintColor);
+        if (bytes != null) {
+          final descriptor = BitmapDescriptor.bytes(bytes);
+          _markerIconCache[cacheKey] = descriptor;
+          return descriptor;
+        }
+      }
+
       // Fetch the server PNG image directly
       final String imageUrl = "${UserRepository.getServerUrl()!}/$imagePath";
       final File imageFile =
@@ -1017,6 +1029,19 @@ class Util {
           : ColorFiltered(colorFilter: getTintFilter(color), child: img);
     }
 
+    final bool isArrow = path.contains('arrow');
+    if (isArrow) {
+      final Widget img = Image.asset(
+        'assets/images/car_toprunning.png',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+      );
+      return isMoving
+          ? img
+          : ColorFiltered(colorFilter: getTintFilter(color), child: img);
+    }
+
     // 3. Fetch the server PNG image directly
     if (imagePath != null && imagePath.isNotEmpty) {
       final String? serverUrl = UserRepository.getServerUrl();
@@ -1074,6 +1099,16 @@ class Util {
             : 'assets/images/bike_toprunning.png';
         return Image.asset(
           localAsset,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      }
+
+      final bool isArrow = path.contains('arrow');
+      if (isArrow) {
+        return Image.asset(
+          'assets/images/car_toprunning.png',
           width: size,
           height: size,
           fit: BoxFit.contain,

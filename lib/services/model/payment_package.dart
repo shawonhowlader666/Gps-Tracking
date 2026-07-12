@@ -29,7 +29,7 @@ Future<List<PaymentPackage>> fetchAndRecommendPackages(int unpaidBillsCount) asy
       final List<PaymentPackage> serverPackages = [];
       for (var plan in serverData) {
         final rules = plan['pricing_rules'] ?? plan['pricingRules'];
-        if (rules != null && rules is List) {
+        if (rules != null && rules is List && rules.isNotEmpty) {
           for (var rule in rules) {
             final duration = rule['duration'];
             final durationType = rule['duration_type'] ?? rule['durationType'];
@@ -55,6 +55,35 @@ Future<List<PaymentPackage>> fetchAndRecommendPackages(int unpaidBillsCount) asy
               ));
             }
           }
+        } else {
+          // Direct properties on plan object (e.g. flat package structure)
+          final status = plan['status'];
+          if (status == false || status == 0 || status == 'false') {
+            continue;
+          }
+
+          final durationMonths = plan['duration_months'] ?? plan['durationMonths'];
+          if (durationMonths == null) continue;
+
+          final double originalPrice = (plan['price'] as num?)?.toDouble() ?? 0.0;
+          final double finalPrice = (plan['net_price'] as num?)?.toDouble() ?? (plan['netPrice'] as num?)?.toDouble() ?? originalPrice;
+          final int discountPercent = (plan['discount'] as num?)?.toInt() ?? 0;
+
+          final String label = (durationMonths % 12 == 0)
+              ? '${durationMonths ~/ 12} বছরের বিল'
+              : '$durationMonths মাসের বিল';
+
+          final String key = (durationMonths % 12 == 0)
+              ? '${durationMonths ~/ 12}_year'
+              : '${durationMonths}_months';
+
+          serverPackages.add(PaymentPackage(
+            key: key,
+            label: label,
+            originalPrice: originalPrice,
+            finalPrice: finalPrice,
+            discountPercent: discountPercent,
+          ));
         }
       }
 
