@@ -253,7 +253,10 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ManualPaymentScreen(dueAmount: _stats!.due),
+                      builder: (_) => ManualPaymentScreen(
+                        dueAmount: _stats!.due,
+                        packageTitle: 'Due Payment (${_stats!.due.toStringAsFixed(0)} BDT)',
+                      ),
                   ),
                 );
               },
@@ -757,7 +760,10 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) =>
-                                ManualPaymentScreen(dueAmount: _stats!.due),
+                                ManualPaymentScreen(
+                                  dueAmount: _stats!.due,
+                                  packageTitle: 'Due Payment (${_stats!.due.toStringAsFixed(0)} BDT)',
+                                ),
                           ),
                         )
                     : null,
@@ -913,7 +919,7 @@ class _PaymentListScreenState extends State<PaymentListScreen> {
             children: [
               const SizedBox(height: 4),
               Text(
-                'BDT ${bill.amount.toStringAsFixed(2)} • ${bill.vehicleCount} Vehicles',
+                'BDT ${bill.amount.toStringAsFixed(2)} • ${bill.vehicleName ?? "${bill.vehicleCount} Vehicles"}',
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.grey[600],

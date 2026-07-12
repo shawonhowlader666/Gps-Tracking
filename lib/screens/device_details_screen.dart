@@ -325,7 +325,10 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
     if (!PaymentService.enableBillAlert) return false;
     final id = device.id;
     if (id == null) return false;
-    return PaymentService.isVehicleExpired(id);
+    final isBillingExpired = PaymentService.isVehicleExpired(id);
+    final days = PaymentService.vehicleDaysRemaining(id);
+    final isGpswoxExpired = _isDeviceExpired(device);
+    return isBillingExpired || days <= 0 || isGpswoxExpired;
   }
 
   /// Billing API says days_remaining <= 7 → show warning popup
@@ -344,12 +347,6 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
         barrierDismissible: false,
         builder: (context) => DeviceExpiredBlockingDialog(device: d),
       );
-    } else if (_isExpiringNow(d)) {
-      final result = await showPaymentDuePopupIfNeeded(context, forceShow: true);
-      // X বা snooze চাপলে tracking তে যাবে
-      if (result != 'go_to_payment' && result != 'payment_done' && context.mounted) {
-        Get.to(() => TrackDevicePage(d.id, d.name, d));
-      }
     } else {
       Get.to(() => TrackDevicePage(d.id, d.name, d));
     }

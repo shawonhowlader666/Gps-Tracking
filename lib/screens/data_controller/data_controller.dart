@@ -161,6 +161,19 @@ class DataController extends GetxController {
   RxList<DeviceItem> onlyDevices = <DeviceItem>[].obs;
   RxList<DeviceItem> filteredDevices = <DeviceItem>[].obs;
   RxList<DeviceItem> searchedDevices = <DeviceItem>[].obs;
+  final RxMap<String, double> vehicleDueMap = <String, double>{}.obs;
+
+  double getVehicleDue(DeviceItem device) {
+    if (vehicleDueMap.isEmpty) return 0.0;
+    final id = device.id?.toString();
+    final name = device.name?.toLowerCase().trim();
+    final imei = (device.imei ?? device.deviceData?.imei)?.toString().trim();
+
+    if (id != null && vehicleDueMap.containsKey(id)) return vehicleDueMap[id]!;
+    if (imei != null && vehicleDueMap.containsKey(imei)) return vehicleDueMap[imei]!;
+    if (name != null && vehicleDueMap.containsKey(name)) return vehicleDueMap[name]!;
+    return 0.0;
+  }
 
   // Status Counters
   RxInt allCount = 0.obs;
@@ -264,7 +277,33 @@ class DataController extends GetxController {
             .map((d) => d.id)
             .whereType<int>()
             .toList();
-        PaymentService.updateAllVehicleExpirations(vehicleIds).catchError((_) {});
+        PaymentService.updateAllVehicleExpirations(vehicleIds).then((_) async {
+          // Fetch invoices and build vehicle due map
+          try {
+            final rawInvoices = await PaymentService.getInvoicesRaw();
+            if (rawInvoices != null && rawInvoices['bills'] != null) {
+              final List bills = rawInvoices['bills'];
+              final Map<String, double> tempDueMap = {};
+              for (var b in bills) {
+                if (b['status'] == 'unpaid') {
+                  final double amt = ((b['amount'] ?? b['total_bill'] ?? 0.0) as num).toDouble();
+                  final bVehicleId = b['vehicle_id']?.toString() ?? b['device_id']?.toString();
+                  final bVehicleName = b['vehicle']?['name']?.toString().toLowerCase().trim();
+                  final bVehicleImei = b['vehicle']?['imei']?.toString().trim();
+                  
+                  if (bVehicleId != null) tempDueMap[bVehicleId] = (tempDueMap[bVehicleId] ?? 0.0) + amt;
+                  if (bVehicleName != null) tempDueMap[bVehicleName] = (tempDueMap[bVehicleName] ?? 0.0) + amt;
+                  if (bVehicleImei != null) tempDueMap[bVehicleImei] = (tempDueMap[bVehicleImei] ?? 0.0) + amt;
+                }
+              }
+              vehicleDueMap.assignAll(tempDueMap);
+            }
+          } catch (_) {}
+
+          _processDeviceItems(devicesResponse);
+          _updateStatusCounters();
+          _reapplyCurrentFilter();
+        }).catchError((_) {});
       }
     } catch (e) {
       isLoading.value = false;
@@ -283,6 +322,16 @@ class DataController extends GetxController {
     }
   }
 
+  bool _isVehicleExpiredInBilling(DeviceItem device) {
+    if (!PaymentService.enableBillAlert) return false;
+    final id = device.id;
+    if (id == null) return false;
+    final isBillingExpired = PaymentService.isVehicleExpired(id);
+    final days = PaymentService.vehicleDaysRemaining(id);
+    final isGpswoxExpired = _isDeviceExpired(device);
+    return isBillingExpired || days <= 0 || isGpswoxExpired;
+  }
+
   Future<void> _processDeviceItems(List<Device> deviceGroups) async {
     final oldDevicesMap = {for (var d in onlyDevices) d.id: d};
     onlyDevices.clear();
@@ -291,10 +340,16 @@ class DataController extends GetxController {
         for (var rawElement in group.items!) {
           var element = rawElement;
           final devId = element.id;
-          if (devId != null && PaymentService.isForcedBlocked && _isDeviceExpired(element)) {
+          if (devId != null && _isVehicleExpiredInBilling(element)) {
             final oldElement = oldDevicesMap[devId];
             if (oldElement != null) {
               element = oldElement;
+            } else {
+              // First run and expired: clear any live data
+              element.lat = null;
+              element.lng = null;
+              element.speed = 0;
+              element.sensors = [];
             }
           }
           if (devId != null) {

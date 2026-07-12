@@ -117,10 +117,24 @@ class _SplashScreenPageState extends State<SplashScreenPage>
     final String packageName = packageInfo.packageName;
 
     // 1. Try package-specific configuration document
-    final doc = await FirebaseFirestore.instance
-        .collection('configs')
-        .doc(packageName)
-        .get();
+    DocumentSnapshot doc;
+    try {
+      doc = await FirebaseFirestore.instance
+          .collection('configs')
+          .doc(packageName)
+          .get()
+          .timeout(const Duration(seconds: 2));
+    } catch (_) {
+      try {
+        doc = await FirebaseFirestore.instance
+            .collection('configs')
+            .doc(packageName)
+            .get(const GetOptions(source: Source.cache));
+      } catch (e) {
+        debugPrint('Local config cache error: $e');
+        return;
+      }
+    }
 
     if (doc.exists && doc.data() != null) {
       final data = doc.data() as Map<String, dynamic>;
@@ -163,10 +177,23 @@ class _SplashScreenPageState extends State<SplashScreenPage>
       forceUpdateMessage = forceUpdate['message'] as String? ?? '';
     } else {
       // 2. Fallback to legacy configs/urls/spytrack document
-      final fallbackDoc = await FirebaseFirestore.instance
-          .collection('configs')
-          .doc('urls')
-          .get();
+      DocumentSnapshot fallbackDoc;
+      try {
+        fallbackDoc = await FirebaseFirestore.instance
+            .collection('configs')
+            .doc('urls')
+            .get()
+            .timeout(const Duration(seconds: 2));
+      } catch (_) {
+        try {
+          fallbackDoc = await FirebaseFirestore.instance
+              .collection('configs')
+              .doc('urls')
+              .get(const GetOptions(source: Source.cache));
+        } catch (_) {
+          return;
+        }
+      }
 
       if (fallbackDoc.exists && fallbackDoc.data() != null) {
         final fallbackData = fallbackDoc.data() as Map<String, dynamic>;

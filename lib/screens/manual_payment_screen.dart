@@ -15,12 +15,16 @@ class ManualPaymentScreen extends StatefulWidget {
   // ✅ After 10th হলে back করলে popup আবার দেখাবে
   final bool isAfter10th;
   final String? packageType; // '1_month' or '1_year'
+  final String? packageTitle;
+  final String? vehicleName;
 
   const ManualPaymentScreen({
     super.key,
     required this.dueAmount,
     this.isAfter10th = false,
     this.packageType,
+    this.packageTitle,
+    this.vehicleName,
   });
 
   @override
@@ -160,17 +164,19 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
       final adminNumber = whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
       final userEmail = UserRepository.getEmail() ?? 'N/A';
 
-      final String packageStr = widget.packageType == '1_year'
+      final String packageStr = widget.packageTitle?.replaceAll('\n', ' ') ?? (widget.packageType == '1_year'
           ? '1 Year (25% Discount BDT 1800)'
           : (widget.packageType == '1_month'
               ? '1 Month (BDT 200)'
               : (widget.packageType != null && widget.packageType!.contains('_months')
                   ? '${widget.packageType!.split('_').first} Months (BDT ${widget.dueAmount})'
-                  : '${widget.packageType ?? 'Custom'} (BDT ${widget.dueAmount})'));
+                  : '${widget.packageType ?? 'Custom'} (BDT ${widget.dueAmount})')));
+
+      final String vehicleStr = widget.vehicleName != null ? '\n🚗 Vehicle: ${widget.vehicleName}' : '';
 
       final msg = Uri.encodeComponent(
         '🧾 *Manual Payment Notification*\n\n'
-        '👤 User: $userEmail\n'
+        '👤 User: $userEmail$vehicleStr\n'
         '💳 Method: ${_selected!.label}\n'
         '📦 Package: $packageStr\n'
         '📱 Sender No: ${_senderController.text.trim()}\n'

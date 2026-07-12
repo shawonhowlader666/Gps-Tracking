@@ -35,7 +35,7 @@ class APIService {
       final response = await http.post(
         uri,
         headers: headers,
-      );
+      ).timeout(const Duration(seconds: 4));
       updateCookie(response);
       return response;
     } catch (e) {

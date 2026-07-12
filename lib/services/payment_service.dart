@@ -91,7 +91,11 @@ class PaymentService {
   /// Login to payment server
   static Future<bool> login() async {
     if (_isLoggingIn) {
-      await Future.delayed(const Duration(milliseconds: 500));
+      int retryCount = 0;
+      while (_isLoggingIn && _token == null && retryCount < 20) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        retryCount++;
+      }
       if (_token == null) {
         throw const HttpException(
             "Already logging in, but no token acquired yet.");
@@ -226,12 +230,13 @@ class PaymentService {
     return null;
   }
 
-  /// Get bills with pagination
+  /// Get bills with pagination (resolved from invoices)
   static Future<List<Bill>?> getBills({int page = 1}) async {
     try {
-      final data = await _getJson('/bills?per_page=15&page=$page');
+      if (page > 1) return [];
+      final data = await _getJson('/invoices');
       if (data != null) {
-        final List list = data['data'];
+        final List list = data['bills'] ?? [];
         return list.map((e) => Bill.fromJson(e)).toList();
       }
     } on TimeoutException {

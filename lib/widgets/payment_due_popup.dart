@@ -1,18 +1,16 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:smart_lock/screens/manual_payment_screen.dart';
 import 'package:smart_lock/services/model/payment_stats.dart';
 import 'package:smart_lock/services/model/payment_package.dart';
 import 'package:smart_lock/services/payment_service.dart';
-import 'package:smart_lock/theme/custom_color.dart';
 
 Future<String?> showPaymentDuePopupIfNeeded(BuildContext context,
-    {bool forceShow = false}) async {
+    {bool forceShow = false, int? vehicleId, String? vehicleName, String? vehicleImei}) async {
   try {
     if (forceShow) {
-      debugPrint('[POPUP] forceShow is true, opening dialog instantly');
+      debugPrint('[POPUP] forceShow is true, opening dialog instantly for vehicleId: $vehicleId');
       return await showGeneralDialog<String>(
         context: context,
         barrierDismissible: false,
@@ -25,14 +23,20 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context,
             child: FadeTransition(opacity: anim, child: child),
           );
         },
-        pageBuilder: (ctx, _, __) => const PaymentDuePopup(),
+        pageBuilder: (ctx, _, __) => PaymentDuePopup(
+          vehicleId: vehicleId,
+          vehicleName: vehicleName,
+          vehicleImei: vehicleImei,
+        ),
       );
     }
 
     // Load stats and expirationInfo in parallel to speed up popup display
     final results = await Future.wait([
       PaymentService.getStats(),
-      _fetchExpirationInfo(),
+      vehicleId != null
+          ? PaymentService.getVehicleExpiration(vehicleId)
+          : _fetchExpirationInfo(),
     ]);
     final stats = results[0] as PaymentStats?;
     final expirationInfo = results[1] as Map<String, dynamic>?;
@@ -64,7 +68,53 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context,
           expirationInfo['is_expired'] == 'true';
     }
 
-    final double due = stats?.due ?? 0;
+    double due = stats?.due ?? 0;
+    int unpaidBillsCount = stats?.unpaidBillsCount ?? 1;
+    Map<String, dynamic>? resolvedExpirationInfo = expirationInfo;
+
+    // Filter by vehicleId, Name, or IMEI if provided
+    if (vehicleId != null || vehicleName != null || vehicleImei != null) {
+      try {
+        final rawInvoices = await PaymentService.getInvoicesRaw();
+        if (rawInvoices != null && rawInvoices['bills'] != null) {
+          final List bills = rawInvoices['bills'];
+          final deviceBills = bills.where((b) {
+            final bVehicleId = b['vehicle_id'] ?? b['device_id'];
+            final bVehicle = b['vehicle'];
+            
+            final matchId = vehicleId != null && bVehicleId != null && bVehicleId.toString() == vehicleId.toString();
+            final matchImei = vehicleImei != null && bVehicle != null && bVehicle['imei'] != null && bVehicle['imei'].toString() == vehicleImei.toString();
+            final matchName = vehicleName != null && bVehicle != null && bVehicle['name'] != null && bVehicle['name'].toString().toLowerCase().trim() == vehicleName.toString().toLowerCase().trim();
+            
+            return matchId || matchImei || matchName;
+          }).toList();
+
+          if (deviceBills.isNotEmpty) {
+            due = deviceBills
+                .where((b) => b['status'] == 'unpaid')
+                .map((b) => (b['amount'] ?? b['total_bill'] ?? 0.0) as num)
+                .fold(0.0, (sum, amt) => sum + amt.toDouble());
+
+            unpaidBillsCount = deviceBills
+                .where((b) => b['status'] == 'unpaid')
+                .length;
+
+            final vehicleData = deviceBills.first['vehicle'];
+            if (vehicleData != null) {
+              daysRemaining = (vehicleData['days_remaining'] as int?) ?? 999;
+              isExpired = vehicleData['is_expired'] == true || vehicleData['is_expired'] == 'true';
+              resolvedExpirationInfo = {
+                'days_remaining': daysRemaining,
+                'is_expired': isExpired,
+                'expiration_date': vehicleData['expiration_date'],
+                'human_readable': vehicleData['human_readable'],
+              };
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
     debugPrint('[POPUP] due=$due, isExpired=$isExpired, daysRemaining=$daysRemaining, forceShow=$forceShow');
 
     // Alert triggers: server says due balance OR server says expired OR days running out (server-driven: days_remaining <= 0)
@@ -77,17 +127,21 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context,
     }
 
     // Use stats fallback if stats was null
-    final resolvedStats = stats ??
-        PaymentStats(
-          due: 0,
-          totalBilled: 0,
-          totalPaid: 0,
-          unpaidBillsCount: 0,
-          enableBillAlert: true,
-        );
+    final resolvedStats = PaymentStats(
+      due: due,
+      totalBilled: stats?.totalBilled ?? 0,
+      totalPaid: stats?.totalPaid ?? 0,
+      unpaidBillsCount: unpaidBillsCount > 0 ? unpaidBillsCount : 1,
+      enableBillAlert: stats?.enableBillAlert ?? true,
+    );
 
     // Final warning mode: server says is_expired = true (no hardcoded day threshold)
     final bool isAfter10th = isExpired;
+
+    if (!context.mounted) {
+      debugPrint('[POPUP] BLOCKED: context not mounted after async bills check');
+      return null;
+    }
 
     return await showGeneralDialog<String>(
       context: context,
@@ -103,8 +157,11 @@ Future<String?> showPaymentDuePopupIfNeeded(BuildContext context,
       },
       pageBuilder: (ctx, _, __) => PaymentDuePopup(
         stats: resolvedStats,
-        expirationInfo: expirationInfo,
+        expirationInfo: resolvedExpirationInfo,
         isAfter10th: isAfter10th,
+        vehicleId: vehicleId,
+        vehicleName: vehicleName,
+        vehicleImei: vehicleImei,
       ),
     );
   } catch (e) {
@@ -130,12 +187,18 @@ class PaymentDuePopup extends StatefulWidget {
   final PaymentStats? stats;
   final Map<String, dynamic>? expirationInfo;
   final bool? isAfter10th;
+  final int? vehicleId;
+  final String? vehicleName;
+  final String? vehicleImei;
 
   const PaymentDuePopup({
     super.key,
     this.stats,
     this.expirationInfo,
     this.isAfter10th,
+    this.vehicleId,
+    this.vehicleName,
+    this.vehicleImei,
   });
 
   @override
@@ -172,7 +235,11 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
       _isLoading = true;
       _hasError = false;
     });
-    loadCombinedDuePopupData().then((data) {
+    loadCombinedDuePopupData(
+      vehicleId: widget.vehicleId,
+      vehicleName: widget.vehicleName,
+      vehicleImei: widget.vehicleImei,
+    ).then((data) {
       if (mounted) {
         setState(() {
           _loadedStats = data.stats;
@@ -207,7 +274,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
     return overdue.clamp(0, 10);
   }
 
-  Future<void> _handlePay(double amount, String packageType) async {
+  Future<void> _handlePay(double amount, String packageType, {String? packageTitle}) async {
     if (!mounted) return;
 
     final bool isAfter10th = _isAfter10th;
@@ -225,6 +292,8 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
             dueAmount: amount,
             isAfter10th: isAfter10th,
             packageType: packageType,
+            packageTitle: packageTitle,
+            vehicleName: widget.vehicleName,
           ),
         ),
       );
@@ -369,6 +438,17 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
               letterSpacing: 0.5,
             ),
           ),
+          if (widget.vehicleName != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              widget.vehicleName!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           if (_isAfter10th) ...[
             const SizedBox(height: 6),
             Container(
@@ -462,7 +542,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
             child: ElevatedButton.icon(
               onPressed: _isPaymentLoading
                   ? null
-                  : () => _handlePay(_stats.due, 'due_payment'),
+                  : () => _handlePay(_stats.due, 'due_payment', packageTitle: 'Due Payment (${_stats.due.toStringAsFixed(0)} BDT)'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1B6B3A),
                 foregroundColor: Colors.white,
@@ -520,7 +600,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                   child: ElevatedButton(
                     onPressed: _isPaymentLoading
                         ? null
-                        : () => _handlePay(pkg1.finalPrice, pkg1.key),
+                        : () => _handlePay(pkg1.finalPrice, pkg1.key, packageTitle: pkg1.buttonText),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFE4B34E),
                       foregroundColor: Colors.black,
@@ -560,7 +640,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                       child: ElevatedButton(
                         onPressed: _isPaymentLoading
                             ? null
-                            : () => _handlePay(pkg1.finalPrice, pkg1.key),
+                            : () => _handlePay(pkg1.finalPrice, pkg1.key, packageTitle: pkg1.buttonText),
                         style: ElevatedButton.styleFrom(
                            backgroundColor: const Color(0xFF1B6B3A),
                           foregroundColor: Colors.white,
@@ -599,7 +679,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                       child: ElevatedButton(
                         onPressed: _isPaymentLoading
                             ? null
-                            : () => _handlePay(pkg2.finalPrice, pkg2.key),
+                            : () => _handlePay(pkg2.finalPrice, pkg2.key, packageTitle: pkg2.buttonText),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFE4B34E),
                           foregroundColor: Colors.black,
@@ -790,12 +870,72 @@ class DuePopupDataCombined {
   DuePopupDataCombined(this.stats, this.expirationInfo, this.packages);
 }
 
-Future<DuePopupDataCombined> loadCombinedDuePopupData() async {
+Future<DuePopupDataCombined> loadCombinedDuePopupData({int? vehicleId, String? vehicleName, String? vehicleImei}) async {
   final stats = await PaymentService.getStats();
-  final expirationInfo = await PaymentService.getExpirationInfo();
-  final unpaidBillsCount = stats?.unpaidBillsCount ?? 1;
+  PaymentStats? resolvedStats = stats;
+  Map<String, dynamic>? resolvedExpirationInfo;
+
+  if (vehicleId != null || vehicleName != null || vehicleImei != null) {
+    if (vehicleId != null) {
+      resolvedExpirationInfo = await PaymentService.getVehicleExpiration(vehicleId);
+    }
+    try {
+      final rawInvoices = await PaymentService.getInvoicesRaw();
+      if (rawInvoices != null && rawInvoices['bills'] != null) {
+        final List bills = rawInvoices['bills'];
+        final deviceBills = bills.where((b) {
+          final bVehicleId = b['vehicle_id'] ?? b['device_id'];
+          final bVehicle = b['vehicle'];
+          
+          final matchId = vehicleId != null && bVehicleId != null && bVehicleId.toString() == vehicleId.toString();
+          final matchImei = vehicleImei != null && bVehicle != null && bVehicle['imei'] != null && bVehicle['imei'].toString() == vehicleImei.toString();
+          final matchName = vehicleName != null && bVehicle != null && bVehicle['name'] != null && bVehicle['name'].toString().toLowerCase().trim() == vehicleName.toString().toLowerCase().trim();
+          
+          return matchId || matchImei || matchName;
+        }).toList();
+
+        if (deviceBills.isNotEmpty) {
+          final double deviceDue = deviceBills
+              .where((b) => b['status'] == 'unpaid')
+              .map((b) => (b['amount'] ?? b['total_bill'] ?? 0.0) as num)
+              .fold(0.0, (sum, amt) => sum + amt.toDouble());
+
+          final int deviceUnpaidCount = deviceBills
+              .where((b) => b['status'] == 'unpaid')
+              .length;
+
+          resolvedStats = PaymentStats(
+            due: deviceDue,
+            totalBilled: deviceBills
+                .map((b) => (b['amount'] ?? b['total_bill'] ?? 0.0) as num)
+                .fold(0.0, (sum, amt) => sum + amt.toDouble()),
+            totalPaid: deviceBills
+                .where((b) => b['status'] == 'paid')
+                .map((b) => (b['amount'] ?? b['total_bill'] ?? 0.0) as num)
+                .fold(0.0, (sum, amt) => sum + amt.toDouble()),
+            unpaidBillsCount: deviceUnpaidCount > 0 ? deviceUnpaidCount : 1,
+            enableBillAlert: stats?.enableBillAlert ?? true,
+          );
+
+          final vehicleData = deviceBills.first['vehicle'];
+          if (vehicleData != null) {
+            resolvedExpirationInfo = {
+              'days_remaining': (vehicleData['days_remaining'] as int?) ?? 999,
+              'is_expired': vehicleData['is_expired'] == true || vehicleData['is_expired'] == 'true',
+              'expiration_date': vehicleData['expiration_date'],
+              'human_readable': vehicleData['human_readable'],
+            };
+          }
+        }
+      }
+    } catch (_) {}
+  } else {
+    resolvedExpirationInfo = await PaymentService.getExpirationInfo();
+  }
+
+  final unpaidBillsCount = resolvedStats?.unpaidBillsCount ?? 1;
   final packages = await fetchAndRecommendPackages(unpaidBillsCount);
-  return DuePopupDataCombined(stats, expirationInfo, packages);
+  return DuePopupDataCombined(resolvedStats, resolvedExpirationInfo, packages);
 }
 
 class DuePopupData {

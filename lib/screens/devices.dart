@@ -700,19 +700,13 @@ class _DevicePageState extends State<DevicePage> {
     final statusText = _getStatusText(status);
 
     return GestureDetector(
-      onTap: () async {
+      onTap: () {
         if (_isExpired(device)) {
           showDialog(
             context: context,
             barrierDismissible: false,
             builder: (context) => DeviceExpiredBlockingDialog(device: device),
           );
-        } else if (_isExpiringToday(device)) {
-          final result = await showPaymentDuePopupIfNeeded(context, forceShow: true);
-          // X বা snooze চাপলে ট্র্যাকিং পেজে নিয়ে যাও
-          if (result != 'go_to_payment' && result != 'payment_done' && context.mounted) {
-            Get.to(() => TrackDevicePage(device.id, device.name, device));
-          }
         } else {
           Get.to(() => TrackDevicePage(device.id, device.name, device));
         }

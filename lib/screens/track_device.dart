@@ -1222,7 +1222,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
         return savedVal;
       }
     }
-    return '54.4'; // Fixed default fallback
+    return '--'; // Default fallback when no sensor data exists
   }
 
   Color _getBatteryColor() {
@@ -2036,7 +2036,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
   Widget _buildImeiRow() {
     final name = device?.name ?? device?.deviceData?.name ?? widget.name ?? '';
     final imei = device?.imei ?? device?.deviceData?.imei ?? '';
-    final displayName = name.isNotEmpty ? name : imei;
+    final dataCtrl = Get.find<DataController>();
+    final double due = widget.device != null ? dataCtrl.getVehicleDue(widget.device!) : (device != null ? dataCtrl.getVehicleDue(device!) : 0.0);
+    final String dueSuffix = due > 0 ? ' (Due: ৳${due.toStringAsFixed(0)})' : '';
+    final displayName = name.isNotEmpty ? '$name$dueSuffix' : imei;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: const BoxDecoration(
@@ -2044,11 +2047,27 @@ class _TrackDeviceState extends State<TrackDevicePage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(displayName,
+          Text.rich(
+            TextSpan(
+              text: name,
               style: const TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFF030712),
-                  fontWeight: FontWeight.w800)),
+                fontSize: 16,
+                color: Color(0xFF030712),
+                fontWeight: FontWeight.w800,
+              ),
+              children: [
+                if (due > 0)
+                  TextSpan(
+                    text: ' (Due: ৳${due.toStringAsFixed(0)})',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFFEF4444),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+              ],
+            ),
+          ),
           Text(imei,
               style: const TextStyle(
                   fontSize: 12,

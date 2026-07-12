@@ -102,11 +102,27 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
 
       _startCountdown();
     } on TimeoutException {
-      if (mounted) setState(() => _state = _CardState.error);
+      if (mounted) {
+        setState(() => _state = _CardState.error);
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted && _state == _CardState.error) _loadData();
+        });
+      }
     } on SocketException {
-      if (mounted) setState(() => _state = _CardState.error);
-    } catch (_) {
-      if (mounted) setState(() => _state = _CardState.error);
+      if (mounted) {
+        setState(() => _state = _CardState.error);
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted && _state == _CardState.error) _loadData();
+        });
+      }
+    } catch (e) {
+      debugPrint("PAYMENT DUE CARD ERROR: $e");
+      if (mounted) {
+        setState(() => _state = _CardState.error);
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted && _state == _CardState.error) _loadData();
+        });
+      }
     }
   }
 
@@ -138,6 +154,7 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
           dueAmount: _due,
           isAfter10th: false,
           packageType: 'due_payment',
+          packageTitle: 'Due Payment (${_due.toStringAsFixed(0)} BDT)',
         ),
       ),
     );

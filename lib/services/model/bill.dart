@@ -5,6 +5,7 @@ class Bill {
   final double amount;
   final String status;
   final List<BillPayment> payments;
+  final String? vehicleName;
 
   Bill({
     required this.id,
@@ -13,6 +14,7 @@ class Bill {
     required this.amount,
     required this.status,
     required this.payments,
+    this.vehicleName,
   });
 
   factory Bill.fromJson(Map<String, dynamic> json) {
@@ -20,13 +22,19 @@ class Bill {
     List<BillPayment> paymentList =
         list.map((i) => BillPayment.fromJson(i)).toList();
 
+    String? vehicleName;
+    if (json['vehicle'] != null) {
+      vehicleName = json['vehicle']['name']?.toString();
+    }
+
     return Bill(
       id: json['id'],
       billingMonth: json['billing_month'],
-      vehicleCount: json['vehicle_count'],
+      vehicleCount: json['vehicle_count'] ?? 1,
       amount: (json['amount'] as num).toDouble(),
       status: json['status'],
       payments: paymentList,
+      vehicleName: vehicleName,
     );
   }
 }

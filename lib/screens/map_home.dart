@@ -425,12 +425,6 @@ class _MapPageState extends State<MapPage> {
                       builder: (context) =>
                           DeviceExpiredBlockingDialog(device: device!),
                     );
-                  } else if (_isExpiringToday(device!)) {
-                    final result = await showPaymentDuePopupIfNeeded(context, forceShow: true);
-                    if (result != 'go_to_payment' && result != 'payment_done' && context.mounted) {
-                      Get.to(() =>
-                          TrackDevicePage(device!.id, device!.name, device));
-                    }
                   } else {
                     Get.to(() =>
                         TrackDevicePage(device!.id, device!.name, device));
@@ -774,12 +768,6 @@ class _MapPageState extends State<MapPage> {
             barrierDismissible: false,
             builder: (context) => DeviceExpiredBlockingDialog(device: d),
           );
-        } else if (_isExpiringToday(d)) {
-          final result = await showPaymentDuePopupIfNeeded(context, forceShow: true);
-          if (result != 'go_to_payment' && result != 'payment_done' && context.mounted) {
-            moveToMarker();
-            Get.to(() => TrackDevicePage(d.id, d.name, d));
-          }
         } else {
           moveToMarker();
           Get.to(() => TrackDevicePage(d.id, d.name, d));
@@ -913,7 +901,10 @@ class _MapPageState extends State<MapPage> {
     if (!PaymentService.enableBillAlert) return false;
     final id = device.id;
     if (id == null) return false;
-    return PaymentService.isVehicleExpired(id);
+    final isBillingExpired = PaymentService.isVehicleExpired(id);
+    final days = PaymentService.vehicleDaysRemaining(id);
+    final isGpswoxExpired = _isDeviceExpired(device);
+    return isBillingExpired || days <= 0 || isGpswoxExpired;
   }
 
   /// Billing API says is_expired: false BUT days_remaining <= 7 → show warning popup

@@ -207,7 +207,7 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                               ),
                             ),
                             FutureBuilder<ExpiredDialogData>(
-                              future: loadExpiredDialogData(device.id),
+                              future: loadExpiredDialogData(device),
                               builder: (context, snapshot) {
                                 final data = snapshot.data ?? ExpiredDialogData(
                                   null,
@@ -281,6 +281,8 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                                 dueAmount: displayedDue,
                                                 isAfter10th: false,
                                                 packageType: 'due_payment',
+                                                packageTitle: 'Due Payment (${displayedDue.toStringAsFixed(0)} BDT)',
+                                                vehicleName: device.name,
                                               ),
                                             ),
                                           );
@@ -338,6 +340,8 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                                     dueAmount: pkg1!.finalPrice,
                                                     isAfter10th: false,
                                                     packageType: pkg1.key,
+                                                    packageTitle: pkg1.buttonText,
+                                                    vehicleName: device.name,
                                                   ),
                                                 ),
                                               );
@@ -373,6 +377,8 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                                         dueAmount: pkg1!.finalPrice,
                                                         isAfter10th: false,
                                                         packageType: pkg1.key,
+                                                        packageTitle: pkg1.buttonText,
+                                                        vehicleName: device.name,
                                                       ),
                                                     ),
                                                   );
@@ -407,6 +413,8 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                                         dueAmount: pkg2!.finalPrice,
                                                         isAfter10th: false,
                                                         packageType: pkg2.key,
+                                                        packageTitle: pkg2.buttonText,
+                                                        vehicleName: device.name,
                                                       ),
                                                     ),
                                                   );
@@ -541,20 +549,30 @@ class ExpiredDialogData {
   ExpiredDialogData(this.stats, this.packages);
 }
 
-Future<ExpiredDialogData> loadExpiredDialogData(int? deviceId) async {
+Future<ExpiredDialogData> loadExpiredDialogData(DeviceItem device) async {
   final stats = await PaymentService.getStats().catchError((_) => null);
   PaymentStats? resolvedStats = stats;
 
-  if (deviceId != null) {
+  final deviceId = device.id;
+  final vehicleName = device.name;
+  final vehicleImei = device.imei ?? device.deviceData?.imei;
+
+  if (deviceId != null || vehicleName != null || vehicleImei != null) {
     try {
       final rawInvoices = await PaymentService.getInvoicesRaw();
       if (rawInvoices != null && rawInvoices['bills'] != null) {
         final List bills = rawInvoices['bills'];
         
-        // Filter bills for this device if vehicle_id or device_id matches
+        // Filter bills for this device using ID, IMEI, or Name
         final deviceBills = bills.where((b) {
           final bVehicleId = b['vehicle_id'] ?? b['device_id'];
-          return bVehicleId == deviceId;
+          final bVehicle = b['vehicle'];
+          
+          final matchId = deviceId != null && bVehicleId != null && bVehicleId.toString() == deviceId.toString();
+          final matchImei = vehicleImei != null && bVehicle != null && bVehicle['imei'] != null && bVehicle['imei'].toString() == vehicleImei.toString();
+          final matchName = vehicleName != null && bVehicle != null && bVehicle['name'] != null && bVehicle['name'].toString().toLowerCase().trim() == vehicleName.toString().toLowerCase().trim();
+          
+          return matchId || matchImei || matchName;
         }).toList();
 
         if (deviceBills.isNotEmpty) {
