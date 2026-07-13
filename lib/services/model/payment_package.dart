@@ -70,7 +70,7 @@ Future<List<PaymentPackage>> fetchAndRecommendPackages(int unpaidBillsCount) asy
 
           final double originalPrice = (plan['price'] as num?)?.toDouble() ?? 0.0;
           final double finalPrice = (plan['net_price'] as num?)?.toDouble() ?? (plan['netPrice'] as num?)?.toDouble() ?? originalPrice;
-          // Note: Calculated dynamically because server API returns discount amount in BDT (e.g. 50 BDT) in the "discount" field, not percentage.
+          // Calculate percentage manually because server returns discount as a BDT amount instead of percentage
           int discountPercent = 0;
           if (originalPrice > finalPrice && originalPrice > 0) {
             discountPercent = (((originalPrice - finalPrice) / originalPrice) * 100).round();
