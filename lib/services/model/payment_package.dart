@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:smart_lock/services/payment_service.dart';
 
 class PaymentPackage {
@@ -40,7 +42,8 @@ Future<List<PaymentPackage>> fetchAndRecommendPackages(int unpaidBillsCount) asy
               final String key = durationType == 'year' ? '${duration}_year' : '${duration}_months';
               final String label = durationType == 'year' ? '$duration বছরের বিল' : '$duration মাসের বিল';
 
-              final double originalPrice = months * 200.0;
+              final double baseMonthlyPrice = (plan['price'] as num?)?.toDouble() ?? 200.0;
+              final double originalPrice = months * baseMonthlyPrice;
               int discount = 0;
               if (originalPrice > price) {
                 discount = (((originalPrice - price) / originalPrice) * 100).round();
@@ -67,7 +70,10 @@ Future<List<PaymentPackage>> fetchAndRecommendPackages(int unpaidBillsCount) asy
 
           final double originalPrice = (plan['price'] as num?)?.toDouble() ?? 0.0;
           final double finalPrice = (plan['net_price'] as num?)?.toDouble() ?? (plan['netPrice'] as num?)?.toDouble() ?? originalPrice;
-          final int discountPercent = (plan['discount'] as num?)?.toInt() ?? 0;
+          int discountPercent = 0;
+          if (originalPrice > finalPrice && originalPrice > 0) {
+            discountPercent = (((originalPrice - finalPrice) / originalPrice) * 100).round();
+          }
 
           final String label = (durationMonths % 12 == 0)
               ? '${durationMonths ~/ 12} বছরের বিল'

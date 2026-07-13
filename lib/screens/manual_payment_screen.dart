@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config.dart';
 import '../storage/user_repository.dart';
@@ -183,18 +182,9 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
         '💰 Amount: BDT ${_amountController.text.trim()}৳\n'
         '🔖 TxnID: ${_txnController.text.trim()}\n'
         '📅 Date: ${_formatNow()}\n\n'
-        '📎 Screenshot attached above.\n'
         '_Please confirm payment._',
       );
 
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'image/png')],
-        text:
-            'Manual Payment Receipt - BDT ${_amountController.text.trim()}৳ via ${_selected!.label}',
-        subject: 'Payment Receipt',
-      );
-
-      await Future.delayed(const Duration(milliseconds: 800));
       final waUri = Uri.parse('https://wa.me/$adminNumber?text=$msg');
       if (await canLaunchUrl(waUri)) {
         await launchUrl(waUri, mode: LaunchMode.externalApplication);
@@ -208,8 +198,8 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
         _showSnack('WhatsApp পাওয়া যায়নি, install করুন।', isError: true);
       }
     } catch (e) {
-      debugPrint('Share error: $e');
-      _showSnack('Share করতে সমস্যা হয়েছে: $e', isError: true);
+      debugPrint('WhatsApp launch error: $e');
+      _showSnack('WhatsApp-এ পাঠাতে সমস্যা হয়েছে: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -360,7 +350,7 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
                 const SizedBox(height: 24),
                 const _BanglaQrCard(),
                 const SizedBox(height: 24),
-                _SendButton(isSending: _isSending, onTap: _captureAndShare),
+                 _SendButton(isSending: _isSending, onTap: _captureAndShare),
                 const SizedBox(height: 32),
               ],
             ),
