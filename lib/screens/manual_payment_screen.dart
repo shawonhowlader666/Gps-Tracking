@@ -185,6 +185,7 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
         '_Please confirm payment._',
       );
 
+      // Note: Bypassed Share.shareXFiles here to directly launch WhatsApp without triggering the OS share selection sheet first
       final waUri = Uri.parse('https://wa.me/$adminNumber?text=$msg');
       if (await canLaunchUrl(waUri)) {
         await launchUrl(waUri, mode: LaunchMode.externalApplication);
