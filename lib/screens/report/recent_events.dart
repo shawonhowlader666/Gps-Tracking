@@ -365,6 +365,27 @@ class _SwipeableEventCard extends StatelessWidget {
     );
   }
 
+  /// Converts "2026-07-04 20:56:18" → "2026-07-04 8:56 PM"
+  String _formatTime(String? raw) {
+    if (raw == null || raw.isEmpty) return '';
+    try {
+      // Try parsing with or without Z suffix
+      final DateTime dt = raw.contains('T') || raw.endsWith('Z')
+          ? DateTime.parse(raw).toLocal()
+          : DateTime.parse('${raw}Z').toLocal();
+
+      final int h = dt.hour;
+      final int m = dt.minute;
+      final String period = h >= 12 ? 'PM' : 'AM';
+      final int displayH = h % 12 == 0 ? 12 : h % 12;
+      final String datePart =
+          '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      return '$datePart $displayH:${m.toString().padLeft(2, '0')} $period';
+    } catch (_) {
+      return raw;
+    }
+  }
+
   Widget _buildCard(BuildContext context) {
     final eventStyle = _getEventStyle(event.message ?? '');
 
@@ -475,7 +496,7 @@ class _SwipeableEventCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          event.time ?? '',
+                          _formatTime(event.time),
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
