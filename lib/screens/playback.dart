@@ -699,7 +699,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  DateFormat('dd-MM-yyyy HH:mm:ss').format(_fromDate),
+                  DateFormat('dd-MM-yyyy hh:mm:ss a').format(_fromDate),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       color: Colors.white,
@@ -733,7 +733,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  DateFormat('dd-MM-yyyy HH:mm:ss').format(_toDate),
+                  DateFormat('dd-MM-yyyy hh:mm:ss a').format(_toDate),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       color: Colors.white,
@@ -1786,7 +1786,7 @@ class _PlaybackScreenState extends State<PlaybackScreen>
                             Text(
                               currentTime.isNotEmpty
                                   ? _formatTimeAMPM(currentTime)
-                                  : DateFormat('HH:mm:ss').format(_fromDate),
+                                  : DateFormat('hh:mm:ss a').format(_fromDate),
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 fontSize: 9,

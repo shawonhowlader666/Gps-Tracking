@@ -631,7 +631,7 @@ class _AlertListPageState extends State<AlertListPage> {
     if (dateString == null || dateString.isEmpty) return 'N/A';
     try {
       DateTime date = DateTime.parse(dateString);
-      return DateFormat('MMM dd, yyyy HH:mm').format(date);
+      return DateFormat('MMM dd, yyyy hh:mm a').format(date);
     } catch (e) {
       return dateString;
     }

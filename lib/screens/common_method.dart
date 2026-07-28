@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 
 String formatTime(String time) {
   DateTime lastUpdate = DateTime.parse(time);
-  return DateFormat('dd-MM-yyyy hh:mm:ss aa').format(lastUpdate.toLocal());
+  return DateFormat('dd-MM-yyyy hh:mm:ss a').format(lastUpdate.toLocal());
 }
 
 String formatDateReport(String date) {
@@ -66,7 +66,7 @@ String formatInvalidDate(String date) {
 String formatInvalidTime(String date) {
   DateFormat inputFormat = DateFormat("MM-dd-yyyy HH:mm:ss");
   DateTime lastUpdate = inputFormat.parse(date);
-  return DateFormat('HH:mm:ss').format(lastUpdate.toLocal());
+  return DateFormat('hh:mm:ss a').format(lastUpdate.toLocal());
 }
 
 String convertSpeed(var speed, String type) {

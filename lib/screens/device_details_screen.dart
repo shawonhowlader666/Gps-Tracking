@@ -235,7 +235,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
 
   String _formatTimestamp(int timestamp) {
     final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
-    return DateFormat('yyyy-MM-dd HH:mm:ss').format(date);
+    return DateFormat('dd-MM-yyyy hh:mm:ss a').format(date);
   }
 
   String _formatDate(dynamic date) {

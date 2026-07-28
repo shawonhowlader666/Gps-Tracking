@@ -34,13 +34,13 @@ class Util {
   // ✅ FIX: toLocal() এর বদলে BD time use করো
   static String formatTime(String time) {
     final lastUpdate = _toBD(DateTime.parse(time));
-    return DateFormat('dd-MM-yyyy hh:mm:ss').format(lastUpdate);
+    return DateFormat('dd-MM-yyyy hh:mm:ss a').format(lastUpdate);
   }
 
   static String formatOnlyTime(String date) {
     final inputFormat = DateFormat("MM-dd-yyyy HH:mm:ss");
     final lastUpdate = _toBD(inputFormat.parse(date));
-    return DateFormat('HH:mm').format(lastUpdate);
+    return DateFormat('hh:mm a').format(lastUpdate);
   }
 
   static String formatOnlyTimeAMPM(String rawTime) {
@@ -66,7 +66,7 @@ class Util {
   static String formatInvalidTime(String date) {
     final inputFormat = DateFormat("MM-dd-yyyy HH:mm:ss");
     final lastUpdate = _toBD(inputFormat.parse(date));
-    return DateFormat('HH:mm:ss').format(lastUpdate);
+    return DateFormat('hh:mm:ss a').format(lastUpdate);
   }
 
   static String convertDistance(double distance) {
@@ -95,7 +95,7 @@ class Util {
   }
 
   static String formatReportTime(DateTime date) {
-    return DateFormat('HH:mm:ss').format(date.toLocal());
+    return DateFormat('hh:mm:ss a').format(date.toLocal());
   }
 
   static String formatDateReport(String date) {
