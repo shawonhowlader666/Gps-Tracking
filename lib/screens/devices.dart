@@ -941,9 +941,9 @@ class _DevicePageState extends State<DevicePage> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: (device.lat == null || device.lng == null)
-                              ? const Text(
-                                  'Address not available',
-                                  style: TextStyle(
+                              ? Text(
+                                  AppLang.noAddress,
+                                  style: const TextStyle(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w600,
                                     color: Color(0xFF111827),
@@ -1015,7 +1015,7 @@ class _DevicePageState extends State<DevicePage> {
       case DeviceStatus.offline:
         return _getOfflineDuration(device);
       case DeviceStatus.expired:
-        return 'subscriptionExpired'.tr;
+        return '';
     }
   }
 
