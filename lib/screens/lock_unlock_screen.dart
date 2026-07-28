@@ -31,7 +31,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   bool _isLocked = true;
   bool _isEngineOn = false;
   bool _isLoading = false;
-  String _debugCommandsText = "Loading GPRS commands...";
 
   // Selected tracker protocol
   String _selectedProtocol = 'Standard GPRS (Auto)';
@@ -133,22 +132,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
     _resolveInitialLockState();
     _loadSelectedProtocol();
-    
-    APIService.getSavedCommands(widget.device.id.toString()).then((res) {
-      if (res != null) {
-        setState(() {
-          _debugCommandsText = res.body;
-        });
-      } else {
-        setState(() {
-          _debugCommandsText = "Error: Null response from server";
-        });
-      }
-    }).catchError((err) {
-      setState(() {
-        _debugCommandsText = "Error loading: $err";
-      });
-    });
   }
 
   @override
@@ -1808,39 +1791,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     );
   }
 
-  Widget _buildDebugCommandsCard() {
-    return Container(
-      margin: const EdgeInsets.only(top: 28),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'DIAGNOSTICS: SERVER GPRS COMMANDS',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _debugCommandsText,
-            style: const TextStyle(
-              fontSize: 10,
-              fontFamily: 'monospace',
-              color: Color(0xFF1E293B),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildLoadingOverlay() {
     return Container(
