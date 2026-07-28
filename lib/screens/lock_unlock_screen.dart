@@ -1514,7 +1514,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     }
 
     return GestureDetector(
-      onTap: _isLoading || isActionStateMatched
+      onTap: _isLoading
           ? null
           : () => _sendCommand(isLock ? 'engineStop' : 'engineResume',
               lockAfter: isLock),

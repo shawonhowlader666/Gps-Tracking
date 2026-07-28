@@ -591,8 +591,21 @@ class NotificationService {
   void _handleNotificationOpen(dynamic payload) {
     Future.delayed(const Duration(milliseconds: 500), () {
       try {
-        Get.toNamed('/events');
-      } catch (_) {}
+        final str = payload?.toString().toLowerCase() ?? '';
+        if (str.contains('alert') ||
+            str.contains('sos') ||
+            str.contains('ignition') ||
+            str.contains('speed') ||
+            str.contains('geofence')) {
+          Get.toNamed('/alerts');
+        } else {
+          Get.toNamed('/events');
+        }
+      } catch (_) {
+        try {
+          Get.toNamed('/events');
+        } catch (_) {}
+      }
     });
   }
 

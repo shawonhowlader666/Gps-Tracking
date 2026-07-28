@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:get/get.dart';
 import 'package:smart_lock/screens/common_method.dart';
+import 'package:smart_lock/screens/report/report_screen.dart';
+import 'package:smart_lock/screens/report/device_fuel_screen.dart';
 import 'package:smart_lock/screens/track_device.dart';
 import 'package:smart_lock/screens/data_controller/data_controller.dart';
 import 'package:smart_lock/services/api_service.dart';
@@ -11,6 +13,7 @@ import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 import 'package:smart_lock/services/model/single_device.dart';
 import 'package:smart_lock/storage/user_repository.dart';
 import 'package:smart_lock/util/util.dart';
+import 'package:smart_lock/util/app_lang.dart';
 import '../constants/app_constants.dart';
 import '../services/payment_service.dart';
 import '../widgets/device_expired_dialog.dart';
@@ -421,17 +424,25 @@ class _DevicePageState extends State<DevicePage> {
 
   String _getStatusText(DeviceStatus status) {
     switch (status) {
-      case DeviceStatus.running:
-        return 'Moving Since';
-      case DeviceStatus.idle:
-        return 'Idle Since';
-      case DeviceStatus.stop:
-        return 'Stop Since';
-      case DeviceStatus.offline:
-        return 'Offline Since';
-      case DeviceStatus.expired:
-        return 'Expired';
+      case DeviceStatus.running: return 'movingSince'.tr;
+      case DeviceStatus.idle:    return 'idleSince'.tr;
+      case DeviceStatus.stop:    return 'stopSince'.tr;
+      case DeviceStatus.offline: return 'offlineSince'.tr;
+      case DeviceStatus.expired: return 'expired'.tr;
     }
+  }
+
+  String _getDeviceFuelCostText(DeviceItem device) {
+    final qtyStr = device.deviceData?.fuelQuantity;
+    if (qtyStr == null || qtyStr.trim().isEmpty) return AppLang.num('0.00 L');
+    final litres = double.tryParse(qtyStr) ?? 0.0;
+    final priceStr = device.deviceData?.fuelPrice;
+    final price = double.tryParse(priceStr ?? '') ?? 0.0;
+    if (price > 0) {
+      final cost = litres * price;
+      return '${AppLang.num(litres.toStringAsFixed(2))} L (৳ ${AppLang.num(cost.toStringAsFixed(2))})';
+    }
+    return '${AppLang.num(litres.toStringAsFixed(2))} L';
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -825,6 +836,53 @@ class _DevicePageState extends State<DevicePage> {
 
                     _dotDivider(),
 
+                    // Fuel row with Details
+                    GestureDetector(
+                      onTap: () {
+                        Get.to(() => DeviceFuelScreen(device: device));
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.local_gas_station_rounded,
+                            size: 14,
+                            color: Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              '${'fuel'.tr}: ${_getDeviceFuelCostText(device)}',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF111827),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'details'.tr,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.blue,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 14,
+                            color: Colors.blue,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    _dotDivider(),
+
                     // Row 2: status dot + duration
                     Row(
                       children: [
@@ -977,15 +1035,15 @@ class _DevicePageState extends State<DevicePage> {
   String _getRemainingText(DeviceItem device) {
     try {
       final expiry = device.deviceData?.expirationDate?.toString();
-      if (expiry == null || expiry.isEmpty) return 'Unlimited';
+      if (expiry == null || expiry.isEmpty) return 'unlimited'.tr;
       final date = DateTime.tryParse(expiry);
-      if (date == null) return 'Unlimited';
+      if (date == null) return 'unlimited'.tr;
       final diff = date.difference(DateTime.now());
-      if (diff.inDays < 0) return 'Expired';
-      if (diff.inDays == 0) return 'Expires Today';
-      return '${diff.inDays} Days Remaining';
+      if (diff.inDays < 0) return 'expired'.tr;
+      if (diff.inDays == 0) return 'expiresToday'.tr;
+      return '${AppLang.num(diff.inDays)} ${'daysRemaining'.tr}';
     } catch (_) {
-      return 'Unlimited';
+      return 'unlimited'.tr;
     }
   }
 

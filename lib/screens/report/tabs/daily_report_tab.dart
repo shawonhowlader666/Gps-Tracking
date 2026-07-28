@@ -1,17 +1,22 @@
 // lib/screens/report/tabs/daily_report_tab.dart
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:smart_lock/screens/report/get_today_report.dart';
+import 'package:smart_lock/services/model/device_item.dart' hide Icon;
+import 'package:smart_lock/util/app_lang.dart';
 import 'package:intl/intl.dart';
 
 class DailyReportTab extends StatefulWidget {
   final int deviceId;
   final String deviceName;
+  final DeviceItem? device;
 
   const DailyReportTab({
     super.key,
     required this.deviceId,
     required this.deviceName,
+    this.device,
   });
 
   @override
@@ -49,6 +54,7 @@ class _DailyReportTabState extends State<DailyReportTab>
       final report = await ReportService.getReportForPeriod(
         deviceId: widget.deviceId,
         period: ReportPeriod.custom,
+        device: widget.device,
         customStart: DateTime(
           _selectedDate.year,
           _selectedDate.month,
@@ -250,20 +256,20 @@ class _DailyReportTabState extends State<DailyReportTab>
 
   Widget _buildReportContent() {
     final data = _reportData!;
+    final hasFuel = data.fuelConsumption != null || data.fuelCost != null || data.odometer != null;
+    final hasEngine = data.engineHours != null || data.engineWork != null || data.engineIdle != null;
     return Column(
       children: [
         _buildHeroCard(data),
         const SizedBox(height: 16),
         _buildSpeedCard(data),
         const SizedBox(height: 16),
-        if (data.engineHours != null ||
-            data.engineWork != null ||
-            data.engineIdle != null) ...[
+        if (hasEngine) ...[
           _buildEngineCard(data),
           const SizedBox(height: 16),
         ],
-        if (data.odometer != null || data.fuelConsumption != null) ...[
-          _buildOtherCard(data),
+        if (hasFuel) ...[
+          _buildFuelCard(data),
           const SizedBox(height: 16),
         ],
         if (data.routeStart != null || data.routeEnd != null)
@@ -300,7 +306,7 @@ class _DailyReportTabState extends State<DailyReportTab>
                   color: Colors.white.withValues(alpha: 0.7), size: 22),
               const SizedBox(width: 10),
               Text(
-                data.routeLength ?? '0 km',
+                AppLang.num(data.routeLength ?? '0 km'),
                 style: const TextStyle(
                   fontSize: 38,
                   fontWeight: FontWeight.w800,
@@ -312,7 +318,7 @@ class _DailyReportTabState extends State<DailyReportTab>
           ),
           const SizedBox(height: 4),
           Text(
-            'Total Distance',
+            'totalMileage'.tr,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.65),
               fontSize: 13,
@@ -328,14 +334,14 @@ class _DailyReportTabState extends State<DailyReportTab>
           Row(
             children: [
               Expanded(
-                  child: _buildMiniStat('Moving', data.moveDuration ?? '—',
+                  child: _buildMiniStat(_movingLabel, AppLang.num(data.moveDuration ?? '—'),
                       Icons.directions_car_rounded)),
               Container(
                   width: 1,
                   height: 44,
                   color: Colors.white.withValues(alpha: 0.2)),
               Expanded(
-                  child: _buildMiniStat('Stopped', data.stopDuration ?? '—',
+                  child: _buildMiniStat(_stoppedLabel, AppLang.num(data.stopDuration ?? '—'),
                       Icons.local_parking_rounded)),
             ],
           ),
@@ -367,9 +373,13 @@ class _DailyReportTabState extends State<DailyReportTab>
     );
   }
 
+  // Mini stat labels from translation
+  String get _movingLabel => 'movingStatus'.tr;
+  String get _stoppedLabel => 'stoppedStatus'.tr;
+
   Widget _buildSpeedCard(TodayReportData data) {
     return _InfoCard(
-      title: 'Speed',
+      title: 'speed'.tr,
       icon: Icons.speed_rounded,
       child: Column(
         children: [
@@ -377,13 +387,13 @@ class _DailyReportTabState extends State<DailyReportTab>
             children: [
               Expanded(
                   child: _StatTile(
-                      label: 'Top Speed',
+                      label: 'maxSpeed'.tr,
                       value: data.topSpeed ?? '—',
                       color: _red)),
               const SizedBox(width: 12),
               Expanded(
                   child: _StatTile(
-                      label: 'Avg Speed',
+                      label: 'avgSpeed'.tr,
                       value: data.averageSpeed ?? '—',
                       color: const Color(0xFF43A047))),
             ],
@@ -404,7 +414,7 @@ class _DailyReportTabState extends State<DailyReportTab>
                       size: 18, color: Colors.orange[700]),
                   const SizedBox(width: 10),
                   Text(
-                    'Overspeed detected: ${data.overspeedCount} times',
+                    '${'overspeedCount'.tr}: ${data.overspeedCount}',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.orange[800],
@@ -422,41 +432,51 @@ class _DailyReportTabState extends State<DailyReportTab>
 
   Widget _buildEngineCard(TodayReportData data) {
     return _InfoCard(
-      title: 'Engine',
+      title: 'engine'.tr,
       icon: Icons.engineering_rounded,
       child: Column(
         children: [
           if (data.engineHours != null)
-            _DataRow(label: 'Engine Hours', value: data.engineHours!),
+            _DataRow(label: 'engineHours'.tr, value: data.engineHours!),
           if (data.engineWork != null)
-            _DataRow(label: 'Engine Work', value: data.engineWork!),
+            _DataRow(label: 'engineWork'.tr, value: data.engineWork!),
           if (data.engineIdle != null)
-            _DataRow(label: 'Engine Idle', value: data.engineIdle!, last: true),
+            _DataRow(label: 'engineIdle'.tr, value: data.engineIdle!, last: true),
         ],
       ),
     );
   }
 
-  Widget _buildOtherCard(TodayReportData data) {
+  Widget _buildFuelCard(TodayReportData data) {
+    final hasFuelConsumption = data.fuelConsumption != null;
+    final hasFuelCost = data.fuelCost != null;
+    final hasOdometer = data.odometer != null;
+
     return _InfoCard(
-      title: 'Other',
-      icon: Icons.info_outline_rounded,
-      child: Row(
+      title: 'fuel'.tr,
+      icon: Icons.local_gas_station_rounded,
+      child: Column(
         children: [
-          if (data.odometer != null)
-            Expanded(
-                child: _StatTile(
-                    label: 'Odometer',
-                    value: data.odometer!,
-                    color: const Color(0xFF5C6BC0))),
-          if (data.odometer != null && data.fuelConsumption != null)
-            const SizedBox(width: 12),
-          if (data.fuelConsumption != null)
-            Expanded(
-                child: _StatTile(
-                    label: 'Fuel',
-                    value: data.fuelConsumption!,
-                    color: const Color(0xFFFF7043))),
+          if (hasFuelConsumption)
+            _DataRow(
+              label: 'fuelConsumption'.tr,
+              value: AppLang.num(data.fuelConsumption!),
+              last: !hasFuelCost && !hasOdometer,
+            ),
+          if (hasFuelCost) ...[
+            _DataRow(
+              label: 'fuelCost'.tr,
+              value: AppLang.num(data.fuelCost!),
+              valueColor: const Color(0xFF22C55E),
+              last: !hasOdometer,
+            ),
+          ],
+          if (hasOdometer)
+            _DataRow(
+              label: 'odometer'.tr,
+              value: AppLang.num(data.odometer!),
+              last: true,
+            ),
         ],
       ),
     );
@@ -586,8 +606,14 @@ class _DataRow extends StatelessWidget {
   final String label;
   final String value;
   final bool last;
+  final Color? valueColor;
 
-  const _DataRow({required this.label, required this.value, this.last = false});
+  const _DataRow({
+    required this.label,
+    required this.value,
+    this.last = false,
+    this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -602,10 +628,10 @@ class _DataRow extends StatelessWidget {
                   style: TextStyle(fontSize: 13, color: Colors.grey[600])),
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A2E),
+                  color: valueColor ?? const Color(0xFF1A1A2E),
                 ),
               ),
             ],

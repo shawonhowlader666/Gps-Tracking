@@ -7,8 +7,11 @@ import 'package:smart_lock/screens/lock_unlock_screen.dart';
 import 'package:smart_lock/screens/playback.dart';
 import 'package:smart_lock/screens/track_device.dart';
 import 'package:smart_lock/screens/DeviceSettingPage.dart';
+import 'package:smart_lock/screens/report/report_screen.dart';
+import 'package:smart_lock/screens/report/device_fuel_screen.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 import 'package:smart_lock/widgets/address.dart';
+import 'package:smart_lock/util/app_lang.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:smart_lock/storage/user_repository.dart';
@@ -143,7 +146,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
     return iconColor == 'yellow' || iconColor == 'green';
   }
 
-  String _getStatusText(DeviceItem d) {
+  String _getRawStatus(DeviceItem d) {
     if (!_isDeviceOnline(d)) return 'OFFLINE';
     final speed = double.tryParse(d.speed.toString()) ?? 0;
     if (speed > 0) return 'RUNNING';
@@ -151,8 +154,22 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
     return 'STOPPED';
   }
 
+  String _getStatusText(DeviceItem d) {
+    final raw = _getRawStatus(d);
+    switch (raw) {
+      case 'RUNNING':
+        return 'movingStatus'.tr;
+      case 'IDLE':
+        return 'idleStatus'.tr;
+      case 'OFFLINE':
+        return 'offlineStatus'.tr;
+      default:
+        return 'stoppedStatus'.tr;
+    }
+  }
+
   Color _getStatusColor(DeviceItem d) {
-    switch (_getStatusText(d)) {
+    switch (_getRawStatus(d)) {
       case 'RUNNING':
         return _green;
       case 'IDLE':
@@ -212,7 +229,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
     return true;
   }
 
-  String _getLockStatus(DeviceItem d) => _isUnlocked(d) ? 'Unlocked' : 'Locked';
+  String _getLockStatus(DeviceItem d) => _isUnlocked(d) ? 'unlocked'.tr : 'locked'.tr;
 
   Color _getLockColor(DeviceItem d) => _isUnlocked(d) ? _green : _red;
 
@@ -247,8 +264,15 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
 
   String _getTodayFuelCost(DeviceItem d) {
     final f = d.deviceData?.fuelQuantity;
-    if (f == null || f.isEmpty) return '0.00 L';
-    return '${(double.tryParse(f) ?? 0.0).toStringAsFixed(2)} L';
+    if (f == null || f.isEmpty) return AppLang.num('0.00 L');
+    final litres = double.tryParse(f) ?? 0.0;
+    final priceStr = d.deviceData?.fuelPrice;
+    final price = double.tryParse(priceStr ?? '') ?? 0.0;
+    if (price > 0) {
+      final cost = litres * price;
+      return '${AppLang.num(litres.toStringAsFixed(2))} L (৳ ${AppLang.num(cost.toStringAsFixed(2))})';
+    }
+    return '${AppLang.num(litres.toStringAsFixed(2))} L';
   }
 
   List<Map<String, dynamic>> _parseSensors(List<dynamic>? raw) {
@@ -385,9 +409,9 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.pop(context, _device.value),
           ),
-          title: const Text(
-            'Device Details',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+          title: Text(
+            'deviceDetails'.tr,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
           ),
         ),
         body: ListView(
@@ -396,41 +420,43 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
             _Section(children: [
               _Row(
                 icon: Icons.settings_input_antenna,
-                label: 'Device Name',
+                label: 'deviceName'.tr,
                 value: d.name ?? 'N/A',
                 hasChevron: true,
                 onTap: () => _copyToClipboard(d.name ?? ''),
               ),
               _Row(
                 icon: Icons.badge_outlined,
-                label: 'IMEI',
+                label: 'imei'.tr,
                 value: d.deviceData?.imei ?? 'N/A',
                 onTap: () => _copyToClipboard(d.deviceData?.imei ?? ''),
               ),
               _Row(
                 icon: Icons.access_time_outlined,
-                label: 'Expiration',
+                label: 'expiration'.tr,
                 value: d.deviceData?.expirationDate != null
                     ? (() {
                         final raw = d.deviceData!.expirationDate.toString();
                         final date = DateTime.tryParse(raw);
                         return date != null
-                            ? DateFormat('dd/MM/yyyy').format(date)
-                            : raw;
+                            ? AppLang.num(DateFormat('dd/MM/yyyy').format(date))
+                            : AppLang.num(raw);
                       })()
-                    : 'Unlimited',
+                    : 'unlimited'.tr,
               ),
               _Row(
                 icon: Icons.sim_card_outlined,
-                label: 'SIM',
-                value: d.deviceData?.simNumber ?? 'N/A',
+                label: 'sim'.tr,
+                value: d.deviceData?.simNumber != null
+                    ? AppLang.num(d.deviceData!.simNumber!)
+                    : 'N/A',
                 valueColor: _primary,
                 hasChevron: true,
                 onTap: () => _callSim(d),
               ),
               _Row(
                 icon: Icons.grid_view_rounded,
-                label: 'Device Icons',
+                label: 'deviceIcons'.tr,
                 value: '',
                 hasChevron: true,
                 customTrailing: Padding(
@@ -446,10 +472,20 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                 ),
                 onTap: () => Get.to(() => DeviceSettingPage(device: d)),
               ),
+              _Row(
+                icon: Icons.local_gas_station_rounded,
+                label: 'fuel'.tr,
+                value: _getTodayFuelCost(d),
+                hasChevron: true,
+                valueColor: Colors.black87,
+                onTap: () {
+                  Get.to(() => DeviceFuelScreen(device: d));
+                },
+              ),
               if (d.deviceData?.additionalNotes != null && d.deviceData!.additionalNotes!.trim().isNotEmpty)
                 _Row(
                   icon: Icons.note_alt_outlined,
-                  label: 'Note',
+                  label: 'note'.tr,
                   value: d.deviceData!.additionalNotes!,
                   onTap: () => _copyToClipboard(d.deviceData!.additionalNotes!),
                 ),
@@ -461,19 +497,19 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
             _Section(children: [
               _Row(
                 icon: Icons.error_outline,
-                label: 'Status',
+                label: 'status'.tr,
                 value: _getStatusText(d),
                 valueColor: _getStatusColor(d),
               ),
               _Row(
                 icon: Icons.settings_outlined,
-                label: 'ACC',
-                value: _isEngineOn(d) ? 'ON' : 'OFF',
+                label: 'acc'.tr,
+                value: _isEngineOn(d) ? 'ON'.tr : 'OFF'.tr,
                 valueColor: _isEngineOn(d) ? _green : _grey,
               ),
               _Row(
                 icon: Icons.lock_outline,
-                label: 'Lock status',
+                label: 'lockStatus'.tr,
                 value: _getLockStatus(d),
                 valueColor: _getLockColor(d),
               ),
@@ -485,14 +521,14 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
             _Section(children: [
               _Row(
                 icon: Icons.my_location,
-                label: 'Location Time',
+                label: 'locationTime'.tr,
                 value: d.timestamp != null
                     ? _formatTimestamp(d.timestamp!)
                     : 'N/A',
               ),
               _Row(
                 icon: Icons.show_chart,
-                label: 'Latest Update',
+                label: 'latestUpdate'.tr,
                 value: d.deviceData?.updatedAt != null
                     ? _formatDate(d.deviceData!.updatedAt!)
                     : (d.timestamp != null
@@ -501,7 +537,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
               ),
               _Row(
                 icon: Icons.storage_outlined,
-                label: 'Server Time',
+                label: 'serverTime'.tr,
                 value: d.timestamp != null
                     ? _formatTimestamp(d.timestamp!)
                     : 'N/A',
@@ -519,22 +555,24 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
             _Section(children: [
               _Row(
                 icon: Icons.speed_outlined,
-                label: 'Today Mileage',
+                label: 'todayMileage'.tr,
                 value: _getTodayMileage(d),
               ),
               _Row(
                 icon: Icons.show_chart,
-                label: 'Odometer',
+                label: 'odometer'.tr,
                 value: _getOdometer(d),
                 hasChevron: true,
                 onTap: () {},
               ),
               _Row(
                 icon: Icons.local_gas_station_outlined,
-                label: 'Today Fuel Cost',
+                label: 'todayFuelCost'.tr,
                 value: _getTodayFuelCost(d),
                 hasChevron: true,
-                onTap: () {},
+                onTap: () {
+                  Get.to(() => DeviceFuelScreen(device: d));
+                },
               ),
             ]),
 
@@ -553,7 +591,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                 children: [
                   Expanded(
                     child: _ActionButton(
-                      label: 'Navigate',
+                      label: 'navigate'.tr,
                       color: _primary,
                       onPressed: () => _navigate(d),
                     ),
@@ -561,7 +599,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _ActionButton(
-                      label: 'Track Live',
+                      label: 'trackLive'.tr,
                       color: _green,
                       onPressed: () => _openTracking(d),
                     ),
@@ -575,7 +613,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                 children: [
                   Expanded(
                     child: _ActionButton(
-                      label: 'Playback',
+                      label: 'playback'.tr,
                       color: _orange,
                       outlined: true,
                       onPressed: () => _openPlayback(d),
@@ -584,7 +622,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _ActionButton(
-                      label: 'Lock / Unlock',
+                      label: 'lockUnlock'.tr,
                       color: _primary,
                       outlined: true,
                       onPressed: () => _openLockUnlock(d),

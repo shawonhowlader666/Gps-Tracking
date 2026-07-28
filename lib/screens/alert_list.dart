@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 import 'package:smart_lock/services/model/alert.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 import 'package:smart_lock/services/model/user.dart';
@@ -265,22 +266,6 @@ class _AlertListPageState extends State<AlertListPage> {
           } catch (e) {
             debugPrint("Auto-create default alert error: $e");
           }
-        } else if (existing.active.toString() != "1") {
-          // If it exists but is inactive, automatically activate it!
-          Map<String, String> requestBody = {
-            'id': existing.id.toString(),
-            'active': "true"
-          };
-          try {
-            final resp = await APIService.activateAlert(requestBody);
-            if (resp.statusCode == 200) {
-              changedAny = true;
-              final activePrefs = prefs ?? await SharedPreferences.getInstance();
-              await activePrefs.setBool('auto_alert_$key', true);
-            }
-          } catch (e) {
-            debugPrint("Auto-activate default alert error: $e");
-          }
         }
       }
       
@@ -337,7 +322,8 @@ class _AlertListPageState extends State<AlertListPage> {
                 'type': 'gprs',
                 'command': '1220000 $formattedSpeed',
               };
-              APIService.sendCommands(commandBody).catchError((e) {});
+              // Fire-and-forget GPRS command — errors are non-critical
+              _sendCommandSilently(commandBody);
             }
           }
         }
@@ -346,8 +332,9 @@ class _AlertListPageState extends State<AlertListPage> {
       } else {
         _showSnackBar('Failed to activate', isError: true);
       }
-    }).catchError((e) {
+    }).catchError((Object e) {
       _showSnackBar('Error: $e', isError: true);
+      return http.Response('', 500);
     });
   }
 
@@ -376,7 +363,7 @@ class _AlertListPageState extends State<AlertListPage> {
                 'type': 'gprs',
                 'command': '1220000 0',
               };
-              APIService.sendCommands(commandBody).catchError((e) {});
+              _sendCommandSilently(commandBody);
             }
           }
         }
@@ -385,8 +372,9 @@ class _AlertListPageState extends State<AlertListPage> {
       } else {
         _showSnackBar('Failed to deactivate', isError: true);
       }
-    }).catchError((e) {
+    }).catchError((Object e) {
       _showSnackBar('Error: $e', isError: true);
+      return http.Response('', 500);
     });
   }
 
@@ -442,18 +430,27 @@ class _AlertListPageState extends State<AlertListPage> {
                 'type': 'gprs',
                 'command': '1220000 0',
               };
-              APIService.sendCommands(commandBody).catchError((e) {});
+              _sendCommandSilently(commandBody);
             }
           }
         }
 
         getAlerts();
       }
-    }).catchError((e) {
+    }).catchError((Object e) {
       if (mounted) {
         _showSnackBar('Failed to delete', isError: true);
       }
+      return http.Response('', 500);
     });
+  }
+
+  // Fire-and-forget GPRS hardware command — errors are silently swallowed
+  // because these are best-effort hardware syncs; the server alert is the source of truth.
+  Future<void> _sendCommandSilently(Map<String, String> body) async {
+    try {
+      await APIService.sendCommands(body);
+    } catch (_) {}
   }
 
   void _showValidationError(List<String> errors) {
@@ -553,10 +550,11 @@ class _AlertListPageState extends State<AlertListPage> {
           _showSnackBar('Failed to create alert', isError: true);
         }
       }
-    }).catchError((e) {
+    }).catchError((Object e) {
       if (mounted) {
         _showSnackBar('Error: $e', isError: true);
       }
+      return http.Response('', 500);
     });
   }
 
@@ -664,9 +662,9 @@ class _AlertListPageState extends State<AlertListPage> {
       backgroundColor: _primaryRed,
       foregroundColor: Colors.white,
       centerTitle: true,
-      title: const Text(
-        'Alerts',
-        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+      title: Text(
+        'alerts'.tr,
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
       ),
       actions: [
         IconButton(
@@ -748,74 +746,37 @@ class _AlertListPageState extends State<AlertListPage> {
   void toggleAutoAlert(String alertKey, bool turnOn) async {
     final activePrefs = prefs ?? await SharedPreferences.getInstance();
 
-    if (alertKey == 'idle' || alertKey == 'offline') {
-      await activePrefs.setBool('auto_alert_$alertKey', turnOn);
-      setState(() {});
-      _showSnackBar(turnOn ? 'Alert activated' : 'Alert deactivated');
-      return;
-    }
+    // 1. Immediately update local state so switch operates smoothly
+    await activePrefs.setBool('auto_alert_$alertKey', turnOn);
+    if (mounted) setState(() {});
+    _showSnackBar(turnOn ? 'Alert activated' : 'Alert deactivated');
 
-    setState(() => isLoading = true);
-    
-    final String targetType = 'ignition_duration';
-            
-    Alert? existing;
-    for (var a in alertList) {
-      final t = a.type?.toLowerCase();
-      final bool isMatch = (t == 'ignition_duration' || t == 'ignition');
-      if (isMatch) {
-        existing = a;
-        break;
-      }
-    }
-        
-    if (existing != null) {
-      // Toggle existing alert on the server
-      Map<String, String> requestBody = {
-        'id': existing.id.toString(),
-        'active': turnOn ? "true" : "false"
-      };
-      try {
-        final resp = await APIService.activateAlert(requestBody);
-        if (resp.statusCode == 200) {
-          _showSnackBar(turnOn ? 'Alert activated' : 'Alert deactivated');
-          await activePrefs.setBool('auto_alert_$alertKey', turnOn);
-        } else {
-          _showSnackBar('Failed to update alert', isError: true);
+    // 2. Best-effort server sync for ignition alert if possible
+    if (alertKey == 'engine') {
+      final String targetType = 'ignition_duration';
+      Alert? existing;
+      for (var a in alertList) {
+        final t = a.type?.toLowerCase();
+        if (t == 'ignition_duration' || t == 'ignition') {
+          existing = a;
+          break;
         }
-      } catch (e) {
-        _showSnackBar('Error: $e', isError: true);
       }
-      await getAlerts();
-    } else {
-      if (turnOn) {
-        // Create new alert on the server
-        if (devicesList.isEmpty) {
-          setState(() => isLoading = false);
-          _showSnackBar('No devices available to assign alert', isError: true);
-          return;
-        }
-        
-        final String nameVal = 'Engine ON / OFF';
-        final String name = Uri.encodeComponent(nameVal);
-        final String devices = devicesList.map((d) => 'devices[]=${d.id}').join('&');
-        final String paramVal = '0';
-        final String request = '&name=$name&type=$targetType&$targetType=$paramVal&$devices&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1';
-        
+
+      if (existing != null) {
         try {
-          final resp = await APIService.addAlert(request);
-          if (resp.statusCode == 200) {
-            _showSnackBar('Alert created successfully');
-            await activePrefs.setBool('auto_alert_$alertKey', turnOn);
-          } else {
-            _showSnackBar('Failed to create alert', isError: true);
-          }
-        } catch (e) {
-          _showSnackBar('Error: $e', isError: true);
-        }
-        await getAlerts();
-      } else {
-        setState(() => isLoading = false);
+          await APIService.activateAlert({
+            'id': existing.id.toString(),
+            'active': turnOn ? "true" : "false"
+          });
+        } catch (_) {}
+      } else if (turnOn && devicesList.isNotEmpty) {
+        final String name = Uri.encodeComponent('Engine ON / OFF');
+        final String devices = devicesList.map((d) => 'devices[]=${d.id}').join('&');
+        final String request = '&name=$name&type=$targetType&$targetType=0&$devices&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1';
+        try {
+          await APIService.addAlert(request);
+        } catch (_) {}
       }
     }
   }
@@ -826,22 +787,8 @@ class _AlertListPageState extends State<AlertListPage> {
     required String desc,
     required String alertKey,
   }) {
-    bool isEnabled = false;
-
-    if (alertKey == 'idle' || alertKey == 'offline') {
-      isEnabled = prefs?.getBool('auto_alert_$alertKey') ?? true;
-    } else {
-      Alert? existing;
-      for (var a in alertList) {
-        final t = a.type?.toLowerCase();
-        final bool isMatch = (t == 'ignition_duration' || t == 'ignition');
-        if (isMatch) {
-          existing = a;
-          break;
-        }
-      }
-      isEnabled = existing != null && existing.active.toString() == "1";
-    }
+    // Read state from local pref (defaults to true)
+    final bool isEnabled = prefs?.getBool('auto_alert_$alertKey') ?? true;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 5),

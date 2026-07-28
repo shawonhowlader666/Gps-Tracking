@@ -29,27 +29,36 @@ class _EventsPageState extends State<EventsPage> {
     await controller.getEvents();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: _buildAppBar(),
-      body: Obx(() {
-        final isLoading = controller.isEventLoading.value;
-        final hasEvents = controller.events.isNotEmpty;
+  String _filterCategory = 'all';
+  String _searchQuery = '';
 
-        // Loading state — show shimmer/spinner
-        if (isLoading && !hasEvents) {
-          return _buildLoadingState();
+  List<Event> _getFilteredEvents() {
+    return controller.events.where((e) {
+      if (_filterCategory != 'all') {
+        final msg = (e.message ?? '').toLowerCase();
+        if (_filterCategory == 'engine' &&
+            !msg.contains('ignition') &&
+            !msg.contains('engine') &&
+            !msg.contains('acc')) return false;
+        if (_filterCategory == 'speed' && !msg.contains('speed')) return false;
+        if (_filterCategory == 'geofence' &&
+            !msg.contains('geofence') &&
+            !msg.contains('zone')) return false;
+        if (_filterCategory == 'sos' &&
+            !msg.contains('sos') &&
+            !msg.contains('alarm')) return false;
+      }
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase();
+        final devName = (e.device_name ?? '').toLowerCase();
+        final msg = (e.message ?? '').toLowerCase();
+        final time = (e.time ?? '').toLowerCase();
+        if (!devName.contains(q) && !msg.contains(q) && !time.contains(q)) {
+          return false;
         }
-
-        return RefreshIndicator(
-          onRefresh: _onRefresh,
-          color: const Color(0xFFC0392B),
-          child: hasEvents ? _buildEventsList() : _buildEmptyState(),
-        );
-      }),
-    );
+      }
+      return true;
+    }).toList();
   }
 
   PreferredSizeWidget _buildAppBar() {
@@ -92,25 +101,96 @@ class _EventsPageState extends State<EventsPage> {
             ),
           ),
         const SizedBox(width: 8),
-        // In EventsPage AppBar actions
-        // FloatingActionButton(
-        //   mini: true,
-        //   onPressed: () {
-        //     final DataController controller = Get.find();
-        //     controller.sendTestNotification();
-        //   },
-        //   child: Icon(Icons.notification_add),
-        // )
       ],
     );
   }
 
-  Widget _buildEventsList() {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: _buildAppBar(),
+      body: Obx(() {
+        final isLoading = controller.isEventLoading.value;
+        final hasEvents = controller.events.isNotEmpty;
+
+        if (isLoading && !hasEvents) {
+          return _buildLoadingState();
+        }
+
+        final filtered = _getFilteredEvents();
+
+        return RefreshIndicator(
+          onRefresh: _onRefresh,
+          color: const Color(0xFFC0392B),
+          child: Column(
+            children: [
+              if (hasEvents) _buildFilterBar(),
+              Expanded(
+                child: filtered.isNotEmpty
+                    ? _buildEventsList(filtered)
+                    : _buildEmptyState(),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildFilterBar() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _buildFilterChip('all', 'All', Icons.grid_view_rounded),
+            const SizedBox(width: 6),
+            _buildFilterChip('engine', 'Engine', Icons.key_rounded),
+            const SizedBox(width: 6),
+            _buildFilterChip('speed', 'Speed', Icons.speed_rounded),
+            const SizedBox(width: 6),
+            _buildFilterChip('geofence', 'Geofence', Icons.location_on_rounded),
+            const SizedBox(width: 6),
+            _buildFilterChip('sos', 'SOS', Icons.sos_rounded),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String id, String label, IconData icon) {
+    final bool isSelected = _filterCategory == id;
+    return ChoiceChip(
+      selected: isSelected,
+      onSelected: (val) {
+        if (val) setState(() => _filterCategory = id);
+      },
+      avatar: Icon(icon,
+          size: 14,
+          color: isSelected ? Colors.white : const Color(0xFF6B7280)),
+      label: Text(label),
+      labelStyle: TextStyle(
+        fontSize: 12,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+        color: isSelected ? Colors.white : const Color(0xFF374151),
+      ),
+      selectedColor: const Color(0xFFC0392B),
+      backgroundColor: const Color(0xFFF3F4F6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      showCheckmark: false,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+    );
+  }
+
+  Widget _buildEventsList(List<Event> filteredList) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      itemCount: controller.events.length,
+      itemCount: filteredList.length,
       itemBuilder: (context, index) {
-        final event = controller.events[index];
+        final event = filteredList[index];
         return Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: _SwipeableEventCard(

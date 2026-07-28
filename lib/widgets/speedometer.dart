@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:smart_lock/util/app_lang.dart';
 
 class SpeedometerScreen extends StatefulWidget {
   const SpeedometerScreen({super.key});
@@ -183,11 +184,11 @@ class SpeedometerPainter extends CustomPainter {
     tpSpeed.paint(
         canvas, Offset(center.dx - tpSpeed.width / 2, center.dy - 25));
 
-    // Km/h label
+    // Speed unit label (Km/h or কি.মি./ঘ. in Bengali)
     TextPainter tpUnit = TextPainter(
-      text: const TextSpan(
-        text: "Km/h",
-        style: TextStyle(fontSize: 18, color: Colors.black),
+      text: TextSpan(
+        text: AppLang.speedUnit,
+        style: const TextStyle(fontSize: 18, color: Colors.black),
       ),
       textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,

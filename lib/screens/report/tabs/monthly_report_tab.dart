@@ -1,8 +1,10 @@
 // lib/screens/report/tabs/monthly_report_tab.dart
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:smart_lock/screens/report/get_today_report.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
+import 'package:smart_lock/util/app_lang.dart';
 import 'package:intl/intl.dart';
 import '../../playback.dart';
 
@@ -68,6 +70,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
       final monthlyReport = await ReportService.getReportForPeriod(
         deviceId: widget.deviceId,
         period: ReportPeriod.custom,
+        device: widget.device,
         customStart: firstDay,
         customEnd: effectiveLastDay,
         forceRefresh: forceRefresh,
@@ -129,6 +132,7 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
     try {
       final dayReport = await ReportService.getReportForPeriod(
         deviceId: widget.deviceId,
+        device: widget.device,
         period: ReportPeriod.custom,
         customStart: date,
         customEnd: DateTime(date.year, date.month, date.day, 23, 59, 59),
@@ -539,23 +543,32 @@ class _MonthlyReportTabState extends State<MonthlyReportTab>
                     icon: Icons.trending_up_rounded)),
           ],
         ),
-        if (data.engineHours != null || data.fuelConsumption != null) ...[
+        if (data.fuelConsumption != null || data.fuelCost != null || data.engineHours != null) ...[
           const SizedBox(height: 10),
           Row(
             children: [
               if (data.engineHours != null)
                 Expanded(
                     child: _MiniDetail(
-                        label: 'Engine',
-                        value: data.engineHours!,
+                        label: 'engine'.tr,
+                        value: AppLang.num(data.engineHours!),
                         icon: Icons.engineering_rounded)),
               if (data.fuelConsumption != null)
                 Expanded(
                     child: _MiniDetail(
-                        label: 'Fuel',
-                        value: data.fuelConsumption!,
+                        label: 'fuel'.tr,
+                        value: AppLang.num(data.fuelConsumption!),
                         icon: Icons.local_gas_station_rounded)),
-              if (data.engineHours == null || data.fuelConsumption == null)
+              if (data.fuelCost != null)
+                Expanded(
+                    child: _MiniDetail(
+                        label: 'fuelCost'.tr,
+                        value: AppLang.num(data.fuelCost!),
+                        icon: Icons.monetization_on_outlined,
+                        valueColor: const Color(0xFF22C55E))),
+              // fill empty space if only one item
+              if ([data.engineHours, data.fuelConsumption, data.fuelCost]
+                      .where((e) => e != null).length == 1)
                 const Expanded(child: SizedBox()),
             ],
           ),
@@ -646,8 +659,14 @@ class _MiniDetail extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
-  const _MiniDetail(
-      {required this.label, required this.value, required this.icon});
+  final Color? valueColor;
+
+  const _MiniDetail({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -663,8 +682,11 @@ class _MiniDetail extends StatelessWidget {
                   style: TextStyle(fontSize: 10, color: Colors.grey[500])),
               Text(
                 value,
-                style:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: valueColor ?? const Color(0xFF1F2937),
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ],
@@ -673,10 +695,4 @@ class _MiniDetail extends StatelessWidget {
       ],
     );
   }
-}
-
-class DayReport {
-  final DateTime date;
-  final TodayReportData data;
-  DayReport({required this.date, required this.data});
 }

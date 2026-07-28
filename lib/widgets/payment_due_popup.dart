@@ -5,6 +5,7 @@ import 'package:smart_lock/screens/manual_payment_screen.dart';
 import 'package:smart_lock/services/model/payment_stats.dart';
 import 'package:smart_lock/services/model/payment_package.dart';
 import 'package:smart_lock/services/payment_service.dart';
+import 'package:smart_lock/util/app_lang.dart';
 
 Future<String?> showPaymentDuePopupIfNeeded(BuildContext context,
     {bool forceShow = false, int? vehicleId, String? vehicleName, String? vehicleImei}) async {
@@ -206,7 +207,7 @@ class PaymentDuePopup extends StatefulWidget {
 }
 
 class _PaymentDuePopupState extends State<PaymentDuePopup> {
-  final bool _isPaymentLoading = false;
+  bool _isPaymentLoading = false;
   String? _errorMessage;
   late Future<DuePopupData> _duePopupDataFuture;
 
@@ -224,7 +225,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
   void initState() {
     super.initState();
     if (widget.stats != null) {
-      _duePopupDataFuture = loadDuePopupData(widget.stats!.unpaidBillsCount);
+      _duePopupDataFuture = loadDuePopupData(widget.stats!.unpaidBillsCount, dueAmount: widget.stats!.due);
     } else {
       _loadDataAsync();
     }
@@ -277,11 +278,47 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
   Future<void> _handlePay(double amount, String packageType, {String? packageTitle}) async {
     if (!mounted) return;
 
+    // Check if this is a package selection (e.g. 3_months, 6_months, 1_year)
+    final int months = getMonthCountFromKey(packageType);
+    double finalAmount = amount;
+
+    if (packageType != 'due_payment' && months > 0) {
+      setState(() {
+        _isPaymentLoading = true;
+      });
+
+      try {
+        // Send will_create: true to API to create/apply the discount invoice in database
+        final res = await PaymentService.calculateManualCustomDiscount(
+          durationMonths: months,
+          willCreate: true,
+        );
+
+        if (res != null && res['payable_total'] != null) {
+          final double serverPayable = (res['payable_total'] as num?)?.toDouble() ??
+              double.tryParse(res['payable_total']?.toString() ?? '') ??
+              amount;
+          if (serverPayable > 0) {
+            finalAmount = serverPayable;
+          }
+        }
+      } catch (e) {
+        debugPrint('[PAYMENT] Error applying custom discount (will_create: true): $e');
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isPaymentLoading = false;
+          });
+        }
+      }
+    }
+
+    if (!mounted) return;
+
     final bool isAfter10th = _isAfter10th;
     final nav = Navigator.of(context, rootNavigator: true);
 
     // ✅ আগে ManualPaymentScreen push করো, তারপর popup pop করো
-    // এতে context valid থাকে
     nav.pop('go_to_payment');
 
     // ✅ addPostFrameCallback দিয়ে popup বন্ধ হওয়ার পর push করো
@@ -289,7 +326,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
       await nav.push<String>(
         MaterialPageRoute(
           builder: (_) => ManualPaymentScreen(
-            dueAmount: amount,
+            dueAmount: finalAmount,
             isAfter10th: isAfter10th,
             packageType: packageType,
             packageTitle: packageTitle,
@@ -507,7 +544,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
               ),
               const SizedBox(width: 2),
               Text(
-                _stats.due.toStringAsFixed(2),
+                AppLang.num(_stats.due.toStringAsFixed(2)),
                 style: const TextStyle(
                   color: Color(0xFFE53935),
                   fontSize: 48,
@@ -542,7 +579,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
             child: ElevatedButton.icon(
               onPressed: _isPaymentLoading
                   ? null
-                  : () => _handlePay(_stats.due, 'due_payment', packageTitle: 'Due Payment (${_stats.due.toStringAsFixed(0)} BDT)'),
+                  : () => _handlePay(_stats.due, 'due_payment', packageTitle: 'বকেয়া পেমেন্ট (৳${AppLang.num(_stats.due.toStringAsFixed(0))})'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1B6B3A),
                 foregroundColor: Colors.white,
@@ -602,10 +639,10 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                         ? null
                         : () => _handlePay(pkg1.finalPrice, pkg1.key, packageTitle: pkg1.buttonText),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE4B34E),
+                      backgroundColor: const Color(0xFFD99E30),
                       foregroundColor: Colors.black,
                       disabledBackgroundColor:
-                          const Color(0xFFE4B34E).withValues(alpha: 0.6),
+                          const Color(0xFFD99E30).withValues(alpha: 0.6),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
@@ -620,14 +657,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                               color: Colors.white,
                             ),
                           )
-                        : Text(
-                            pkg1.buttonText,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+                        : _buildPkgButtonContent(pkg1, darkText: false),
                   ),
                 );
               }
@@ -661,14 +691,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                                   color: Colors.white,
                                 ),
                               )
-                            : Text(
-                                pkg1.buttonText,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                            : _buildPkgButtonContent(pkg1, darkText: false),
                       ),
                     ),
                   ),
@@ -681,10 +704,10 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                             ? null
                             : () => _handlePay(pkg2.finalPrice, pkg2.key, packageTitle: pkg2.buttonText),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE4B34E),
+                          backgroundColor: const Color(0xFFD99E30),
                           foregroundColor: Colors.black,
                           disabledBackgroundColor:
-                              const Color(0xFFE4B34E).withValues(alpha: 0.6),
+                              const Color(0xFFD99E30).withValues(alpha: 0.6),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -700,14 +723,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                                   color: Colors.white,
                                 ),
                               )
-                            : Text(
-                                pkg2.buttonText,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                            : _buildPkgButtonContent(pkg2, darkText: true),
                       ),
                     ),
                   ),
@@ -790,7 +806,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
                   color: const Color(0xFFE53935).withValues(alpha: 0.3)),
             ),
             child: Text(
-              '$overdueDays দিন অতিক্রান্ত',
+              '${AppLang.num(overdueDays)} দিন অতিক্রান্ত',
               style: const TextStyle(
                 color: Color(0xFFE53935),
                 fontSize: 12,
@@ -849,7 +865,7 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
           TextSpan(text: message),
           if (!_isExpired) ...[
             TextSpan(
-              text: '$remaining দিন',
+              text: '${AppLang.num(remaining)} দিন',
               style: const TextStyle(
                 color: Color(0xFFE53935),
                 fontWeight: FontWeight.w700,
@@ -859,6 +875,62 @@ class _PaymentDuePopupState extends State<PaymentDuePopup> {
           ],
         ],
       ),
+    );
+  }
+
+  /// Package button content: label on top, strikethrough original + bold final price below
+  Widget _buildPkgButtonContent(PaymentPackage pkg, {bool darkText = false}) {
+    final textColor = darkText ? Colors.black87 : Colors.white;
+    final hasDiscount = pkg.discountPercent > 0 && pkg.originalPrice > pkg.finalPrice;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          AppLang.num(pkg.label),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: textColor,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 3),
+        RichText(
+          textAlign: TextAlign.center,
+          text: TextSpan(
+            children: [
+              if (hasDiscount) ...[
+                TextSpan(
+                  text: '৳${AppLang.num(pkg.originalPrice.toStringAsFixed(0))} ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: textColor.withValues(alpha: 0.65),
+                    decoration: TextDecoration.lineThrough,
+                    decorationColor: textColor.withValues(alpha: 0.65),
+                  ),
+                ),
+              ],
+              TextSpan(
+                text: '৳${AppLang.num(pkg.finalPrice.toStringAsFixed(0))}',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: textColor,
+                ),
+              ),
+              if (hasDiscount)
+                TextSpan(
+                  text: '  ${AppLang.num(pkg.discountPercent.toString())}% ছাড়',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF1B6B3A),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -934,7 +1006,7 @@ Future<DuePopupDataCombined> loadCombinedDuePopupData({int? vehicleId, String? v
   }
 
   final unpaidBillsCount = resolvedStats?.unpaidBillsCount ?? 1;
-  final packages = await fetchAndRecommendPackages(unpaidBillsCount);
+  final packages = await fetchAndRecommendPackages(unpaidBillsCount, dueAmount: resolvedStats?.due);
   return DuePopupDataCombined(resolvedStats, resolvedExpirationInfo, packages);
 }
 
@@ -943,7 +1015,7 @@ class DuePopupData {
   DuePopupData(this.packages);
 }
 
-Future<DuePopupData> loadDuePopupData(int unpaidBillsCount) async {
-  final packages = await fetchAndRecommendPackages(unpaidBillsCount);
+Future<DuePopupData> loadDuePopupData(int unpaidBillsCount, {double? dueAmount}) async {
+  final packages = await fetchAndRecommendPackages(unpaidBillsCount, dueAmount: dueAmount);
   return DuePopupData(packages);
 }

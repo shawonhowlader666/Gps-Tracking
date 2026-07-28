@@ -20,6 +20,7 @@ import 'package:smart_lock/screens/data_controller/data_controller.dart';
 import 'package:smart_lock/services/api_service.dart';
 import 'package:smart_lock/services/road_snap_service.dart';
 import 'package:smart_lock/util/util.dart';
+import 'package:smart_lock/util/app_lang.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:smart_lock/storage/user_repository.dart';
 import 'package:smart_lock/services/payment_service.dart';
@@ -984,16 +985,11 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   String _getStatusText() {
     switch (_getDeviceStatus(device)) {
-      case DeviceStatus.running:
-        return "Moving";
-      case DeviceStatus.idle:
-        return "Idle";
-      case DeviceStatus.stop:
-        return "Stopped";
-      case DeviceStatus.offline:
-        return "Offline";
-      case DeviceStatus.expired:
-        return "Expired";
+      case DeviceStatus.running: return 'movingStatus'.tr;
+      case DeviceStatus.idle:    return 'idleStatus'.tr;
+      case DeviceStatus.stop:    return 'stoppedStatus'.tr;
+      case DeviceStatus.offline: return 'offlineStatus'.tr;
+      case DeviceStatus.expired: return 'expiredStatus'.tr;
     }
   }
 
@@ -1979,16 +1975,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          _buildActionBtn(Icons.play_circle_fill, 'Play Back',
-              const Color(0xFF3B82F6), _openPlayback),
-          _buildActionBtn(
-              Icons.notifications_active, 'Alert', const Color(0xFFF59E0B), () {
-            Get.to(() => EventsPage());
-          }),
-          _buildActionBtn(
-              Icons.lock, 'Lock', const Color(0xFF22C55E), _openLock),
-          _buildActionBtn(
-              Icons.settings, 'Setting', const Color(0xFF0EA5E9), _openDetails),
+          _buildActionBtn(Icons.play_circle_fill, 'playBack'.tr, const Color(0xFF3B82F6), _openPlayback),
+          _buildActionBtn(Icons.notifications_active, 'alert'.tr, const Color(0xFFF59E0B), () { Get.to(() => EventsPage()); }),
+          _buildActionBtn(Icons.lock, 'lockBtn'.tr, const Color(0xFF22C55E), _openLock),
+          _buildActionBtn(Icons.settings, 'setting'.tr, const Color(0xFF0EA5E9), _openDetails),
         ],
       ),
     );
@@ -2185,7 +2175,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
             bgColor: statusBgColor,
             content: Text(
               status == DeviceStatus.running
-                  ? '${double.tryParse(device?.speed?.toString() ?? '0')?.toInt() ?? 0} km/h'
+                  ? AppLang.num(double.tryParse(device?.speed?.toString() ?? '0')?.toInt() ?? 0)
+                    + ' ${'speedUnit'.tr}'
                   : stopDuration,
               textAlign: TextAlign.center,
               maxLines: 1,
@@ -2200,10 +2191,10 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
           // Engine Card
           buildCardItem(
-            label: 'Engine',
+            label: 'engine'.tr,
             bgColor: engineBgColor,
             content: Text(
-              isEngineOn ? 'On' : 'Off',
+              isEngineOn ? 'engineOn'.tr : 'engineOff'.tr,
               textAlign: TextAlign.center,
               maxLines: 1,
               softWrap: false,
@@ -2245,7 +2236,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
           // Expiry Card
           buildCardItem(
-            label: 'Expired On',
+            label: 'expiredOn'.tr,
             bgColor: expiryBgColor,
             content: Text(
               expiryStr,
@@ -2275,23 +2266,25 @@ class _TrackDeviceState extends State<TrackDevicePage>
         children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
-                todaytotalDistance.toLowerCase().contains('km')
-                    ? todaytotalDistance
-                    : '${todaytotalDistance} Km',
+                AppLang.num(
+                  todaytotalDistance.toLowerCase().contains('km')
+                      ? todaytotalDistance
+                      : '$todaytotalDistance ${'kmUnit'.tr}',
+                ),
                 style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF1F2937))),
-            Text('Today Mileage',
+            Text('todayMileage'.tr,
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
           ]),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('${totalMileage}Km',
+            Text(AppLang.num('${totalMileage}${'kmUnit'.tr}'),
                 style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF1F2937))),
-            Text('Total Mileage',
+            Text('totalMileage'.tr,
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
           ]),
         ],

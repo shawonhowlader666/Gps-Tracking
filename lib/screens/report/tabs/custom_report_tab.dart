@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:smart_lock/screens/report/get_today_report.dart';
+import 'package:smart_lock/services/model/device_item.dart' hide Icon;
+import 'package:smart_lock/util/app_lang.dart';
 import 'package:intl/intl.dart';
 
 class CustomReportTab extends StatefulWidget {
   final int deviceId;
   final String deviceName;
   final String? presetPeriod;
+  final DeviceItem? device;
 
   const CustomReportTab({
     super.key,
     required this.deviceId,
     required this.deviceName,
     this.presetPeriod,
+    this.device,
   });
 
   @override
@@ -104,6 +109,7 @@ class _CustomReportTabState extends State<CustomReportTab>
         customStart: _startDate,
         customEnd: _endDate,
         forceRefresh: forceRefresh,
+        device: widget.device,
       );
       setState(() {
         _reportData = report;
@@ -474,32 +480,35 @@ class _CustomReportTabState extends State<CustomReportTab>
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                if (data.routeLength != null)
-                  _ResultRow('Distance', data.routeLength!, Icons.route_rounded,
+                 if (data.routeLength != null)
+                  _ResultRow('distance'.tr, AppLang.num(data.routeLength!), Icons.route_rounded,
                       const Color(0xFF3F51B5)),
                 if (data.moveDuration != null)
-                  _ResultRow('Move Duration', data.moveDuration!,
+                  _ResultRow('movingStatus'.tr, AppLang.num(data.moveDuration!),
                       Icons.directions_car_rounded, const Color(0xFF43A047)),
                 if (data.stopDuration != null)
-                  _ResultRow('Stop Duration', data.stopDuration!,
+                  _ResultRow('stoppedStatus'.tr, AppLang.num(data.stopDuration!),
                       Icons.local_parking_rounded, const Color(0xFFFF9800)),
                 if (data.topSpeed != null)
                   _ResultRow(
-                      'Top Speed', data.topSpeed!, Icons.speed_rounded, _red),
+                      'maxSpeed'.tr, AppLang.num(data.topSpeed!), Icons.speed_rounded, _red),
                 if (data.averageSpeed != null)
-                  _ResultRow('Avg Speed', data.averageSpeed!,
+                  _ResultRow('avgSpeed'.tr, AppLang.num(data.averageSpeed!),
                       Icons.trending_up_rounded, const Color(0xFF00BCD4)),
                 if (data.engineHours != null)
-                  _ResultRow('Engine Hours', data.engineHours!,
+                  _ResultRow('engineHours'.tr, AppLang.num(data.engineHours!),
                       Icons.engineering_rounded, const Color(0xFF9C27B0)),
-                if (data.fuelConsumption != null)
-                  _ResultRow('Fuel', data.fuelConsumption!,
+                 if (data.fuelConsumption != null)
+                  _ResultRow('fuel'.tr, AppLang.num(data.fuelConsumption!),
                       Icons.local_gas_station_rounded, const Color(0xFFFF7043)),
+                if (data.fuelCost != null)
+                  _ResultRow('fuelCost'.tr, AppLang.num(data.fuelCost!),
+                      Icons.monetization_on_outlined, const Color(0xFF22C55E)),
                 if (data.odometer != null)
-                  _ResultRow('Odometer', data.odometer!, Icons.speed_rounded,
+                  _ResultRow('odometer'.tr, AppLang.num(data.odometer!), Icons.speed_rounded,
                       const Color(0xFF5C6BC0)),
                 if (data.overspeedCount != null && data.overspeedCount != '0')
-                  _ResultRow('Overspeed', '${data.overspeedCount} times',
+                  _ResultRow('overspeedCount'.tr, AppLang.num('${data.overspeedCount} times'),
                       Icons.warning_amber_rounded, const Color(0xFFE91E63),
                       last: true),
               ],

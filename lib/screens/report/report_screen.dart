@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:smart_lock/screens/report/tabs/daily_report_tab.dart';
 import 'package:smart_lock/screens/report/tabs/monthly_report_tab.dart';
 import 'package:smart_lock/screens/report/tabs/custom_report_tab.dart';
@@ -58,9 +59,9 @@ class _ReportScreenState extends State<ReportScreen>
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              ' Reports',
-              style: TextStyle(
+            Text(
+              'reportTitle'.tr,
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -83,9 +84,9 @@ class _ReportScreenState extends State<ReportScreen>
             fontSize: 14,
           ),
           tabs: [
-            Tab(icon: Icon(Icons.today, size: 20), text: 'Daily'),
-            Tab(icon: Icon(Icons.calendar_month, size: 20), text: 'Monthly'),
-            Tab(icon: Icon(Icons.tune, size: 20), text: 'Custom'),
+            Tab(icon: const Icon(Icons.today, size: 20), text: 'dailyTab'.tr),
+            Tab(icon: const Icon(Icons.calendar_month, size: 20), text: 'monthlyTab'.tr),
+            Tab(icon: const Icon(Icons.tune, size: 20), text: 'customTab'.tr),
           ],
         ),
       ),
@@ -95,16 +96,18 @@ class _ReportScreenState extends State<ReportScreen>
           DailyReportTab(
             deviceId: widget.deviceId,
             deviceName: widget.deviceName,
+            device: widget.device,
           ),
           MonthlyReportTab(
             deviceId: widget.deviceId,
             deviceName: widget.deviceName,
-            device: widget.device, // PASS DEVICE
+            device: widget.device,
           ),
           CustomReportTab(
             deviceId: widget.deviceId,
             deviceName: widget.deviceName,
             presetPeriod: widget.presetPeriod,
+            device: widget.device,
           ),
         ],
       ),

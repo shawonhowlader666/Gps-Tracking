@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:get/get.dart';
+import 'package:smart_lock/util/app_lang.dart';
 import 'package:smart_lock/services/model/alert.dart';
 import 'package:smart_lock/services/model/device.dart';
 import 'package:smart_lock/services/model/event.dart';
@@ -353,10 +354,11 @@ class APIService {
     if (lat == null || lng == null) return "";
     final double? latVal = double.tryParse(lat.toString());
     final double? lngVal = double.tryParse(lng.toString());
+    final String langCode = Get.locale?.languageCode ?? 'en';
     if (latVal == null || lngVal == null) {
-      return "${lat.toString().trim()},${lng.toString().trim()}";
+      return "${lat.toString().trim()},${lng.toString().trim()}_$langCode";
     }
-    return "${latVal.toStringAsFixed(4)},${lngVal.toStringAsFixed(4)}";
+    return "${latVal.toStringAsFixed(4)},${lngVal.toStringAsFixed(4)}_$langCode";
   }
 
   static String? getCachedAddress(dynamic lat, dynamic lng) {
@@ -383,8 +385,10 @@ class APIService {
       headers['content-type'] =
           "application/x-www-form-urlencoded; charset=UTF-8";
       try {
+        // Pass lang=bn to geocoder API when Bengali locale is active
+        final langCode = AppLang.isBn ? 'bn' : 'en';
         final url =
-            "$serverURL/api/geo_address?lat=$lat&lon=$lng&user_api_hash=${UserRepository.getHash()}";
+            "$serverURL/api/geo_address?lat=$lat&lon=$lng&lang=$langCode&user_api_hash=${UserRepository.getHash()}";
         final response = await http.get(Uri.parse(url), headers: headers);
         if (response.statusCode == 200) {
           final address = response.body;

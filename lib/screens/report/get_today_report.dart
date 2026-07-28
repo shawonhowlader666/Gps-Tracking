@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:smart_lock/services/api_service.dart';
+import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 import 'package:smart_lock/storage/user_repository.dart';
 
 // ─── Period enum ──────────────────────────────────────────────────────────────
@@ -29,6 +30,8 @@ class TodayReportData {
   final String? engineIdle;
   final String? odometer;
   final String? fuelConsumption;
+  final String? fuelLitres;
+  final String? fuelCost;
   final int? totalPoints;
 
   const TodayReportData({
@@ -46,6 +49,8 @@ class TodayReportData {
     this.engineIdle,
     this.odometer,
     this.fuelConsumption,
+    this.fuelLitres,
+    this.fuelCost,
     this.totalPoints,
   });
 
@@ -64,7 +69,12 @@ class TodayReportData {
         'averageSpeed': averageSpeed,
         'overspeedCount': overspeedCount,
         'engineHours': engineHours,
+        'engineWork': engineWork,
+        'engineIdle': engineIdle,
+        'odometer': odometer,
         'fuelConsumption': fuelConsumption,
+        'fuelLitres': fuelLitres,
+        'fuelCost': fuelCost,
       };
 
   factory TodayReportData.fromJson(Map<String, dynamic> json) =>
@@ -76,7 +86,12 @@ class TodayReportData {
         averageSpeed: json['averageSpeed'],
         overspeedCount: json['overspeedCount'],
         engineHours: json['engineHours'],
+        engineWork: json['engineWork'],
+        engineIdle: json['engineIdle'],
+        odometer: json['odometer'],
         fuelConsumption: json['fuelConsumption'],
+        fuelLitres: json['fuelLitres'],
+        fuelCost: json['fuelCost'],
       );
 
   TodayReportData copyWith({
@@ -100,7 +115,12 @@ class TodayReportData {
         averageSpeed: averageSpeed ?? this.averageSpeed,
         overspeedCount: overspeedCount ?? this.overspeedCount,
         engineHours: engineHours,
+        engineWork: engineWork,
+        engineIdle: engineIdle,
+        odometer: odometer,
         fuelConsumption: fuelConsumption,
+        fuelLitres: fuelLitres,
+        fuelCost: fuelCost,
         totalPoints: totalPoints,
       );
 }
@@ -131,6 +151,7 @@ class ReportService {
     DateTime? customStart,
     DateTime? customEnd,
     bool forceRefresh = false,
+    DeviceItem? device,
   }) {
     final range = _dateRange(period, customStart, customEnd);
     return getTodayReportDataWithDates(
@@ -138,17 +159,20 @@ class ReportService {
       fromDate: range.$1,
       toDate: range.$2,
       forceRefresh: forceRefresh,
+      device: device,
     );
   }
 
   static Future<TodayReportData> getTodayReportData({
     required int deviceId,
     bool forceRefresh = false,
+    DeviceItem? device,
   }) =>
       getReportForPeriod(
         deviceId: deviceId,
         period: ReportPeriod.today,
         forceRefresh: forceRefresh,
+        device: device,
       );
 
   static Future<TodayReportData> getTodayReportDataWithDates({
@@ -156,9 +180,9 @@ class ReportService {
     required DateTime fromDate,
     required DateTime toDate,
     bool forceRefresh = false,
+    DeviceItem? device,
   }) {
-    final key =
-        '${deviceId}_${_fmt(fromDate)}_${_fmt(toDate)}';
+    final key = '${deviceId}_${_fmt(fromDate)}_${_fmt(toDate)}';
 
     // 1. Serve from cache if valid
     if (!forceRefresh) {
@@ -169,7 +193,7 @@ class ReportService {
     // 2. Request deduplication — return the ongoing future if one exists
     if (_inFlight.containsKey(key)) return _inFlight[key]!;
 
-    final future = _fetch(deviceId, fromDate, toDate).then((data) {
+    final future = _fetch(deviceId, fromDate, toDate, device: device).then((data) {
       _cache[key] = _CacheEntry(data, DateTime.now());
       _inFlight.remove(key);
       return data;
@@ -186,8 +210,9 @@ class ReportService {
   static Future<TodayReportData> _fetch(
     int deviceId,
     DateTime from,
-    DateTime to,
-  ) async {
+    DateTime to, {
+    DeviceItem? device,
+  }) async {
     try {
       final serverUrl = APIService.serverURL;
       final hash = UserRepository.getHash();
@@ -227,7 +252,7 @@ class ReportService {
       final body = response.body.replaceAll('﻿', '');
       final decoded = json.decode(body);
 
-      return _compute(decoded);
+      return _compute(decoded, device: device);
     } catch (e) {
       debugPrint('[Report] Error: $e');
       return const TodayReportData();
@@ -235,34 +260,26 @@ class ReportService {
   }
 
   // ── Parse & compute stats from the API response ────────────────────────────
-  // GPSWox get_history confirmed structure (from playback.dart):
-  // {
-  //   "distance_sum": "25.50 km",  ← already has unit
-  //   "top_speed": "75 kph",       ← already has unit
-  //   "move_duration": "2h 15m",
-  //   "stop_duration": "45m",
-  //   "items": [                   ← trip segments
-  //     { "time":..., "top_speed":..., "average_speed":...,
-  //       "items": [               ← nested GPS points
-  //         { "latitude":..., "longitude":..., "speed":..., "course":..., "raw_time":... }
-  //       ]
-  //     }
-  //   ]
-  // }
-  static TodayReportData _compute(dynamic decoded) {
+  static TodayReportData _compute(dynamic decoded, {DeviceItem? device}) {
     String? routeLength;
     String? moveDuration;
     String? stopDuration;
     String? topSpeed;
     String? averageSpeed;
     String? fuelConsumption;
+    String? fuelLitres;
+    String? fuelCost;
+    String? engineHours;
+    String? engineWork;
+    String? engineIdle;
+    String? odometer;
     String? routeStart;
     String? routeEnd;
     int? totalPoints;
 
     if (decoded is! Map) return const TodayReportData();
 
-    // --- Top-level server pre-computed fields (already have units) ---
+    // --- Top-level server pre-computed fields ---
     final distSum = decoded['distance_sum'];
     if (distSum != null && distSum.toString().trim().isNotEmpty) {
       routeLength = distSum.toString().trim();
@@ -270,7 +287,6 @@ class ReportService {
 
     final tSpeed = decoded['top_speed'];
     if (tSpeed != null && tSpeed.toString().trim().isNotEmpty) {
-      // normalize: "75 kph" → "75 km/h"
       topSpeed = tSpeed.toString().trim().replaceAll('kph', 'km/h');
     }
 
@@ -287,10 +303,54 @@ class ReportService {
     final fuel = decoded['fuel_consumption'];
     if (fuel != null && fuel.toString().trim().isNotEmpty) {
       fuelConsumption = fuel.toString().trim();
+      final numStr = fuelConsumption!.replaceAll(RegExp(r'[^0-9.]'), '');
+      final litres = double.tryParse(numStr);
+      if (litres != null && litres > 0) {
+        fuelLitres = numStr;
+        final priceStr = device?.deviceData?.fuelPrice;
+        final pricePerL = double.tryParse(priceStr ?? '');
+        if (pricePerL != null && pricePerL > 0) {
+          final cost = litres * pricePerL;
+          fuelCost = '৳ ${cost.toStringAsFixed(2)}';
+        }
+      }
+    } else if (device != null) {
+      // Fallback: calculate fuel from distance using fuelPerKm (L/100km)
+      final distKm = double.tryParse(
+          (routeLength ?? '').replaceAll(RegExp(r'[^0-9.]'), ''));
+      final perKm = double.tryParse(device.deviceData?.fuelPerKm ?? '');
+      if (distKm != null && perKm != null && distKm > 0 && perKm > 0) {
+        final litres = (distKm * perKm) / 100;
+        fuelLitres = litres.toStringAsFixed(2);
+        fuelConsumption = '${litres.toStringAsFixed(2)} L';
+        final pricePerL = double.tryParse(device.deviceData?.fuelPrice ?? '');
+        if (pricePerL != null && pricePerL > 0) {
+          fuelCost = '৳ ${(litres * pricePerL).toStringAsFixed(2)}';
+        }
+      }
+    }
+
+    // Engine
+    final eHours = decoded['engine_hours'] ?? decoded['engineHours'];
+    if (eHours != null && eHours.toString().trim().isNotEmpty) {
+      engineHours = eHours.toString().trim();
+    }
+    final eWork = decoded['engine_work'] ?? decoded['engineWork'];
+    if (eWork != null && eWork.toString().trim().isNotEmpty) {
+      engineWork = eWork.toString().trim();
+    }
+    final eIdle = decoded['engine_idle'] ?? decoded['engineIdle'];
+    if (eIdle != null && eIdle.toString().trim().isNotEmpty) {
+      engineIdle = eIdle.toString().trim();
+    }
+
+    // Odometer
+    final odo = decoded['odometer'];
+    if (odo != null && odo.toString().trim().isNotEmpty && odo.toString() != '0') {
+      odometer = '${double.tryParse(odo.toString())?.toStringAsFixed(2) ?? odo} km';
     }
 
     // --- Flatten nested GPS positions from trip segments ---
-    // Structure: items[trip].items[gps_point] { latitude, longitude, speed }
     final segments = decoded['items'];
     if (segments is List && segments.isNotEmpty) {
       final allPositions = <Map<String, dynamic>>[];
@@ -298,15 +358,12 @@ class ReportService {
       for (final segment in segments) {
         if (segment is! Map) continue;
 
-        // Collect per-segment average_speed for averaging
         final segAvgSpeed = segment['average_speed'];
-
         final innerItems = segment['items'];
         if (innerItems is List) {
           for (final pt in innerItems) {
             if (pt is Map && pt['latitude'] != null) {
               final pos = Map<String, dynamic>.from(pt);
-              // Inject segment-level average speed if missing
               if (segAvgSpeed != null) pos['_seg_avg_speed'] = segAvgSpeed;
               allPositions.add(pos);
             }
@@ -317,18 +374,15 @@ class ReportService {
       totalPoints = allPositions.length;
 
       if (allPositions.isNotEmpty) {
-        // Distance from positions if server didn't give it
         if (routeLength == null || routeLength == '0' || routeLength == '0 km') {
           routeLength = _calcDistance(allPositions);
         }
 
-        // Top speed from positions if server didn't give it
         if (topSpeed == null) {
           final top = _calcTopSpeed(allPositions);
           if (top > 0) topSpeed = '${top.toStringAsFixed(0)} km/h';
         }
 
-        // Average speed — use segment average_speed values
         double avgSum = 0;
         int avgCount = 0;
         for (final segment in segments) {
@@ -347,11 +401,8 @@ class ReportService {
           if (avg > 0) averageSpeed ??= '${avg.toStringAsFixed(0)} km/h';
         }
 
-
-        // Move duration from positions if server didn't give it
         moveDuration ??= _calcMoveDuration(allPositions);
 
-        // Route start = first GPS point, route end = last GPS point
         final first = allPositions.first;
         final last = allPositions.last;
         final sLat = first['latitude']?.toString().trim();
@@ -375,6 +426,12 @@ class ReportService {
       topSpeed: topSpeed,
       averageSpeed: averageSpeed,
       fuelConsumption: fuelConsumption,
+      fuelLitres: fuelLitres,
+      fuelCost: fuelCost,
+      engineHours: engineHours,
+      engineWork: engineWork,
+      engineIdle: engineIdle,
+      odometer: odometer,
       routeStart: routeStart,
       routeEnd: routeEnd,
       totalPoints: totalPoints,
@@ -529,4 +586,10 @@ class ReportService {
       };
 
   static void dispose() => clearCache();
+}
+
+class DayReport {
+  final DateTime date;
+  final TodayReportData data;
+  DayReport({required this.date, required this.data});
 }

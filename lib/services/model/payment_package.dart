@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:smart_lock/services/payment_service.dart';
 
 class PaymentPackage {
@@ -22,191 +23,61 @@ class PaymentPackage {
       : '$label\n(৳${finalPrice.toStringAsFixed(0)})';
 }
 
-/// Dynamic billing packages fetched from the server.
-/// If server is unreachable or has no packages, it falls back to the default local packages.
-Future<List<PaymentPackage>> fetchAndRecommendPackages(int unpaidBillsCount) async {
+/// Fetches recommended package from server via /users/manual-custom-discount.
+/// duration_months is omitted (null) so server decides the best package for this user.
+Future<List<PaymentPackage>> fetchAndRecommendPackages(int unpaidBillsCount, {double? dueAmount}) async {
   try {
-    final serverData = await PaymentService.getBillingPackages();
-    if (serverData != null && serverData.isNotEmpty) {
-      final List<PaymentPackage> serverPackages = [];
-      for (var plan in serverData) {
-        final rules = plan['pricing_rules'] ?? plan['pricingRules'];
-        if (rules != null && rules is List && rules.isNotEmpty) {
-          for (var rule in rules) {
-            final duration = rule['duration'];
-            final durationType = rule['duration_type'] ?? rule['durationType'];
-            final double price = (rule['price'] as num?)?.toDouble() ?? 0.0;
+    // Pass no duration_months — server picks the best one for this user's account
+    final res = await PaymentService.calculateManualCustomDiscount(
+      willCreate: false,
+    );
 
-            if (durationType == 'month' || durationType == 'year') {
-              final int months = durationType == 'year' ? (duration ?? 1) * 12 : (duration ?? 1);
-              final String key = durationType == 'year' ? '${duration}_year' : '${duration}_months';
-              final String label = durationType == 'year' ? '$duration বছরের বিল' : '$duration মাসের বিল';
+    debugPrint('[PACKAGES] API response: $res');
 
-              final double baseMonthlyPrice = (plan['price'] as num?)?.toDouble() ?? 200.0;
-              final double originalPrice = months * baseMonthlyPrice;
-              int discount = 0;
-              if (originalPrice > price) {
-                discount = (((originalPrice - price) / originalPrice) * 100).round();
-              }
+    if (res != null && res['payable_total'] != null) {
+      // Use duration_months directly from server response (100% dynamic)
+      final int durationMonths = (res['duration_months'] as num?)?.toInt() ?? 1;
+      final double baseTotal = (res['base_total'] as num?)?.toDouble() ?? 0.0;
+      final double payableTotal = (res['payable_total'] as num?)?.toDouble() ?? baseTotal;
+      final int discountPercent = (res['discount_percent'] as num?)?.toInt()
+          ?? (res['default_discount_percent'] as num?)?.toInt()
+          ?? 0;
 
-              serverPackages.add(PaymentPackage(
-                key: key,
-                label: label,
-                originalPrice: originalPrice,
-                finalPrice: price,
-                discountPercent: discount,
-              ));
-            }
-          }
-        } else {
-          // Direct properties on plan object (e.g. flat package structure)
-          final status = plan['status'];
-          if (status == false || status == 0 || status == 'false') {
-            continue;
-          }
+      // Build label from server data — no hardcoding
+      final String label = (durationMonths % 12 == 0)
+          ? '${durationMonths ~/ 12} বছরের বিল'
+          : '$durationMonths মাসের বিল';
 
-          final durationMonths = plan['duration_months'] ?? plan['durationMonths'];
-          if (durationMonths == null) continue;
+      final String key = (durationMonths % 12 == 0)
+          ? '${durationMonths ~/ 12}_year'
+          : '${durationMonths}_months';
 
-          final double originalPrice = (plan['price'] as num?)?.toDouble() ?? 0.0;
-          final double finalPrice = (plan['net_price'] as num?)?.toDouble() ?? (plan['netPrice'] as num?)?.toDouble() ?? originalPrice;
-          // Calculate percentage manually because server returns discount as a BDT amount instead of percentage
-          int discountPercent = 0;
-          if (originalPrice > finalPrice && originalPrice > 0) {
-            discountPercent = (((originalPrice - finalPrice) / originalPrice) * 100).round();
-          }
+      final pkg = PaymentPackage(
+        key: key,
+        label: label,
+        originalPrice: baseTotal > 0 ? baseTotal : payableTotal,
+        finalPrice: payableTotal,
+        discountPercent: discountPercent,
+      );
 
-          final String label = (durationMonths % 12 == 0)
-              ? '${durationMonths ~/ 12} বছরের বিল'
-              : '$durationMonths মাসের বিল';
-
-          final String key = (durationMonths % 12 == 0)
-              ? '${durationMonths ~/ 12}_year'
-              : '${durationMonths}_months';
-
-          serverPackages.add(PaymentPackage(
-            key: key,
-            label: label,
-            originalPrice: originalPrice,
-            finalPrice: finalPrice,
-            discountPercent: discountPercent,
-          ));
-        }
-      }
-
-      if (serverPackages.isNotEmpty) {
-        // Sort by final price ascending
-        serverPackages.sort((a, b) => a.finalPrice.compareTo(b.finalPrice));
-        
-        PaymentPackage? pkg1;
-        PaymentPackage? pkg2;
-
-        // Find package that covers the due months
-        for (var p in serverPackages) {
-          final mCount = _getMonthCountFromKey(p.key);
-          if (mCount >= unpaidBillsCount) {
-            pkg1 = p;
-            break;
-          }
-        }
-
-        pkg1 ??= serverPackages.last;
-
-        // Find an upsell package (larger than pkg1)
-        for (var p in serverPackages) {
-          final mCount = _getMonthCountFromKey(p.key);
-          final pkg1Count = _getMonthCountFromKey(pkg1.key);
-          if (mCount > pkg1Count) {
-            pkg2 = p;
-            break;
-          }
-        }
-
-        // If no package is larger than pkg1, pick the next largest
-        if (pkg2 == null) {
-          if (serverPackages.length > 1) {
-            pkg2 = pkg1;
-            pkg1 = serverPackages[serverPackages.length - 2];
-          } else {
-            pkg2 = pkg1;
-          }
-        }
-
-        return [pkg1, pkg2];
-      }
+      debugPrint('[PACKAGES] -> ${pkg.key}: ${pkg.label}, price: ${pkg.finalPrice}, discount: ${pkg.discountPercent}%');
+      return [pkg];
     }
   } catch (e) {
-    // Fail silently
+    debugPrint('[PACKAGES] Exception: $e');
   }
 
-  // Do not fall back to local packages when the server is offline/error
   return [];
 }
 
-int _getMonthCountFromKey(String key) {
-  if (key == '1_year') return 12;
+int getMonthCountFromKey(String key) {
   if (key.endsWith('_year')) {
-    final val = int.tryParse(key.split('_').first) ?? 1;
-    return val * 12;
+    final years = int.tryParse(key.split('_').first) ?? 1;
+    return years * 12;
   }
-  if (key.endsWith('_months')) {
+  if (key.endsWith('_months') || key.endsWith('_month')) {
     return int.tryParse(key.split('_').first) ?? 1;
   }
-  if (key == '1_month') return 1;
-  return 1;
-}
-
-List<PaymentPackage> getRecommendedPackages(int unpaidBillsCount) {
-  // Standard packages (Rate: 200 BDT/month)
-  final p1 = PaymentPackage(
-    key: '1_month',
-    label: '১ মাসের বিল',
-    originalPrice: 200,
-    finalPrice: 200,
-    discountPercent: 0,
-  );
-  
-  final p3 = PaymentPackage(
-    key: '3_months',
-    label: '৩ মাসের বিল',
-    originalPrice: 600,
-    finalPrice: 570,
-    discountPercent: 5, // 5% discount
-  );
-  
-  final p6 = PaymentPackage(
-    key: '6_months',
-    label: '৬ মাসের বিল',
-    originalPrice: 1200,
-    finalPrice: 1020,
-    discountPercent: 15, // 15% discount
-  );
-  
-  final p12 = PaymentPackage(
-    key: '1_year',
-    label: '১ বছরের বিল',
-    originalPrice: 2400,
-    finalPrice: 1800,
-    discountPercent: 25, // 25% discount
-  );
-
-  if (unpaidBillsCount <= 1) {
-    return [p1, p3]; // Recommend 1 Month & 3 Months
-  } else if (unpaidBillsCount <= 3) {
-    return [p3, p6]; // Recommend 3 Months & 6 Months
-  } else if (unpaidBillsCount <= 5) {
-    return [p6, p12]; // Recommend 6 Months & 1 Year
-  } else {
-    // If they have 6+ months, calculate custom dues with 10% discount
-    final customPrice = unpaidBillsCount * 200.0;
-    final finalPrice = customPrice * 0.9;
-    final pCustom = PaymentPackage(
-      key: '${unpaidBillsCount}_months',
-      label: '$unpaidBillsCount মাসের বিল',
-      originalPrice: customPrice,
-      finalPrice: finalPrice,
-      discountPercent: 10,
-    );
-    return [pCustom, p12];
-  }
+  final numeric = int.tryParse(RegExp(r'\d+').firstMatch(key)?.group(0) ?? '');
+  return numeric ?? 1;
 }

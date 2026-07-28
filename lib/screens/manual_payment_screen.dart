@@ -56,13 +56,9 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
   @override
   void initState() {
     super.initState();
-    if (widget.packageType == '1_month') {
-      _amountController.text = '200';
-    } else if (widget.packageType == '1_year') {
-      _amountController.text = '1800'; // 25% discount applied (2400 -> 1800)
-    } else {
-      _amountController.text = widget.dueAmount.toStringAsFixed(0);
-    }
+    _amountController.text = widget.dueAmount > 0
+        ? widget.dueAmount.toStringAsFixed(0)
+        : '';
 
     _fadeCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 400));

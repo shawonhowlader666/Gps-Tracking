@@ -63,6 +63,8 @@ class _DeviceSettingPageState extends State<DeviceSettingPage> {
   ];
 
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _fuelPriceController = TextEditingController();
+  final TextEditingController _fuelPerKmController = TextEditingController();
 
   // SOS Controllers
   final TextEditingController _sosPhone1Controller = TextEditingController();
@@ -130,6 +132,8 @@ class _DeviceSettingPageState extends State<DeviceSettingPage> {
   @override
   void dispose() {
     _nameController.dispose();
+    _fuelPriceController.dispose();
+    _fuelPerKmController.dispose();
     _sosPhone1Controller.dispose();
     _sosPhone2Controller.dispose();
     _sosPhone3Controller.dispose();
@@ -960,6 +964,8 @@ class _DeviceSettingPageState extends State<DeviceSettingPage> {
 
       sd = SingleDevice.fromJson(json.decode(value.body.replaceAll("ï»¿", "")));
       _nameController.text = sd!.item!["name"] ?? '';
+      _fuelPriceController.text = sd!.item!["fuel_price"]?.toString() ?? '';
+      _fuelPerKmController.text = sd!.item!["fuel_per_km"]?.toString() ?? '';
       selectedIconId = sd!.item!["icon_id"];
 
       // Retrieve / resolve custom icon path
@@ -1095,6 +1101,64 @@ class _DeviceSettingPageState extends State<DeviceSettingPage> {
                               borderRadius: BorderRadius.circular(12),
                               borderSide:
                                   BorderSide(color: _primaryRed, width: 2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Fuel Rate (Liters per 100 km)',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _fuelPerKmController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            hintText: 'e.g. 8.00',
+                            prefixIcon: Icon(Icons.local_gas_station_outlined, color: _primaryRed),
+                            filled: true,
+                            fillColor: const Color(0xFFF9FAFB),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: _primaryRed, width: 2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Fuel Price (Per Liter)',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _fuelPriceController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            hintText: 'Price per liter in ৳ (Taka)',
+                            prefixIcon: Icon(Icons.monetization_on_outlined, color: _primaryRed),
+                            filled: true,
+                            fillColor: const Color(0xFFF9FAFB),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: _primaryRed, width: 2),
                             ),
                           ),
                         ),
@@ -1256,7 +1320,9 @@ class _DeviceSettingPageState extends State<DeviceSettingPage> {
 
     Map<String, String> requestBody = {
       'name': _nameController.text.trim(),
-      'fuel_measurement_id': sd!.item!["fuel_measurement_id"].toString(),
+      'fuel_measurement_id': sd!.item!["fuel_measurement_id"]?.toString() ?? '1',
+      'fuel_price': _fuelPriceController.text.trim(),
+      'fuel_per_km': _fuelPerKmController.text.trim(),
       'device_id': devId.toString(),
       if (selectedIconId != null) 'icon_id': selectedIconId.toString(),
     };
@@ -1273,6 +1339,8 @@ class _DeviceSettingPageState extends State<DeviceSettingPage> {
           sd = null;
           selectedIconId = null;
           _nameController.clear();
+          _fuelPriceController.clear();
+          _fuelPerKmController.clear();
         });
       }
     } catch (e) {

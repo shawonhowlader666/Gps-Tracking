@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:smart_lock/services/model/bill.dart';
 import 'package:smart_lock/services/model/payment_stats.dart';
 import 'package:smart_lock/storage/user_repository.dart';
@@ -363,5 +364,36 @@ class PaymentService {
       rethrow;
     }
     return null;
+  }
+
+  /// Calculate custom discount and payable total from billing API for user's vehicles.
+  /// Pass durationMonths: null to let server decide the best duration automatically.
+  static Future<Map<String, dynamic>?> calculateManualCustomDiscount({
+    int? durationMonths,
+    num? discountPercent,
+    String? startMonth,
+    bool willCreate = false,
+  }) async {
+    try {
+      final Map<String, dynamic> body = {
+        'will_create': willCreate,
+      };
+      if (durationMonths != null && durationMonths > 0) {
+        body['duration_months'] = durationMonths;
+      }
+      if (discountPercent != null) {
+        body['discount_percent'] = discountPercent;
+      }
+      if (startMonth != null) {
+        body['start_month'] = startMonth;
+      }
+      debugPrint("[BILLING API] Sending POST /users/manual-custom-discount with body: $body");
+      final res = await _postJson('/users/manual-custom-discount', body: body);
+      debugPrint("[BILLING API] Received response: $res");
+      return res;
+    } catch (e) {
+      debugPrint("[BILLING API] ERROR IN calculateManualCustomDiscount: $e");
+      return null;
+    }
   }
 }
