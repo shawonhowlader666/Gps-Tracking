@@ -549,12 +549,12 @@ class _HomeScreenState extends State<HomeScreen> {
         Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Total',
+            Text('totalLabel'.tr,
                 style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[500],
                     fontWeight: FontWeight.w500)),
-            Text(total.toString(),
+            Text(AppLang.num(total),
                 style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -606,12 +606,12 @@ class _HomeScreenState extends State<HomeScreen> {
         Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Total',
+            Text('totalLabel'.tr,
                 style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[400],
                     fontWeight: FontWeight.w500)),
-            Text('0',
+            Text(AppLang.num(0),
                 style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -651,7 +651,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: Color(0xFF374151),
                   fontWeight: FontWeight.w500)),
         ),
-        Text(count.toString(),
+        Text(AppLang.num(count),
             style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
