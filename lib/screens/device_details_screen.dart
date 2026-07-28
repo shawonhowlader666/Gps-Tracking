@@ -479,7 +479,10 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                 hasChevron: true,
                 valueColor: Colors.black87,
                 onTap: () {
-                  Get.to(() => DeviceFuelScreen(device: d));
+                  Get.to(
+                    () => DeviceFuelScreen(device: d),
+                    preventDuplicates: false,
+                  );
                 },
               ),
               if (d.deviceData?.additionalNotes != null && d.deviceData!.additionalNotes!.trim().isNotEmpty)
@@ -571,7 +574,10 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                 value: _getTodayFuelCost(d),
                 hasChevron: true,
                 onTap: () {
-                  Get.to(() => DeviceFuelScreen(device: d));
+                  Get.to(
+                    () => DeviceFuelScreen(device: d),
+                    preventDuplicates: false,
+                  );
                 },
               ),
             ]),

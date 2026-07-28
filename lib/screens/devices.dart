@@ -839,7 +839,10 @@ class _DevicePageState extends State<DevicePage> {
                     // Fuel row with Details
                     GestureDetector(
                       onTap: () {
-                        Get.to(() => DeviceFuelScreen(device: device));
+                        Get.to(
+                          () => DeviceFuelScreen(device: device),
+                          preventDuplicates: false,
+                        );
                       },
                       behavior: HitTestBehavior.opaque,
                       child: Row(
