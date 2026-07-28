@@ -17,7 +17,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'translation/translation_service.dart';
 
 // ─── Global singleton notification plugin ────────────────────────────────────
-// ─── Global singleton notification plugin ────────────────────────────────────
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 

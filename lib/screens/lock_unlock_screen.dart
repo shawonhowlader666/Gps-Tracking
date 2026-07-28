@@ -608,7 +608,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     if (commandType == 'gmt') friendlyName = 'GMT+6 Timezone';
     if (commandType == 'reset') friendlyName = 'Device Restart';
 
-    final onGprsTap = () async {
+    Future<Null> onGprsTap() async {
       setState(() => _isLoading = true);
       try {
         if (commandType == 'accalm' && (_selectedProtocol == 'SinoTrack' || _selectedProtocol == 'Standard GPRS (Auto)')) {
@@ -705,9 +705,9 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
-    };
+    }
 
-    final onServerSMSTap = () async {
+    Future<Null> onServerSMSTap() async {
       setState(() => _isLoading = true);
       try {
         if (commandType == 'accalm' && (_selectedProtocol == 'SinoTrack' || _selectedProtocol == 'Standard GPRS (Auto)')) {
@@ -804,7 +804,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
-    };
+    }
 
     _showCommandMethodDialog(
       command: command,
@@ -844,7 +844,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
 
     if (command.isEmpty) return;
 
-    final onGprsTap = () async {
+    Future<Null> onGprsTap() async {
       final isOnline = _isDeviceOnline(widget.device);
       if (!isOnline) {
         Fluttertoast.showToast(
@@ -911,9 +911,9 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
-    };
+    }
 
-    final onServerSMSTap = () async {
+    Future<Null> onServerSMSTap() async {
       setState(() => _isLoading = true);
       try {
         final Map<String, String> setAdminBody = {
@@ -969,7 +969,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
-    };
+    }
 
     _showCommandMethodDialog(
       command: command,
