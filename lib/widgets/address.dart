@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smart_lock/services/api_service.dart';
 import 'package:smart_lock/theme/custom_color.dart';
+import 'package:smart_lock/util/app_lang.dart';
 import 'package:marquee_widget/marquee_widget.dart';
 
 Widget addressLoad(String lat, String lng, {TextStyle? style}) {
@@ -82,7 +83,9 @@ class _AddressTextState extends State<AddressText> {
     }
 
     return Text(
-      _address ?? "Address not available",
+      (_address != null && _address!.isNotEmpty)
+          ? _address!
+          : (AppLang.isBn ? 'ঠিকানা পাওয়া যায়নি' : 'Address not available'),
       style: displayStyle,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
@@ -159,7 +162,9 @@ class _AddressMarqueeTextState extends State<AddressMarqueeText> {
       );
     }
 
-    final addr = _address ?? "Address not available";
+    final addr = (_address != null && _address!.isNotEmpty)
+        ? _address!
+        : (AppLang.isBn ? 'ঠিকানা পাওয়া যায়নি' : 'Address not available');
 
     return Marquee(
       direction: Axis.horizontal,

@@ -1,4 +1,6 @@
 const Map<String, String> en_US = {
+  'unknownTime': 'Unknown time',
+  'subscriptionExpired': 'Subscription Expired',
   'homePage': 'Home',
   "userEmail": "Email",
   "userPassword": "Password",

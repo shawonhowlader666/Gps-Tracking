@@ -1,4 +1,6 @@
 const Map<String, String> bn_BD = {
+  'unknownTime': 'সময় অজানা',
+  'subscriptionExpired': 'মেয়াদ শেষ',
   'homePage': 'হোম',
   "userEmail": "ইমেল",
   "userPassword": "পাসওয়ার্ড",

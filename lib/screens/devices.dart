@@ -1009,29 +1009,46 @@ class _DevicePageState extends State<DevicePage> {
       case DeviceStatus.running:
         return convertSpeed(device.speed, device.distanceUnitHour ?? 'km/h');
       case DeviceStatus.idle:
-        return device.stopDuration ?? '0s';
+        return AppLang.num(device.stopDuration ?? '0s');
       case DeviceStatus.stop:
-        return device.stopDuration ?? '0s';
+        return AppLang.num(device.stopDuration ?? '0s');
       case DeviceStatus.offline:
         return _getOfflineDuration(device);
       case DeviceStatus.expired:
-        return 'Subscription Expired';
+        return 'subscriptionExpired'.tr;
     }
   }
 
   String _getOfflineDuration(DeviceItem device) {
-    if (device.timestamp == null || device.timestamp == 0) return 'Unknown';
+    int? ts = device.timestamp;
+    if ((ts == null || ts == 0) && device.time != null && device.time!.isNotEmpty) {
+      final dt = DateTime.tryParse(device.time!);
+      if (dt != null) ts = dt.millisecondsSinceEpoch ~/ 1000;
+    }
+    if ((ts == null || ts == 0) && device.deviceData?.updatedAt != null) {
+      final dt = DateTime.tryParse(device.deviceData!.updatedAt!);
+      if (dt != null) ts = dt.millisecondsSinceEpoch ~/ 1000;
+    }
+
+    if (ts == null || ts == 0) return 'unknownTime'.tr;
     try {
-      final lastUpdate =
-          DateTime.fromMillisecondsSinceEpoch(device.timestamp! * 1000);
+      final lastUpdate = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
       final d = DateTime.now().difference(lastUpdate);
-      if (d.inDays > 0)
-        return '${d.inDays * 24 + d.inHours % 24}h ${d.inMinutes % 60}m ${d.inSeconds % 60}s';
-      if (d.inHours > 0)
-        return '${d.inHours}h ${d.inMinutes % 60}m ${d.inSeconds % 60}s';
-      return '${d.inMinutes}m ${d.inSeconds % 60}s';
+      final hours = d.inHours;
+      final mins = d.inMinutes % 60;
+      final secs = d.inSeconds % 60;
+
+      if (AppLang.isBn) {
+        if (hours > 0) {
+          return '${AppLang.num(hours)}ঘ ${AppLang.num(mins)}মি ${AppLang.num(secs)}সে';
+        }
+        return '${AppLang.num(mins)}মি ${AppLang.num(secs)}সে';
+      }
+
+      if (hours > 0) return '${hours}h ${mins}m ${secs}s';
+      return '${mins}m ${secs}s';
     } catch (_) {
-      return 'Unknown';
+      return 'unknownTime'.tr;
     }
   }
 

@@ -2012,13 +2012,20 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   Widget _buildAddressRow() {
+    final addrText = (_address != null && _address!.trim().isNotEmpty)
+        ? _address!
+        : (AppLang.isBn ? 'ঠিকানা পাওয়া যায়নি' : 'Address not found');
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
       child: Text(
-        _address ?? '',
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF111827)),
+        addrText,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF111827),
+        ),
       ),
     );
   }
@@ -2256,7 +2263,12 @@ class _TrackDeviceState extends State<TrackDevicePage>
   }
 
   Widget _buildMileageRow() {
-    final totalMileage = device?.totalDistance?.toStringAsFixed(1) ?? '0';
+    final cleanTodayDist = todaytotalDistance
+        .replaceAll(RegExp(r'[a-zA-Z]'), '')
+        .trim();
+    final todayVal = cleanTodayDist.isEmpty ? '0' : cleanTodayDist;
+    final totalVal = device?.totalDistance?.toStringAsFixed(1) ?? '0';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
@@ -2266,26 +2278,33 @@ class _TrackDeviceState extends State<TrackDevicePage>
         children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
-                AppLang.num(
-                  todaytotalDistance.toLowerCase().contains('km')
-                      ? todaytotalDistance
-                      : '$todaytotalDistance ${'kmUnit'.tr}',
-                ),
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1F2937))),
+              '${AppLang.num(todayVal)} ${'kmUnit'.tr}',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1F2937),
+              ),
+            ),
             Text('todayMileage'.tr,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF374151))),
           ]),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(AppLang.num('${totalMileage}${'kmUnit'.tr}'),
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1F2937))),
+            Text(
+              '${AppLang.num(totalVal)} ${'kmUnit'.tr}',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1F2937),
+              ),
+            ),
             Text('totalMileage'.tr,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF374151))),
           ]),
         ],
       ),
