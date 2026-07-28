@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:smart_lock/constants/app_constants.dart';
 import 'package:smart_lock/screens/home/home_controller.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
+import 'package:smart_lock/util/app_lang.dart';
 import '../widgets/payment_due_card.dart';
 import 'data_controller/data_controller.dart';
 import 'package:smart_lock/screens/web_view.dart';
@@ -448,7 +449,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Icon(Icons.pie_chart, color: dangerColor, size: 18),
                 const SizedBox(width: 8),
                 Text(
-                  'Vehicle Status',
+                  'vehicleStatus'.tr,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -457,7 +458,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  '$total Total',
+                  '${AppLang.num(total)} ${'totalLabel'.tr}',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[500],
@@ -494,20 +495,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _buildLegendRow(
-                          color: _greenColor, label: 'Moving', count: running),
+                          color: _greenColor, label: 'chipMoving'.tr, count: running),
                       const SizedBox(height: 8),
                       _buildLegendRow(
-                          color: _redColor, label: 'Stopped', count: stopped),
+                          color: _redColor, label: 'chipStopped'.tr, count: stopped),
                       const SizedBox(height: 8),
                       _buildLegendRow(
-                          color: _yellowColor, label: 'Idle', count: idle),
+                          color: _yellowColor, label: 'chipIdle'.tr, count: idle),
                       const SizedBox(height: 8),
                       _buildLegendRow(
-                          color: _redColor, label: 'Offline', count: offline),
+                          color: _redColor, label: 'chipOffline'.tr, count: offline),
                       const SizedBox(height: 8),
                       _buildLegendRow(
                           color: _orangeColor,
-                          label: 'Expired',
+                          label: 'chipExpired'.tr,
                           count: expired),
                     ],
                   ),

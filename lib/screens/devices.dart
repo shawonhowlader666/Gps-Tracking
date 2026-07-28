@@ -602,12 +602,12 @@ class _DevicePageState extends State<DevicePage> {
           child: ListView(
             scrollDirection: Axis.horizontal,
             children: [
-              _buildChip(0, 'All', all, _purpleColor),
-              _buildChip(1, 'Moving', running, _greenColor),
-              _buildChip(2, 'Stopped', stop, _redColor),
-              _buildChip(3, 'Idle', idle, _yellowColor),
-              _buildChip(4, 'Offline', offline, _redColor),
-              _buildChip(5, 'Expired', expired, _orangeColor),
+              _buildChip(0, 'chipAll'.tr, all, _purpleColor),
+              _buildChip(1, 'chipMoving'.tr, running, _greenColor),
+              _buildChip(2, 'chipStopped'.tr, stop, _redColor),
+              _buildChip(3, 'chipIdle'.tr, idle, _yellowColor),
+              _buildChip(4, 'chipOffline'.tr, offline, _redColor),
+              _buildChip(5, 'chipExpired'.tr, expired, _orangeColor),
             ],
           ),
         ),
