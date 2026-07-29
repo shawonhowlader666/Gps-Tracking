@@ -497,9 +497,53 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 20),
                   Text(
                     'Version 1.0.9+11',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final Uri uri = Uri.parse('https://www.asthax.com');
+                      try {
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      } catch (e) {
+                        debugPrint('Website launch error: $e');
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.code_rounded, size: 14, color: Color(0xFFE53935)),
+                          SizedBox(width: 6),
+                          Text.rich(
+                            TextSpan(
+                              text: 'Developed by ',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF4B5563), fontWeight: FontWeight.w500),
+                              children: [
+                                TextSpan(
+                                  text: 'AsthaX',
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE53935)),
+                                ),
+                                TextSpan(
+                                  text: ' • www.asthax.com',
+                                  style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
             )
