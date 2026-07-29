@@ -161,7 +161,6 @@ Future<bool> _shouldShowNotification(String body) async {
     if (detectedType.isNotEmpty) {
       final hasActiveAlert = activeServerAlerts.any((t) => t.toLowerCase() == detectedType);
       if (!hasActiveAlert) {
-        debugPrint('[NotificationService] Blocking notification "$body" because alert type "$detectedType" is inactive/deleted on server.');
         return false;
       }
     }
