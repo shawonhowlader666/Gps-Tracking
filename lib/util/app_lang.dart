@@ -1,4 +1,4 @@
-﻿import 'package:get/get.dart';
+import 'package:get/get.dart';
 
 /// Central app localization helper.
 /// Use [AppLang.isBn] to check locale and [AppLang.num] to convert to Bangla numerals.
@@ -18,13 +18,18 @@ class AppLang {
   }
 
   static String _toBanglaDigits(String s) {
-    const en = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-    var result = s;
-    for (int i = 0; i < en.length; i++) {
-      result = result.replaceAll(en[i], bn[i]);
+    if (s.isEmpty) return s;
+    final sb = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      final charCode = s.codeUnitAt(i);
+      // '0' is 48, '9' is 57
+      if (charCode >= 48 && charCode <= 57) {
+        sb.writeCharCode(0x09E6 + (charCode - 48)); // 0x09E6 is '০'
+      } else {
+        sb.writeCharCode(charCode);
+      }
     }
-    return result;
+    return sb.toString();
   }
 
   // ── Device status ──────────────────────────────────────────────────────────
