@@ -202,6 +202,7 @@ class DataController extends GetxController {
   final Map<int, bool> _prevOnlineStatus = {};
   final Map<int, bool> _prevIdleStatus = {};     // true = idle (engine on, speed=0)
   final Map<int, bool> _prevMovingStatus = {};   // true = moving (speed > 0)
+  final Map<int, bool> _prevSpeedStatus = {};    // true = overspeeding
   final Map<int, DateTime> _lastOverspeedTime = {};
   final Map<int, bool> _prevSOSStatus = {};
 
@@ -579,24 +580,27 @@ class DataController extends GetxController {
           _prevEngineStatus[devId] = currentEngine;
         }
 
-        // ─ 2. Idle detection (engine ON + speed = 0) ─────────────────────────
-        final bool isCurrentlyIdle = currentEngine && speed <= 1.0;
-        if (_prevIdleStatus.containsKey(devId)) {
-          final wasIdle = _prevIdleStatus[devId]!;
-          if (isCurrentlyIdle && !wasIdle) {
-            if (idleEnabled) {
-              // Just became idle
-              const String msg = 'Vehicle is now IDLE — Engine ON, not moving';
+        // ─ 3. Over Speed detection ───────────────────────────────────────────
+        final bool speedEnabled = prefs.getBool('auto_alert_speed') ?? true;
+        final int userSpeedLimit = prefs.getInt('auto_alert_speed_limit') ?? 80;
+        final bool isCurrentlyOverSpeed = speed > userSpeedLimit;
+
+        if (_prevSpeedStatus.containsKey(devId)) {
+          final wasOverSpeed = _prevSpeedStatus[devId]!;
+          if (isCurrentlyOverSpeed && !wasOverSpeed) {
+            if (speedEnabled) {
+              final String msg = 'Over Speed Alert — Speed: ${speed.toInt()} km/h (Limit: $userSpeedLimit km/h)';
               _notificationService.showLocalNotification(
-                id: devId * 10 + 6,
-                title: '🅿️ Idle: ${device.name}',
+                id: devId * 10 + 7,
+                title: '⚡ Over Speed: ${device.name}',
                 body: msg,
+                channelId: 'alert_channel_v1',
               );
               _createAndSaveLocalEvent(message: msg, device: device);
             }
           }
         }
-        _prevIdleStatus[devId] = isCurrentlyIdle;
+        _prevSpeedStatus[devId] = isCurrentlyOverSpeed;
 
         // ─ 4. Offline / Back Online ───────────────────────────────────────────
         final bool isOnline = Util.isDeviceOnline(device);
