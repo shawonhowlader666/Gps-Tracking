@@ -1056,7 +1056,7 @@ class Util {
             ? fallbackImg
             : ColorFiltered(
                 colorFilter: getTintFilter(color), child: fallbackImg);
-        return CachedNetworkImage(
+        final Widget netImg = CachedNetworkImage(
           imageUrl: "$serverUrl/$imagePath",
           width: size,
           height: size,
@@ -1064,6 +1064,10 @@ class Util {
           placeholder: (context, url) => tintedFallback,
           errorWidget: (context, url, error) => tintedFallback,
         );
+        return isMoving
+            ? netImg
+            : ColorFiltered(
+                colorFilter: getTintFilter(color), child: netImg);
       }
     }
 
