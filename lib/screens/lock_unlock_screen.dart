@@ -1,6 +1,5 @@
 // ignore_for_file: file_names
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/material.dart' as m;
 import 'package:fluttertoast/fluttertoast.dart';
@@ -49,22 +48,6 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
     final devId = widget.device.id;
     if (devId != null) {
       GetStorage().write('protocol_$devId', protocol);
-    }
-  }
-
-  bool _isAccAlarmOn = false;
-
-  void _loadAccAlarmState() {
-    final devId = widget.device.id;
-    if (devId != null) {
-      _isAccAlarmOn = GetStorage().read<bool>('accalm_$devId') ?? false;
-    }
-  }
-
-  void _saveAccAlarmState(bool val) {
-    final devId = widget.device.id;
-    if (devId != null) {
-      GetStorage().write('accalm_$devId', val);
     }
   }
 
