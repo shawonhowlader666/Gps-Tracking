@@ -39,6 +39,9 @@ class Event extends Object {
         return 'Engine On';
       }
     }
+    if (msg.contains('speed') || msg.contains('overspeed') || msg.contains('fast')) {
+      return 'Over Speed';
+    }
     if (msg.contains('power') &&
         (msg.contains('cut') ||
             msg.contains('disconnect') ||

@@ -589,11 +589,11 @@ class DataController extends GetxController {
           final wasOverSpeed = _prevSpeedStatus[devId]!;
           if (isCurrentlyOverSpeed && !wasOverSpeed) {
             if (speedEnabled) {
-              final String msg = 'Over Speed Alert — Speed: ${speed.toInt()} km/h (Limit: $userSpeedLimit km/h)';
+              const String msg = 'Over Speed';
               _notificationService.showLocalNotification(
                 id: devId * 10 + 7,
                 title: '⚡ Over Speed: ${device.name}',
-                body: msg,
+                body: 'Vehicle speed exceeded $userSpeedLimit km/h (Current: ${speed.toInt()} km/h)',
                 channelId: 'alert_channel_v1',
               );
               _createAndSaveLocalEvent(message: msg, device: device);
