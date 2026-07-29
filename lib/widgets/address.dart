@@ -84,7 +84,7 @@ class _AddressTextState extends State<AddressText> {
 
     return Text(
       (_address != null && _address!.isNotEmpty)
-          ? _address!
+          ? AppLang.num(_address!)
           : (AppLang.isBn ? 'ঠিকানা পাওয়া যায়নি' : 'Address not available'),
       style: displayStyle,
       maxLines: 1,
@@ -163,7 +163,7 @@ class _AddressMarqueeTextState extends State<AddressMarqueeText> {
     }
 
     final addr = (_address != null && _address!.isNotEmpty)
-        ? _address!
+        ? AppLang.num(_address!)
         : (AppLang.isBn ? 'ঠিকানা পাওয়া যায়নি' : 'Address not available');
 
     return Marquee(

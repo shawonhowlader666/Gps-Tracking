@@ -2013,7 +2013,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   Widget _buildAddressRow() {
     final addrText = (_address != null && _address!.trim().isNotEmpty)
-        ? _address!
+        ? AppLang.num(_address!)
         : (AppLang.isBn ? 'ঠিকানা পাওয়া যায়নি' : 'Address not found');
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -2184,7 +2184,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
               status == DeviceStatus.running
                   ? AppLang.num(double.tryParse(device?.speed?.toString() ?? '0')?.toInt() ?? 0)
                     + ' ${'speedUnit'.tr}'
-                  : stopDuration,
+                  : AppLang.num(stopDuration),
               textAlign: TextAlign.center,
               maxLines: 1,
               softWrap: false,
@@ -2246,7 +2246,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
             label: 'expiredOn'.tr,
             bgColor: expiryBgColor,
             content: Text(
-              expiryStr,
+              AppLang.num(expiryStr),
               textAlign: TextAlign.center,
               maxLines: 1,
               softWrap: false,
