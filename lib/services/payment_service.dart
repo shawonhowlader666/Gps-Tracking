@@ -262,8 +262,7 @@ class PaymentService {
   static Future<Map<String, dynamic>?> getBillsRaw() async {
     try {
       return await _getJson('/bills?per_page=15');
-    } catch (e) {
-      print("ERROR IN getBillsRaw: $e");
+    } catch (_) {
       return null;
     }
   }
@@ -272,8 +271,7 @@ class PaymentService {
   static Future<Map<String, dynamic>?> getInvoicesRaw() async {
     try {
       return await _getJson('/invoices');
-    } catch (e) {
-      print("ERROR IN getInvoicesRaw: $e");
+    } catch (_) {
       return null;
     }
   }
@@ -282,8 +280,7 @@ class PaymentService {
   static Future<Map<String, dynamic>?> getInvoiceSingularRaw() async {
     try {
       return await _getJson('/invoice');
-    } catch (e) {
-      print("ERROR IN getInvoiceSingularRaw: $e");
+    } catch (_) {
       return null;
     }
   }

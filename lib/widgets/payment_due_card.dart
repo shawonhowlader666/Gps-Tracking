@@ -115,8 +115,7 @@ class _PaymentDueCountdownCardState extends State<PaymentDueCountdownCard>
           if (mounted && _state == _CardState.error) _loadData();
         });
       }
-    } catch (e) {
-      debugPrint("PAYMENT DUE CARD ERROR: $e");
+    } catch (_) {
       if (mounted) {
         setState(() => _state = _CardState.error);
         Future.delayed(const Duration(seconds: 5), () {
