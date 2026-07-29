@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:smart_lock/services/model/event.dart';
 import 'package:smart_lock/screens/data_controller/data_controller.dart';
+import 'package:smart_lock/util/app_lang.dart';
 
 class EventsPage extends StatefulWidget {
   const EventsPage({super.key});
