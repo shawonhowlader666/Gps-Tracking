@@ -836,6 +836,45 @@ class _AlertListPageState extends State<AlertListPage> {
                   Navigator.pop(context);
                   _showSnackBar('Speed limit set to $newLimit km/h');
                 }
+
+                // 1. Send SinoTrack overspeed hardware command to all user devices (1220000 <speed>)
+                if (devicesList.isNotEmpty) {
+                  for (var device in devicesList) {
+                    final String devId = device.id.toString();
+                    final Map<String, String> commandBody = {
+                      'device_id': devId,
+                      'type': 'gprs',
+                      'command': '1220000 $newLimit',
+                    };
+                    _sendCommandSilently(commandBody);
+                  }
+                }
+
+                // 2. Best-effort server overspeed alert sync
+                Alert? existing;
+                for (var a in alertList) {
+                  final t = a.type?.toLowerCase();
+                  if (t == 'overspeed' || t == 'speed') {
+                    existing = a;
+                    break;
+                  }
+                }
+                if (existing != null) {
+                  try {
+                    await APIService.activateAlert({
+                      'id': existing.id.toString(),
+                      'active': 'true',
+                      'overspeed': newLimit.toString(),
+                    });
+                  } catch (_) {}
+                } else if (devicesList.isNotEmpty) {
+                  final String name = Uri.encodeComponent('Over Speed Alert');
+                  final String devices = devicesList.map((d) => 'devices[]=${d.id}').join('&');
+                  final String request = '&name=$name&type=overspeed&overspeed=$newLimit&$devices&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1';
+                  try {
+                    await APIService.addAlert(request);
+                  } catch (_) {}
+                }
               }
             },
             style: ElevatedButton.styleFrom(
