@@ -37,10 +37,12 @@ class _EventsPageState extends State<EventsPage> {
       if (_filterCategory != 'all') {
         final msg = (e.message ?? '').toLowerCase();
 
-        if (_filterCategory == 'engine' &&
-            !msg.contains('ignition') &&
-            !msg.contains('engine') &&
-            !msg.contains('acc')) return false;
+        if (_filterCategory == 'engine') {
+          if (msg.contains('idle')) return false;
+          if (!msg.contains('ignition') &&
+              !msg.contains('engine') &&
+              !msg.contains('acc')) return false;
+        }
         if (_filterCategory == 'idle' && !msg.contains('idle')) return false;
         if (_filterCategory == 'speed' && !msg.contains('speed')) return false;
         if (_filterCategory == 'geofence' &&
