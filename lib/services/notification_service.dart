@@ -519,6 +519,10 @@ class NotificationService {
     Priority priority = Priority.high,
     Importance importance = Importance.high,
   }) async {
+    final String combined = '$title $body'.toLowerCase();
+    if (combined.contains('idle')) {
+      return;
+    }
     try {
       final androidDetails = AndroidNotificationDetails(
         channelId,
@@ -592,6 +596,9 @@ class NotificationService {
   }
 
   Future<void> showEventNotification(Event event) async {
+    final String msg = (event.message ?? '').toLowerCase();
+    if (msg.contains('idle')) return;
+
     final String emoji = _getEmojiForMessage(event.message ?? '');
     final String channelId = _getChannelIdForMessage(event.message ?? '');
     final bool isAlert =
