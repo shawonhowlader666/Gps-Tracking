@@ -44,13 +44,6 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
     if (serverTime == null || serverTime.isEmpty) return '';
 
     try {
-      // ✅ DateTime.parse() UTC হিসেবে নেয় না — তাই আমরা manually UTC বলে দিচ্ছি
-      DateTime utcTime;
-
-  String _convertToLocalTime(String? serverTime) {
-    if (serverTime == null || serverTime.isEmpty) return '';
-
-    try {
       if (serverTime.contains('AM') || serverTime.contains('PM') || serverTime.contains('am') || serverTime.contains('pm')) {
         final parts = serverTime.trim().split(RegExp(r'\s+'));
         for (var part in parts) {
@@ -81,7 +74,6 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
     }
   }
 
-  // ✅ Date ও Time দুটোই দেখাতে চাইলে এই function ব্যবহার করো
   String _convertToLocalDateTime(String? serverTime) {
     if (serverTime == null || serverTime.isEmpty) return '';
 
@@ -98,9 +90,9 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
       final String period = hour >= 12 ? 'PM' : 'AM';
       final int displayHour = hour % 12 == 0 ? 12 : hour % 12;
 
-      return '${localTime.day.toString().padLeft(2, '0')}/'
-          '${localTime.month.toString().padLeft(2, '0')}/'
-          '${localTime.year} '
+      return '${dt.day.toString().padLeft(2, '0')}/'
+          '${dt.month.toString().padLeft(2, '0')}/'
+          '${dt.year} '
           '${displayHour.toString().padLeft(2, '0')}:'
           '${minute.toString().padLeft(2, '0')} $period';
     } catch (e) {
