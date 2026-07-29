@@ -36,25 +36,22 @@ class _EventsPageState extends State<EventsPage> {
     return controller.events.where((e) {
       if (_filterCategory != 'all') {
         final msg = (e.message ?? '').toLowerCase();
-        final type = (e.type ?? '').toLowerCase();
-        final detail = (e.detail ?? '').toLowerCase();
-        final fullStr = '$msg $type $detail';
 
         if (_filterCategory == 'engine' &&
-            !fullStr.contains('ignition') &&
-            !fullStr.contains('engine') &&
-            !fullStr.contains('acc')) return false;
+            !msg.contains('ignition') &&
+            !msg.contains('engine') &&
+            !msg.contains('acc')) return false;
         if (_filterCategory == 'idle' &&
-            !fullStr.contains('idle') &&
-            !fullStr.contains('stop_duration') &&
-            !fullStr.contains('stopped')) return false;
-        if (_filterCategory == 'speed' && !fullStr.contains('speed')) return false;
+            !msg.contains('idle') &&
+            !msg.contains('stop') &&
+            !msg.contains('stopped')) return false;
+        if (_filterCategory == 'speed' && !msg.contains('speed')) return false;
         if (_filterCategory == 'geofence' &&
-            !fullStr.contains('geofence') &&
-            !fullStr.contains('zone')) return false;
+            !msg.contains('geofence') &&
+            !msg.contains('zone')) return false;
         if (_filterCategory == 'sos' &&
-            !fullStr.contains('sos') &&
-            !fullStr.contains('alarm')) return false;
+            !msg.contains('sos') &&
+            !msg.contains('alarm')) return false;
       }
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
