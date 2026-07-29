@@ -429,17 +429,17 @@ class _DeviceFuelScreenState extends State<DeviceFuelScreen> {
           Row(children: [
             Expanded(
               child: _InputField(
-                label: 'Fuel Price (৳/L)',
-                controller: _priceCtrl,
-                hint: '130',
+                label: 'Fuel Rate (L/100 km)',
+                controller: _rateCtrl,
+                hint: '10.5',
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _InputField(
-                label: 'Fuel Rate (L/100 km)',
-                controller: _rateCtrl,
-                hint: '10.5',
+                label: 'Fuel Price (৳/L)',
+                controller: _priceCtrl,
+                hint: '130',
               ),
             ),
           ]),
@@ -499,7 +499,7 @@ class _DeviceFuelScreenState extends State<DeviceFuelScreen> {
                   Expanded(
                     child: Text(
                       AppLang.num(
-                          '৳${_fuelPrice % 1 == 0 ? _fuelPrice.toInt() : _fuelPrice}/L  •  ${_fuelRate % 1 == 0 ? _fuelRate.toInt() : _fuelRate} L/100km'),
+                          '${_fuelRate % 1 == 0 ? _fuelRate.toInt() : _fuelRate} L/100km  •  ৳${_fuelPrice % 1 == 0 ? _fuelPrice.toInt() : _fuelPrice}/L'),
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
