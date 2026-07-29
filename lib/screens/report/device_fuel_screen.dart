@@ -389,6 +389,8 @@ class _DeviceFuelScreenState extends State<DeviceFuelScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           children: [
+            _buildSettingsCard(),
+            const SizedBox(height: 20),
             _buildPeriodSelector(),
             const SizedBox(height: 16),
             _buildSummary(),
