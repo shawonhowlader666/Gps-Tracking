@@ -32,23 +32,19 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   bool _isEngineOn = false;
   bool _isLoading = false;
 
-  // Selected tracker protocol
-  String _selectedProtocol = 'Standard GPRS (Auto)';
+  bool _isAccAlarmOn = false;
 
-  void _loadSelectedProtocol() {
+  void _loadAccAlarmState() {
     final devId = widget.device.id;
     if (devId != null) {
-      final saved = GetStorage().read<String>('protocol_$devId');
-      if (saved != null) {
-        _selectedProtocol = saved;
-      }
+      _isAccAlarmOn = GetStorage().read<bool>('accalm_$devId') ?? false;
     }
   }
 
-  void _saveSelectedProtocol(String protocol) {
+  void _saveAccAlarmState(bool val) {
     final devId = widget.device.id;
     if (devId != null) {
-      GetStorage().write('protocol_$devId', protocol);
+      GetStorage().write('accalm_$devId', val);
     }
   }
 

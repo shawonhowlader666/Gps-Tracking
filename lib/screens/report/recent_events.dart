@@ -624,6 +624,12 @@ class _SwipeableEventCard extends StatelessWidget {
         color: const Color(0xFFDF58F6),
         label: 'ZONE',
       );
+    } else if (message.contains('idle')) {
+      return _EventStyle(
+        icon: Icons.pause_circle_filled_rounded,
+        color: const Color(0xFFFFD600),
+        label: 'IDLE',
+      );
     } else if (message.contains('ignition')) {
       return _EventStyle(
         icon: Icons.power_settings_new_rounded,
