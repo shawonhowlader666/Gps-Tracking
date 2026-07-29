@@ -9,6 +9,7 @@ import 'package:smart_lock/services/model/payment_stats.dart';
 import 'package:smart_lock/services/payment_service.dart';
 import 'package:smart_lock/storage/user_repository.dart';
 import 'package:smart_lock/theme/custom_color.dart';
+import 'package:smart_lock/util/app_lang.dart';
 
 class DeviceExpiredBlockingDialog extends StatelessWidget {
   final DeviceItem device;
