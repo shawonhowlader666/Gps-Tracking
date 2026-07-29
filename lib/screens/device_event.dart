@@ -47,29 +47,37 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
       // ✅ DateTime.parse() UTC হিসেবে নেয় না — তাই আমরা manually UTC বলে দিচ্ছি
       DateTime utcTime;
 
-      // Server যদি "2024-01-15T13:44:00Z" বা "2024-01-15T13:44:00.000Z" দেয়
-      if (serverTime.contains('T') || serverTime.endsWith('Z')) {
-        utcTime = DateTime.parse(serverTime).toUtc();
-      }
-      // Server যদি "2024-01-15 13:44:00" এই format দেয় (Z ছাড়া)
-      else {
-        // Z যোগ করে UTC বলে দাও
-        utcTime = DateTime.parse('${serverTime}Z').toUtc();
+  String _convertToLocalTime(String? serverTime) {
+    if (serverTime == null || serverTime.isEmpty) return '';
+
+    try {
+      if (serverTime.contains('AM') || serverTime.contains('PM') || serverTime.contains('am') || serverTime.contains('pm')) {
+        final parts = serverTime.trim().split(RegExp(r'\s+'));
+        for (var part in parts) {
+          if (part.contains(':')) {
+            final segs = part.split(':');
+            if (segs.length >= 2) {
+              final h = int.tryParse(segs[0]) ?? 12;
+              final m = segs[1];
+              final period = serverTime.toUpperCase().contains('PM') ? 'PM' : 'AM';
+              final displayHour = h % 12 == 0 ? 12 : h % 12;
+              return '${displayHour.toString().padLeft(2, '0')}:$m $period';
+            }
+          }
+        }
+        return serverTime;
       }
 
-      // ✅ Device-এর local timezone-এ convert করো
-      final DateTime localTime = utcTime.toLocal();
-
-      // ✅ 12-hour format: "01:44 PM"
-      final int hour = localTime.hour;
-      final int minute = localTime.minute;
+      final cleanTime = serverTime.replaceAll('Z', '').replaceAll('T', ' ');
+      final DateTime dt = DateTime.parse(cleanTime);
+      final int hour = dt.hour;
+      final int minute = dt.minute;
       final String period = hour >= 12 ? 'PM' : 'AM';
       final int displayHour = hour % 12 == 0 ? 12 : hour % 12;
 
       return '${displayHour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
     } catch (e) {
-      // Parse করতে না পারলে original time দেখাও
-      return serverTime ?? '';
+      return serverTime;
     }
   }
 
@@ -78,18 +86,15 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
     if (serverTime == null || serverTime.isEmpty) return '';
 
     try {
-      DateTime utcTime;
-
-      if (serverTime.contains('T') || serverTime.endsWith('Z')) {
-        utcTime = DateTime.parse(serverTime).toUtc();
-      } else {
-        utcTime = DateTime.parse('${serverTime}Z').toUtc();
+      if (serverTime.contains('AM') || serverTime.contains('PM') || serverTime.contains('am') || serverTime.contains('pm')) {
+        return serverTime;
       }
 
-      final DateTime localTime = utcTime.toLocal();
+      final cleanTime = serverTime.replaceAll('Z', '').replaceAll('T', ' ');
+      final DateTime dt = DateTime.parse(cleanTime);
 
-      final int hour = localTime.hour;
-      final int minute = localTime.minute;
+      final int hour = dt.hour;
+      final int minute = dt.minute;
       final String period = hour >= 12 ? 'PM' : 'AM';
       final int displayHour = hour % 12 == 0 ? 12 : hour % 12;
 
