@@ -177,8 +177,7 @@ class PaymentService {
     }
 
     if (response.statusCode == 200) return jsonDecode(response.body);
-    throw HttpException(
-        "Server Error (Status: ${response.statusCode}, Response: ${response.body})");
+    return null;
   }
 
   /// Generic POST with auto-retry on 401
@@ -207,8 +206,7 @@ class PaymentService {
     }
 
     if (response.statusCode == 200) return jsonDecode(response.body);
-    throw HttpException(
-        "Server Error (Status: ${response.statusCode}, Response: ${response.body})");
+    return null;
   }
 
   /// Get payment statistics
