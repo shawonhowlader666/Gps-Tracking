@@ -40,6 +40,7 @@ class _EventsPageState extends State<EventsPage> {
             !msg.contains('ignition') &&
             !msg.contains('engine') &&
             !msg.contains('acc')) return false;
+        if (_filterCategory == 'idle' && !msg.contains('idle')) return false;
         if (_filterCategory == 'speed' && !msg.contains('speed')) return false;
         if (_filterCategory == 'geofence' &&
             !msg.contains('geofence') &&
@@ -149,6 +150,8 @@ class _EventsPageState extends State<EventsPage> {
             _buildFilterChip('all', 'All', Icons.grid_view_rounded),
             const SizedBox(width: 6),
             _buildFilterChip('engine', 'Engine', Icons.key_rounded),
+            const SizedBox(width: 6),
+            _buildFilterChip('idle', 'Idle', Icons.pause_circle_filled_rounded),
             const SizedBox(width: 6),
             _buildFilterChip('speed', 'Speed', Icons.speed_rounded),
             const SizedBox(width: 6),
