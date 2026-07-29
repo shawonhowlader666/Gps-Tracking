@@ -678,7 +678,7 @@ class _AlertListPageState extends State<AlertListPage> {
   // Built-in auto-tracking alerts (always active, can't be deleted)
   static const List<Map<String, dynamic>> _autoAlerts = [
     {'icon': Icons.key, 'label': 'Engine ON / OFF', 'desc': 'Auto-detect ignition changes', 'key': 'engine'},
-    {'icon': Icons.timer_outlined, 'label': 'Idle Detection', 'desc': 'Engine ON — speed ≤ 1 km/h', 'key': 'idle'},
+    {'icon': Icons.speed_rounded, 'label': 'Over Speed Alert', 'desc': 'Alert when vehicle exceeds speed limit', 'key': 'speed'},
     {'icon': Icons.wifi_off, 'label': 'Offline / Online', 'desc': 'Connection lost or restored', 'key': 'offline'},
   ];
 

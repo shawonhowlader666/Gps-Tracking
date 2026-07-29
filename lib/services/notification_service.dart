@@ -129,9 +129,9 @@ Future<bool> _shouldShowNotification(String body) async {
     return prefs.getBool('auto_alert_engine') ?? true;
   }
 
-  // 2. Idle
-  if (lower.contains('idle')) {
-    return prefs.getBool('auto_alert_idle') ?? true;
+  // 2. Over Speed / Speed
+  if (lower.contains('speed') || lower.contains('overspeed')) {
+    return prefs.getBool('auto_alert_speed') ?? true;
   }
 
   // 3. Offline / Online
