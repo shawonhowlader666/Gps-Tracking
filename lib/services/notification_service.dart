@@ -139,7 +139,7 @@ Future<bool> _shouldShowNotification(String text) async {
 
   // 2. Over Speed / Speed
   if (lower.contains('speed') || lower.contains('overspeed')) {
-    return prefs.getBool('auto_alert_speed') ?? true;
+    return prefs.getBool('auto_alert_speed') ?? false;
   }
 
   // 3. Offline / Online

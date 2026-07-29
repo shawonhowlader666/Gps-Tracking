@@ -581,7 +581,7 @@ class DataController extends GetxController {
         }
 
         // ─ 3. Over Speed detection ───────────────────────────────────────────
-        final bool speedEnabled = prefs.getBool('auto_alert_speed') ?? true;
+        final bool speedEnabled = prefs.getBool('auto_alert_speed') ?? false;
         final int userSpeedLimit = prefs.getInt('auto_alert_speed_limit') ?? 80;
         final bool isCurrentlyOverSpeed = speed > userSpeedLimit;
 

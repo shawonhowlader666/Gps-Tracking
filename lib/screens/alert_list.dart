@@ -900,8 +900,8 @@ class _AlertListPageState extends State<AlertListPage> {
     required String desc,
     required String alertKey,
   }) {
-    // Read state from local pref (defaults to true)
-    final bool isEnabled = prefs?.getBool('auto_alert_$alertKey') ?? true;
+    // Read state from local pref (speed defaults to false, others to true)
+    final bool isEnabled = prefs?.getBool('auto_alert_$alertKey') ?? (alertKey != 'speed');
     final int currentLimit = prefs?.getInt('auto_alert_speed_limit') ?? 80;
     final String displayDesc = alertKey == 'speed'
         ? 'Limit: $currentLimit km/h (Tap to change)'
