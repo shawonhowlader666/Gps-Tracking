@@ -29,6 +29,9 @@ class Event extends Object {
   static String? _cleanMessage(String? rawMessage) {
     if (rawMessage == null) return null;
     final msg = rawMessage.toLowerCase();
+    if (msg.contains('idle')) {
+      return 'Engine Idle';
+    }
     if (msg.contains('ignition') || msg.contains('engine')) {
       if (msg.contains('off') || msg.contains('stop')) {
         return 'Engine Off';
