@@ -779,6 +779,73 @@ class _AlertListPageState extends State<AlertListPage> {
         } catch (_) {}
       }
     }
+  void _showSpeedLimitDialog(int currentLimit) {
+    final TextEditingController limitCtrl = TextEditingController(text: currentLimit.toString());
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.speed_rounded, color: _primaryRed, size: 22),
+            SizedBox(width: 8),
+            Text('Set Speed Limit', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the speed limit (KM/H) above which you want to receive overspeed alerts:',
+              style: TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: limitCtrl,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Speed Limit (km/h)',
+                hintText: '80',
+                suffixText: 'km/h',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: _primaryRed, width: 2),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: _greyText)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final int? newLimit = int.tryParse(limitCtrl.text.trim());
+              if (newLimit != null && newLimit > 0) {
+                final activePrefs = prefs ?? await SharedPreferences.getInstance();
+                await activePrefs.setInt('auto_alert_speed_limit', newLimit);
+                if (mounted) {
+                  setState(() {});
+                  Navigator.pop(context);
+                  _showSnackBar('Speed limit set to $newLimit km/h');
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Save Limit'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildAutoAlertCard({
@@ -788,7 +855,10 @@ class _AlertListPageState extends State<AlertListPage> {
     required String alertKey,
   }) {
     // Read state from local pref (defaults to true)
-    final bool isEnabled = prefs?.getBool('auto_alert_$alertKey') ?? true;
+    final int currentLimit = prefs?.getInt('auto_alert_speed_limit') ?? 80;
+    final String displayDesc = alertKey == 'speed'
+        ? 'Limit: $currentLimit km/h (Tap to change)'
+        : desc;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 5),
@@ -804,60 +874,68 @@ class _AlertListPageState extends State<AlertListPage> {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: _primaryRed.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: alertKey == 'speed' ? () => _showSpeedLimitDialog(currentLimit) : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: _primaryRed.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: _primaryRed, size: 16),
               ),
-              child: Icon(icon, color: _primaryRed, size: 16),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
-                  ),
-                  Text(
-                    desc,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
-                  ),
-                ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
+                    ),
+                    Text(
+                      displayDesc,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: alertKey == 'speed' ? FontWeight.w600 : FontWeight.normal,
+                        color: alertKey == 'speed' ? _primaryRed : const Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: _primaryRed.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _primaryRed.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'AUTO',
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: _primaryRed, letterSpacing: 0.5),
+                ),
               ),
-              child: const Text(
-                'AUTO',
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: _primaryRed, letterSpacing: 0.5),
+              const SizedBox(width: 4),
+              Transform.scale(
+                scale: 0.8,
+                child: Switch(
+                  value: isEnabled,
+                  activeColor: _primaryRed,
+                  activeTrackColor: _primaryRed.withValues(alpha: 0.2),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onChanged: (bool value) {
+                    toggleAutoAlert(alertKey, value);
+                  },
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-            Transform.scale(
-              scale: 0.8,
-              child: Switch(
-                value: isEnabled,
-                activeColor: _primaryRed,
-                activeTrackColor: _primaryRed.withValues(alpha: 0.2),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                onChanged: (bool value) {
-                  toggleAutoAlert(alertKey, value);
-                },
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
