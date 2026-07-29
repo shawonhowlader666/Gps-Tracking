@@ -658,7 +658,7 @@ class _DevicePageState extends State<DevicePage> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                count.toString(),
+                AppLang.num(count),
                 style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -832,56 +832,6 @@ class _DevicePageState extends State<DevicePage> {
                           ),
                         ),
                       ],
-                    ),
-
-                    _dotDivider(),
-
-                    // Fuel row with Details
-                    GestureDetector(
-                      onTap: () {
-                        Get.to(
-                          () => DeviceFuelScreen(device: device),
-                          preventDuplicates: false,
-                        );
-                      },
-                      behavior: HitTestBehavior.opaque,
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.local_gas_station_rounded,
-                            size: 14,
-                            color: Color(0xFF64748B),
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              '${'fuel'.tr}: ${_getDeviceFuelCostText(device)}',
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF111827),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'details'.tr,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.blue,
-                            ),
-                          ),
-                          const SizedBox(width: 2),
-                          const Icon(
-                            Icons.chevron_right_rounded,
-                            size: 14,
-                            color: Colors.blue,
-                          ),
-                        ],
-                      ),
                     ),
 
                     _dotDivider(),
