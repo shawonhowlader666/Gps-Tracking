@@ -438,13 +438,14 @@ class _DeviceFuelScreenState extends State<DeviceFuelScreen> {
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
-            height: 46,
+            height: 48,
             child: ElevatedButton(
               onPressed: _isSaving ? null : _saveSettings,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _gold,
-                foregroundColor: Colors.black87,
-                elevation: 0,
+                backgroundColor: _red,
+                foregroundColor: Colors.white,
+                elevation: 1,
+                shadowColor: _red.withValues(alpha: 0.3),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ),
@@ -453,36 +454,54 @@ class _DeviceFuelScreenState extends State<DeviceFuelScreen> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.black87))
+                          strokeWidth: 2, color: Colors.white))
                   : Text('save'.tr,
                       style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700)),
+                          fontSize: 15, fontWeight: FontWeight.w700)),
             ),
           ),
           if (_fuelPrice > 0 || _fuelRate > 0) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.shade200),
-              ),
-              child: Row(children: [
-                const Icon(Icons.check_circle_outline,
-                    size: 14, color: Colors.green),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    AppLang.num(
-                        '৳${_fuelPrice.toStringAsFixed(2)}/L  •  ${_fuelRate.toStringAsFixed(2)} L/100km'),
-                    style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.green),
+                color: const Color(0xFFECFDF5),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFA7F3D0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF059669).withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
                   ),
-                ),
-              ]),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFD1FAE5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.check_circle_rounded,
+                        size: 16, color: Color(0xFF059669)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      AppLang.num(
+                          '৳${_fuelPrice.toStringAsFixed(2)}/L  •  ${_fuelRate.toStringAsFixed(2)} L/100km'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF047857),
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
