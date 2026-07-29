@@ -30,7 +30,7 @@ class Event extends Object {
     if (rawMessage == null) return null;
     final msg = rawMessage.toLowerCase();
     if (msg.contains('idle')) {
-      return 'Engine Idle';
+      return 'Idle';
     }
     if (msg.contains('ignition') || msg.contains('engine')) {
       if (msg.contains('off') || msg.contains('stop')) {
