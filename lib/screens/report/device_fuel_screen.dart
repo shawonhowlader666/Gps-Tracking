@@ -120,11 +120,19 @@ class _DeviceFuelScreenState extends State<DeviceFuelScreen> {
     _fuelPrice = double.tryParse(priceStr) ?? 0;
     _fuelRate  = double.tryParse(rateStr)  ?? 0;
 
+    String formatCleanNumber(double val, String original) {
+      if (val <= 0) return '';
+      if (val == val.toInt()) {
+        return val.toInt().toString();
+      }
+      return val.toString();
+    }
+
     _priceCtrl.removeListener(_onSettingsChanged);
     _rateCtrl.removeListener(_onSettingsChanged);
 
-    _priceCtrl.text = priceStr.isNotEmpty ? priceStr : (_fuelPrice > 0 ? _fuelPrice.toString() : '');
-    _rateCtrl.text  = rateStr.isNotEmpty  ? rateStr  : (_fuelRate > 0 ? _fuelRate.toString()  : '');
+    _priceCtrl.text = formatCleanNumber(_fuelPrice, priceStr);
+    _rateCtrl.text  = formatCleanNumber(_fuelRate, rateStr);
 
     _priceCtrl.addListener(_onSettingsChanged);
     _rateCtrl.addListener(_onSettingsChanged);
@@ -491,7 +499,7 @@ class _DeviceFuelScreenState extends State<DeviceFuelScreen> {
                   Expanded(
                     child: Text(
                       AppLang.num(
-                          '৳${_fuelPrice.toStringAsFixed(2)}/L  •  ${_fuelRate.toStringAsFixed(2)} L/100km'),
+                          '৳${_fuelPrice % 1 == 0 ? _fuelPrice.toInt() : _fuelPrice}/L  •  ${_fuelRate % 1 == 0 ? _fuelRate.toInt() : _fuelRate} L/100km'),
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
