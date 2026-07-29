@@ -88,14 +88,17 @@ class _EventsPageState extends State<EventsPage> {
               color: Color(0xFF2D3142),
             ),
           ),
-          Obx(() => Text(
-                '${controller.events.length} ${'notifications'.tr}',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.grey[500],
-                ),
-              )),
+          Obx(() {
+            final filteredCount = _getFilteredEvents().length;
+            return Text(
+              '${AppLang.num(filteredCount)} ${'notifications'.tr}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: Colors.grey[500],
+              ),
+            );
+          }),
         ],
       ),
       actions: [

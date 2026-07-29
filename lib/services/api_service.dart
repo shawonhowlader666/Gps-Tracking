@@ -278,16 +278,9 @@ class APIService {
       final url =
           '$serverURL/api/get_events?user_api_hash=$hash&lang=$language&from_date=$fromDate&to_date=$toDate';
 
-      debugPrint('[Events] URL: $url');
-
       final response = await http
           .get(Uri.parse(url), headers: headers)
           .timeout(const Duration(seconds: 30));
-
-      debugPrint('[Events] Status: ${response.statusCode}');
-      if (response.body.length > 10) {
-        debugPrint('[Events] Body (500): ${response.body.substring(0, response.body.length.clamp(0, 500))}');
-      }
 
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body.replaceAll('\uFEFF', '').replaceAll('﻿', ''));
