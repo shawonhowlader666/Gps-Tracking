@@ -41,10 +41,7 @@ class _EventsPageState extends State<EventsPage> {
             !msg.contains('ignition') &&
             !msg.contains('engine') &&
             !msg.contains('acc')) return false;
-        if (_filterCategory == 'idle' &&
-            !msg.contains('idle') &&
-            !msg.contains('stop') &&
-            !msg.contains('stopped')) return false;
+        if (_filterCategory == 'idle' && !msg.contains('idle')) return false;
         if (_filterCategory == 'speed' && !msg.contains('speed')) return false;
         if (_filterCategory == 'geofence' &&
             !msg.contains('geofence') &&
