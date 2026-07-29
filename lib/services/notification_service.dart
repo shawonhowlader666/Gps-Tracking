@@ -56,7 +56,7 @@ Future<void> _showBackgroundNotification(RemoteMessage message) async {
         message.data['body'] as String? ??
         'You have a new message';
 
-    if (!await _shouldShowNotification(body)) {
+    if (!await _shouldShowNotification('$title $body')) {
       return;
     }
 
@@ -116,8 +116,11 @@ void onDidReceiveBackgroundNotificationResponse(NotificationResponse response) {
   // Handle background notification tap if needed
 }
 
-Future<bool> _shouldShowNotification(String body) async {
-  final lower = body.toLowerCase();
+Future<bool> _shouldShowNotification(String text) async {
+  final lower = text.toLowerCase();
+  if (lower.contains('idle')) {
+    return false;
+  }
   SharedPreferences? prefs;
   try {
     prefs = await SharedPreferences.getInstance();
@@ -463,7 +466,7 @@ class NotificationService {
     required String body,
     Map<String, dynamic>? data,
   }) async {
-    if (!await _shouldShowNotification(body)) {
+    if (!await _shouldShowNotification('$title $body')) {
       return;
     }
 
