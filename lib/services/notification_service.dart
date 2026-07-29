@@ -124,6 +124,11 @@ Future<bool> _shouldShowNotification(String body) async {
   } catch (_) {}
   if (prefs == null) return true;
 
+  // 0. Idle notifications - completely disabled per user preference
+  if (lower.contains('idle')) {
+    return false;
+  }
+
   // 1. Engine / Ignition
   if (lower.contains('ignition') || lower.contains('engine')) {
     return prefs.getBool('auto_alert_engine') ?? true;
