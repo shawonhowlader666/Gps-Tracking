@@ -973,6 +973,9 @@ class _AlertListPageState extends State<AlertListPage> {
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   onChanged: (bool value) {
                     toggleAutoAlert(alertKey, value);
+                    if (alertKey == 'speed' && value) {
+                      _showSpeedLimitDialog(currentLimit);
+                    }
                   },
                 ),
               ),
