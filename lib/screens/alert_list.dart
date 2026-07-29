@@ -779,6 +779,8 @@ class _AlertListPageState extends State<AlertListPage> {
         } catch (_) {}
       }
     }
+  }
+
   void _showSpeedLimitDialog(int currentLimit) {
     final TextEditingController limitCtrl = TextEditingController(text: currentLimit.toString());
     showDialog(
