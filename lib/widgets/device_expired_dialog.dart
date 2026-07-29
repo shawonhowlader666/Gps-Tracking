@@ -226,8 +226,8 @@ class DeviceExpiredBlockingDialog extends StatelessWidget {
                                 final displayedDue = due;
 
                                 final dynamicDescription = due > 0
-                                      ? 'কানেকশন সচল রাখতে অনুগ্রহ করে বিল পরিশোধ করুন। আপনার মোট $unpaidBillsCount মাসের বিল (৳${due.toStringAsFixed(0)}) বকেয়া রয়েছে।'
-                                    : 'কানেকশন সচল রাখতে অনুগ্রহ করে বিল পরিশোধ করুন। ১ বছরের অগ্রিম পেমেন্টে ২৫% ডিসকাউন্ট রয়েছে।';
+                                      ? 'কানেকশন সচল রাখতে অনুগ্রহ করে বিল পরিশোধ করুন। আপনার মোট ${AppLang.num(unpaidBillsCount)} মাসের বিল (৳${AppLang.num(due.toStringAsFixed(0))}) বকেয়া রয়েছে।'
+                                    : 'অনুগ্রহ করে বকেয়া বিল পরিশোধ করুন।';
 
                                 return Column(
                                   children: [
