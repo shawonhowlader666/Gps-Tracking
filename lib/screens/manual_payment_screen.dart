@@ -159,13 +159,11 @@ class _ManualPaymentScreenState extends State<ManualPaymentScreen>
       final adminNumber = whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
       final userEmail = UserRepository.getEmail() ?? 'N/A';
 
-      final String packageStr = widget.packageTitle?.replaceAll('\n', ' ') ?? (widget.packageType == '1_year'
-          ? '1 Year (BDT ${widget.dueAmount})'
-          : (widget.packageType == '1_month'
-              ? '1 Month (BDT ${widget.dueAmount})'
-              : (widget.packageType != null && widget.packageType!.contains('_months')
-                  ? '${widget.packageType!.split('_').first} Months (BDT ${widget.dueAmount})'
-                  : '${widget.packageType ?? 'Payment'} (BDT ${widget.dueAmount})')));
+      final String packageStr = widget.packageTitle != null && widget.packageTitle!.isNotEmpty
+          ? widget.packageTitle!.replaceAll('\n', ' ')
+          : (widget.packageType != null && widget.packageType!.isNotEmpty
+              ? '${widget.packageType} (BDT ${widget.dueAmount})'
+              : 'Bill Payment (BDT ${widget.dueAmount})');
 
       final String vehicleStr = widget.vehicleName != null ? '\n🚗 Vehicle: ${widget.vehicleName}' : '';
 
