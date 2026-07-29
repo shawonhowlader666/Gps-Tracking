@@ -357,6 +357,8 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         requestBody['data'] = lockAfter ? 'stop123456' : 'resume123456';
       } else {
         requestBody['type'] = lockAfter ? 'engineStop' : 'engineResume';
+        requestBody['command'] = lockAfter ? 'engineStop' : 'engineResume';
+        requestBody['data'] = lockAfter ? 'engineStop' : 'engineResume';
       }
 
       final res = await APIService.sendCommands(requestBody);
@@ -1495,6 +1497,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
           ? null
           : () => _sendCommand(isLock ? 'engineStop' : 'engineResume',
               lockAfter: isLock),
+      behavior: HitTestBehavior.opaque,
       child: Column(
         children: [
           ScaleTransition(
