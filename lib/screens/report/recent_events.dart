@@ -47,11 +47,10 @@ class _EventsPageState extends State<EventsPage> {
         }
         if (_filterCategory == 'idle' && !msg.contains('idle')) return false;
         if (_filterCategory == 'speed') {
-          final double s = double.tryParse(e.speed?.toString() ?? '0') ?? 0;
           final bool isSpeedMsg = msg.contains('speed') ||
               msg.contains('overspeed') ||
               msg.contains('fast');
-          if (!isSpeedMsg && s <= 0) return false;
+          if (!isSpeedMsg) return false;
         }
         if (_filterCategory == 'geofence' &&
             !msg.contains('geofence') &&
