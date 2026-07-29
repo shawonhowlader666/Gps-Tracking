@@ -177,6 +177,7 @@ String _getEmojiForMessage(String message) {
   if (lower.contains('alarm') || lower.contains('alert')) return '🚨';
   if (lower.contains('speed')) return '⚡';
   if (lower.contains('geofence')) return '📍';
+  if (lower.contains('idle')) return '⏳';
   if (lower.contains('ignition')) return '🔑';
   if (lower.contains('online') || lower.contains('অনলাইন')) return '✅';
   if (lower.contains('offline') || lower.contains('অফলাইন')) return '❌';
