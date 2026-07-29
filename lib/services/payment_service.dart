@@ -128,14 +128,13 @@ class PaymentService {
         _token = jsonDecode(response.body)['token'];
         return true;
       }
-      throw HttpException(
-          "Billing Auth Failed (Status: ${response.statusCode}, Response: ${response.body})");
+      return false;
     } on TimeoutException {
-      rethrow;
+      return false;
     } on SocketException {
-      rethrow;
-    } catch (e) {
-      rethrow;
+      return false;
+    } catch (_) {
+      return false;
     } finally {
       _isLoggingIn = false;
     }
