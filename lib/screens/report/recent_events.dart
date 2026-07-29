@@ -451,24 +451,41 @@ class _SwipeableEventCard extends StatelessWidget {
     );
   }
 
-  /// Converts "2026-07-04 20:56:18" → "2026-07-04 8:56 PM"
+  /// Formats raw time string to 12-hour AM/PM format without double timezone offset shifting
   String _formatTime(String? raw) {
     if (raw == null || raw.isEmpty) return '';
     try {
-      // Try parsing with or without Z suffix
-      final DateTime dt = raw.contains('T') || raw.endsWith('Z')
-          ? DateTime.parse(raw).toLocal()
-          : DateTime.parse('${raw}Z').toLocal();
+      // 1. If server already sent 12-hour formatted time (e.g. "29-07-2026 04:10:00 PM")
+      if (raw.contains('AM') || raw.contains('PM') || raw.contains('am') || raw.contains('pm')) {
+        final parts = raw.trim().split(RegExp(r'\s+'));
+        if (parts.length >= 3) {
+          final datePart = parts[0];
+          final timePart = parts[1];
+          final period = parts[2].toUpperCase();
+          final timeSegments = timePart.split(':');
+          if (timeSegments.length >= 2) {
+            final h = int.tryParse(timeSegments[0]) ?? 12;
+            final m = timeSegments[1];
+            final displayH = h % 12 == 0 ? 12 : h % 12;
+            return '${AppLang.num(datePart)} ${AppLang.num('$displayH:$m')} $period';
+          }
+        }
+        return AppLang.num(raw);
+      }
 
+      // 2. Parse ISO/Standard Date Format "2026-07-29 16:10:00"
+      final cleanRaw = raw.replaceAll('Z', '').replaceAll('T', ' ');
+      final dt = DateTime.parse(cleanRaw);
       final int h = dt.hour;
       final int m = dt.minute;
       final String period = h >= 12 ? 'PM' : 'AM';
       final int displayH = h % 12 == 0 ? 12 : h % 12;
       final String datePart =
           '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-      return '$datePart $displayH:${m.toString().padLeft(2, '0')} $period';
+      final String timeStr = '$datePart $displayH:${m.toString().padLeft(2, '0')} $period';
+      return AppLang.num(timeStr);
     } catch (_) {
-      return raw;
+      return AppLang.num(raw);
     }
   }
 
