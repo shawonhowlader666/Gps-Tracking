@@ -139,19 +139,7 @@ Future<bool> _shouldShowNotification(String text) async {
 
   // 2. Over Speed / Speed
   if (lower.contains('speed') || lower.contains('overspeed')) {
-    final bool isEnabled = prefs.getBool('auto_alert_speed') ?? true;
-    if (!isEnabled) return false;
-
-    // Check custom speed limit threshold if specified in notification body (e.g. "Speed: 85 kph")
-    final int userLimit = prefs.getInt('auto_alert_speed_limit') ?? 80;
-    final match = RegExp(r'(\d+)\s*(kph|km/h|kmh)').firstMatch(lower);
-    if (match != null) {
-      final int currentSpeed = int.tryParse(match.group(1) ?? '') ?? 0;
-      if (currentSpeed < userLimit) {
-        return false; // Below custom speed limit
-      }
-    }
-    return true;
+    return prefs.getBool('auto_alert_speed') ?? true;
   }
 
   // 3. Offline / Online

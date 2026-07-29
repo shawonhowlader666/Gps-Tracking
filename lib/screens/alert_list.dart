@@ -751,13 +751,14 @@ class _AlertListPageState extends State<AlertListPage> {
     if (mounted) setState(() {});
     _showSnackBar(turnOn ? 'Alert activated' : 'Alert deactivated');
 
-    // 2. Best-effort server sync for ignition alert if possible
-    if (alertKey == 'engine') {
-      final String targetType = 'ignition_duration';
+    // 2. Best-effort server sync for ignition / speed alert if possible
+    if (alertKey == 'engine' || alertKey == 'speed') {
+      final String targetType = alertKey == 'engine' ? 'ignition_duration' : 'overspeed';
       Alert? existing;
       for (var a in alertList) {
         final t = a.type?.toLowerCase();
-        if (t == 'ignition_duration' || t == 'ignition') {
+        if ((alertKey == 'engine' && (t == 'ignition_duration' || t == 'ignition')) ||
+            (alertKey == 'speed' && (t == 'overspeed' || t == 'speed'))) {
           existing = a;
           break;
         }
@@ -771,11 +772,14 @@ class _AlertListPageState extends State<AlertListPage> {
           });
         } catch (_) {}
       } else if (turnOn && devicesList.isNotEmpty) {
-        final String name = Uri.encodeComponent('Engine ON / OFF');
+        final String name = Uri.encodeComponent(alertKey == 'engine' ? 'Engine ON / OFF' : 'Over Speed Alert');
         final String devices = devicesList.map((d) => 'devices[]=${d.id}').join('&');
-        final String request = '&name=$name&type=$targetType&$targetType=0&$devices&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1';
+        final int limit = activePrefs.getInt('auto_alert_speed_limit') ?? 80;
+        final String paramVal = alertKey == 'engine' ? '0' : limit.toString();
+        final String request = 'name=$name&type=$targetType&$targetType=$paramVal&$devices&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1';
         try {
           await APIService.addAlert(request);
+          getAlerts();
         } catch (_) {}
       }
     }
@@ -870,9 +874,10 @@ class _AlertListPageState extends State<AlertListPage> {
                 } else if (devicesList.isNotEmpty) {
                   final String name = Uri.encodeComponent('Over Speed Alert');
                   final String devices = devicesList.map((d) => 'devices[]=${d.id}').join('&');
-                  final String request = '&name=$name&type=overspeed&overspeed=$newLimit&$devices&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1';
+                  final String request = 'name=$name&type=overspeed&overspeed=$newLimit&$devices&notifications[sound]=1&notifications[push]=1&notifications[mobile]=1';
                   try {
                     await APIService.addAlert(request);
+                    getAlerts();
                   } catch (_) {}
                 }
               }
