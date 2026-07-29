@@ -343,9 +343,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
         'device_id': widget.device.id.toString(),
       };
 
-      if (_selectedProtocol == 'Standard GPRS (Auto)') {
-        requestBody['type'] = lockAfter ? 'engineStop' : 'engineResume';
-      } else if (_selectedProtocol == 'SinoTrack') {
+      if (_selectedProtocol == 'SinoTrack') {
         requestBody['type'] = 'custom';
         requestBody['command'] = lockAfter ? '9400000' : '9500000';
         requestBody['data'] = lockAfter ? '9400000' : '9500000';
