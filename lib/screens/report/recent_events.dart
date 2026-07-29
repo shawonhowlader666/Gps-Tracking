@@ -35,11 +35,12 @@ class _EventsPageState extends State<EventsPage> {
 
   List<Event> _getFilteredEvents() {
     return controller.events.where((e) {
-      if (_filterCategory != 'all') {
-        final msg = (e.message ?? '').toLowerCase();
+      final msg = (e.message ?? '').toLowerCase();
+      // Completely exclude Idle events from events list
+      if (msg.contains('idle')) return false;
 
+      if (_filterCategory != 'all') {
         if (_filterCategory == 'engine') {
-          if (msg.contains('idle')) return false;
           if (!msg.contains('ignition') &&
               !msg.contains('engine') &&
               !msg.contains('acc')) return false;
@@ -154,8 +155,6 @@ class _EventsPageState extends State<EventsPage> {
             _buildFilterChip('all', 'All', Icons.grid_view_rounded),
             const SizedBox(width: 6),
             _buildFilterChip('engine', 'Engine', Icons.key_rounded),
-            const SizedBox(width: 6),
-            _buildFilterChip('idle', 'Idle', Icons.pause_circle_filled_rounded),
             const SizedBox(width: 6),
             _buildFilterChip('speed', 'Speed', Icons.speed_rounded),
             const SizedBox(width: 6),
