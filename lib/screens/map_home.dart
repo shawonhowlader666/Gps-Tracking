@@ -218,12 +218,15 @@ class _MapPageState extends State<MapPage> {
             final markerId = MarkerId(subElement.id.toString());
             final labelId = MarkerId("t_${subElement.id}");
 
+            final double? lat = double.tryParse(subElement.lat?.toString() ?? '');
+            final double? lng = double.tryParse(subElement.lng?.toString() ?? '');
+            if (lat == null || lng == null) continue;
+
             void buildAndAddMarker(BitmapDescriptor icon) {
               _markers.add(
                 Marker(
                     markerId: markerId,
-                    position: LatLng(double.parse(subElement.lat.toString()),
-                        double.parse(subElement.lng.toString())),
+                    position: LatLng(lat, lng),
                     rotation: course,
                     icon: icon,
                     anchor: const Offset(0.5, 0.5),
@@ -241,7 +244,7 @@ class _MapPageState extends State<MapPage> {
                               }
                           });
                       CameraPosition cPosition = CameraPosition(
-                        target: LatLng(subElement.lat, subElement.lng),
+                        target: LatLng(lat, lng),
                         zoom: currentZoom,
                       );
                       mapController!.moveCamera(
@@ -252,16 +255,18 @@ class _MapPageState extends State<MapPage> {
                         polylines.clear();
                         polylineCoordinates.clear();
 
-                        for (var tail in subElement.tail!) {
-                          polylineCoordinates.add(LatLng(
-                              double.parse(tail.lat.toString()),
-                              double.parse(tail.lng.toString())));
+                        if (subElement.tail != null) {
+                          for (var tail in subElement.tail!) {
+                            final tLat = double.tryParse(tail.lat?.toString() ?? '');
+                            final tLng = double.tryParse(tail.lng?.toString() ?? '');
+                            if (tLat != null && tLng != null) {
+                              polylineCoordinates.add(LatLng(tLat, tLng));
+                            }
+                          }
                         }
                         drawPolyline();
                         device = subElement;
-                        polylineCoordinates.add(LatLng(
-                            double.parse(subElement.lat.toString()),
-                            double.parse(subElement.lng.toString())));
+                        polylineCoordinates.add(LatLng(lat, lng));
                       });
                     },
                     infoWindow: const InfoWindow()),
@@ -271,8 +276,7 @@ class _MapPageState extends State<MapPage> {
                 _markers.addLabelMarker(LabelMarker(
                   label: subElement.name!,
                   markerId: labelId,
-                  position: LatLng(double.parse(subElement.lat.toString()),
-                      double.parse(subElement.lng.toString())),
+                  position: LatLng(lat, lng),
                 ));
               }
             }
