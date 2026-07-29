@@ -8,9 +8,9 @@ import 'package:smart_lock/screens/report/get_today_report.dart';
 import 'package:smart_lock/screens/data_controller/data_controller.dart';
 import 'package:smart_lock/util/app_lang.dart';
 
-// Persisted settings keys
-String _priceKey(int id) => 'fuel_price_$id';
-String _rateKey(int id)  => 'fuel_rate_$id';
+// Persisted settings keys (global so one setting applies to all user vehicles)
+String _priceKey([int? id]) => 'global_fuel_price';
+String _rateKey([int? id])  => 'global_fuel_rate';
 
 class DeviceFuelScreen extends StatefulWidget {
   final DeviceItem device;
