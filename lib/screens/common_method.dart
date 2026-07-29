@@ -6,8 +6,16 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
 String formatTime(String time) {
-  DateTime lastUpdate = DateTime.parse(time);
-  return DateFormat('dd-MM-yyyy hh:mm:ss a').format(lastUpdate.toLocal());
+  try {
+    if (time.contains('AM') || time.contains('PM') || time.contains('am') || time.contains('pm')) {
+      return time;
+    }
+    final cleanTime = time.replaceAll('Z', '').replaceAll('T', ' ');
+    final DateTime dt = DateTime.parse(cleanTime);
+    return DateFormat('dd-MM-yyyy hh:mm:ss a').format(dt);
+  } catch (_) {
+    return time;
+  }
 }
 
 String formatDateReport(String date) {
