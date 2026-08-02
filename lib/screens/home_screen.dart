@@ -6,10 +6,9 @@ import 'package:smart_lock/constants/app_constants.dart';
 import 'package:smart_lock/screens/home/home_controller.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 import 'package:smart_lock/util/app_lang.dart';
+import 'package:smart_lock/util/util.dart';
 import '../widgets/payment_due_card.dart';
 import 'data_controller/data_controller.dart';
-import 'package:smart_lock/screens/web_view.dart';
-import 'package:smart_lock/screens/payment_list.dart';
 import 'package:smart_lock/services/payment_service.dart';
 
 // ── inactive সরানো হয়েছে ──
@@ -50,7 +49,6 @@ class _HomeScreenState extends State<HomeScreen> {
   static const Color _greenColor = Color(0xFF22C55E); // running
   static const Color _yellowColor = Color(0xFFFFD600); // idle
   static const Color _redColor = Color(0xFFEF4444); // stop
-  static const Color _greyColor = Color(0xFF9CA3AF); // offline
   static const Color _orangeColor = Color(0xFFF97316); // expired
   static const Color dangerColor = Color(0xFFEF4444);
 
@@ -160,61 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   bool _isEngineOn(DeviceItem device) {
-    // Check local override first
-    final devId = device.id;
-    if (devId != null) {
-      final engineOverride = DataController.getLocalEngineOverride(devId);
-      if (engineOverride != null) {
-        return ['on', '1', 'true', 'ign on', 'engine on', 'acc on']
-            .contains(engineOverride.toLowerCase().trim());
-      }
-    }
-
-    if (device.engineStatus != null) {
-      final status = device.engineStatus;
-      if (status is bool) return status;
-      if (status is int) return status == 1;
-      if (status is String) {
-        final s = status.toLowerCase().trim();
-        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s))
-          return true;
-        if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
-            .contains(s)) return false;
-      }
-    }
-
-    if (device.sensors != null) {
-      for (var sensor in device.sensors!) {
-        try {
-          final type = (sensor['type'] ?? '').toString().toLowerCase();
-          final name = (sensor['name'] ?? '').toString().toLowerCase();
-          final value = sensor['value'];
-          if (type == 'acc' ||
-              type == 'ignition' ||
-              type == 'engine' ||
-              name.contains('ignition') ||
-              name.contains('acc') ||
-              name.contains('engine')) {
-            if (value == null) continue;
-            if (value is bool) return value;
-            if (value is int) return value == 1;
-            if (value is String) {
-              final v = value.toLowerCase().trim();
-              if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
-                  .contains(v)) return true;
-              if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
-                  .contains(v)) return false;
-            }
-          }
-        } catch (_) {}
-      }
-    }
-
-    final speed = double.tryParse(device.speed.toString()) ?? 0;
-    if (speed > 0) return true;
-
-    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
-    return iconColor == 'yellow' || iconColor == 'green';
+    return Util.isEngineOn(device);
   }
 
   bool _isDeviceExpired(DeviceItem device) {

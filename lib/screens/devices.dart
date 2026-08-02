@@ -208,8 +208,47 @@ class _DevicePageState extends State<DevicePage> {
 
     final sensors = _parseSensors(rawSensors);
 
-    if (sensors.isEmpty) {
-      return const SizedBox();
+    final finalSensors = <Map<String, dynamic>>[...sensors];
+
+    // Check if Engine, Lock, Battery/Voltage exist
+    final bool hasBattery = finalSensors.any((s) {
+      final name = (s['name'] ?? s['type'] ?? '').toString().toLowerCase();
+      return name.contains('battery') || name.contains('voltage') || name.contains('adc') || name.contains('power');
+    });
+
+    final bool hasLock = finalSensors.any((s) {
+      final name = (s['name'] ?? s['type'] ?? '').toString().toLowerCase();
+      return name.contains('lock') || name.contains('block') || name.contains('relay') || name.contains('immobiliz');
+    });
+
+    final bool hasEngine = finalSensors.any((s) {
+      final name = (s['name'] ?? s['type'] ?? '').toString().toLowerCase();
+      return name.contains('engine') || name.contains('acc') || name.contains('ignition');
+    });
+
+    if (!hasBattery) {
+      String batVal = '100';
+      final xmlParams = Util.getXmlParams(device);
+      if (xmlParams.isNotEmpty) {
+        final rawVolt = xmlParams['adc1'] ?? xmlParams['adc2'] ?? xmlParams['voltage'] ?? xmlParams['power'] ?? xmlParams['v_in'];
+        final rawBat = xmlParams['batterylevel'] ?? xmlParams['batteryLevel'] ?? xmlParams['battery_level'] ?? xmlParams['battery'] ?? xmlParams['bat'];
+        if (rawVolt != null && rawVolt.toString().isNotEmpty) {
+          batVal = '${rawVolt.toString().trim()} V';
+        } else if (rawBat != null && rawBat.toString().isNotEmpty) {
+          batVal = rawBat.toString().trim();
+        }
+      }
+      finalSensors.add({'name': 'Battery', 'value': batVal});
+    }
+
+    if (!hasLock) {
+      final isLocked = Util.isLocked(device);
+      finalSensors.add({'name': 'Lock', 'value': isLocked ? 'On' : 'Off'});
+    }
+
+    if (!hasEngine) {
+      final isEngineOn = Util.isEngineOn(device);
+      finalSensors.add({'name': 'Engine', 'value': isEngineOn ? 'On' : 'Off'});
     }
 
     return Padding(
@@ -217,7 +256,7 @@ class _DevicePageState extends State<DevicePage> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: sensors.map((sensor) {
+          children: finalSensors.map((sensor) {
             final rawName =
                 (sensor['name'] ?? sensor['type'] ?? 'Sensor').toString();
 
@@ -293,66 +332,8 @@ class _DevicePageState extends State<DevicePage> {
     return speed > 0;
   }
 
-  /// True if the ignition / ACC sensor is reported as ON.
   bool _isEngineOn(DeviceItem device) {
-    // Check local override first
-    final devId = device.id;
-    if (devId != null) {
-      final engineOverride = DataController.getLocalEngineOverride(devId);
-      if (engineOverride != null) {
-        return ['on', '1', 'true', 'ign on', 'engine on', 'acc on']
-            .contains(engineOverride.toLowerCase().trim());
-      }
-    }
-
-    // 1. explicit engineStatus field
-    if (device.engineStatus != null) {
-      final status = device.engineStatus;
-      if (status is bool) return status;
-      if (status is int) return status == 1;
-      if (status is String) {
-        final s = status.toLowerCase().trim();
-        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s))
-          return true;
-        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
-            .contains(s)) return false;
-      }
-    }
-
-    // 2. sensor array
-    if (device.sensors != null) {
-      for (final sensor in device.sensors!) {
-        try {
-          final type = (sensor['type'] ?? '').toString().toLowerCase();
-          final sName = (sensor['name'] ?? '').toString().toLowerCase();
-          final value = sensor['value'];
-          final isIgnSensor = type == 'acc' ||
-              type == 'ignition' ||
-              type == 'engine' ||
-              sName.contains('ignition') ||
-              sName.contains('acc') ||
-              sName.contains('engine');
-          if (!isIgnSensor || value == null) continue;
-          if (value is bool) return value;
-          if (value is int) return value == 1;
-          if (value is String) {
-            final v = value.toLowerCase().trim();
-            if (['on', '1', 'true', 'ign on', 'acc on', 'engine on']
-                .contains(v)) return true;
-            if (['off', '0', 'false', 'ign off', 'acc off', 'engine off']
-                .contains(v)) return false;
-          }
-        } catch (_) {}
-      }
-    }
-
-    // 3. iconColor fallback
-    final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
-    if (iconColor == 'yellow' || iconColor == 'green') return true;
-
-    // 4. speed fallback — if moving, engine must be on
-    final speed = double.tryParse(device.speed.toString()) ?? 0;
-    return speed > 0;
+    return Util.isEngineOn(device);
   }
 
   bool _isDeviceExpired(DeviceItem device) {

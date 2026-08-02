@@ -1062,26 +1062,33 @@ class _TrackDeviceState extends State<TrackDevicePage>
       rawVal = sensor['val'];
       formattedValue = sensor['value']?.toString() ?? '';
     } else {
-      // Fallback to XML other parsing
-      final otherXml = element.deviceData?.traccar?.other;
-      if (otherXml != null && otherXml.isNotEmpty) {
-        try {
-          final parsed = Util.convertXmlToJson(otherXml);
-          String? batVal = parsed['battery'] ?? parsed['batteryLevel'] ?? parsed['battery_level'] ?? parsed['bat'] ?? parsed['charge'];
-          String? voltVal = parsed['voltage'] ?? parsed['power'] ?? parsed['adc'];
-          
-          if (batVal != null && batVal.isNotEmpty) {
-            type = 'battery';
-            name = 'battery';
-            formattedValue = batVal;
-            rawVal = batVal;
-          } else if (voltVal != null && voltVal.isNotEmpty) {
-            type = 'voltage';
-            name = 'voltage';
-            formattedValue = voltVal;
-            rawVal = voltVal;
+      // Fallback to XML other parsing when no custom sensors exist
+      final parsed = Util.getXmlParams(element);
+      if (parsed.isNotEmpty) {
+        // 1. Check Voltage first (adc1, adc2, adc3, adc, voltage, power, etc.)
+        dynamic rawVolt = parsed['adc1'] ?? parsed['adc2'] ?? parsed['adc3'] ?? parsed['adc'] ?? parsed['adc_1'] ?? parsed['voltage'] ?? parsed['power'] ?? parsed['v_in'];
+        // 2. Check Battery Level (batterylevel, battery_level, battery, bat, chargelevel)
+        dynamic rawBat = parsed['batterylevel'] ?? parsed['batteryLevel'] ?? parsed['battery_level'] ?? parsed['battery'] ?? parsed['bat'] ?? parsed['chargelevel'];
+
+        // Exclude boolean "true"/"false" from battery values (since "charge: true" is charging status, not battery level)
+        if (rawBat != null) {
+          final sBat = rawBat.toString().toLowerCase().trim();
+          if (sBat == 'true' || sBat == 'false') {
+            rawBat = null;
           }
-        } catch (_) {}
+        }
+
+        if (rawVolt != null && rawVolt.toString().isNotEmpty) {
+          type = 'voltage';
+          name = 'voltage';
+          formattedValue = rawVolt.toString();
+          rawVal = rawVolt;
+        } else if (rawBat != null && rawBat.toString().isNotEmpty) {
+          type = 'battery';
+          name = 'battery';
+          formattedValue = rawBat.toString();
+          rawVal = rawBat;
+        }
       }
     }
 
@@ -1103,7 +1110,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
         if (isVoltage) {
           formattedValue = '$cleanVal V';
         } else {
-          formattedValue = cleanVal;
+          formattedValue = '$cleanVal%';
         }
       }
     }
@@ -2102,6 +2109,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
     }
 
     final engineBgColor = isEngineOn ? const Color(0xFFBBF7D0) : const Color(0xFFE5E7EB);
+    final isLocked = device != null ? Util.isLocked(device!) : false;
+    final lockBgColor = isLocked ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0);
     final batteryBgColor = const Color(0xFFBFDBFE); // vibrant light blue
     const expiryBgColor = Color(0xFFE5E7EB); // clean light grey
 
@@ -2210,6 +2219,35 @@ class _TrackDeviceState extends State<TrackDevicePage>
                 fontWeight: FontWeight.bold,
                 color: isEngineOn ? const Color(0xFF15803D) : const Color(0xFF1F2937),
               ),
+            ),
+          ),
+
+          // Lock / Security Card
+          buildCardItem(
+            label: 'Lock',
+            bgColor: lockBgColor,
+            content: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
+                  size: 12,
+                  color: isLocked ? const Color(0xFFB91C1C) : const Color(0xFF15803D),
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  isLocked ? 'Locked' : 'Unlocked',
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isLocked ? const Color(0xFFB91C1C) : const Color(0xFF15803D),
+                  ),
+                ),
+              ],
             ),
           ),
 

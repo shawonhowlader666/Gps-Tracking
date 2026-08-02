@@ -13,7 +13,6 @@ import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart' as xml;
 import 'package:smart_lock/storage/user_repository.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:smart_lock/theme/custom_color.dart';
 import 'package:smart_lock/services/model/device_item.dart' hide Icon;
 import 'package:smart_lock/screens/data_controller/data_controller.dart';
 import 'package:smart_lock/services/payment_service.dart';
@@ -461,19 +460,31 @@ class Util {
   }
 
   static Map<String, dynamic> convertXmlToJson(String xmlData) {
-    final document = xml.XmlDocument.parse(xmlData);
-    final jsonMap = <String, dynamic>{};
+    if (xmlData.isEmpty) return {};
+    try {
+      final document = xml.XmlDocument.parse(xmlData);
+      final jsonMap = <String, dynamic>{};
 
-    for (var element in document.findAllElements('info').first.children) {
-      if (element is xml.XmlElement) {
-        final key = element.name.local;
-        // ignore: deprecated_member_use
-        final value = element.text;
-        jsonMap[key] = value;
+      final infoElements = document.findAllElements('info');
+      if (infoElements.isNotEmpty) {
+        for (var element in infoElements.first.children) {
+          if (element is xml.XmlElement) {
+            jsonMap[element.name.local] = element.text;
+          }
+        }
       }
+      return jsonMap;
+    } catch (_) {
+      return {};
     }
+  }
 
-    return jsonMap;
+  static Map<String, dynamic> getXmlParams(DeviceItem device) {
+    final otherXml = device.deviceData?.traccar?.other;
+    if (otherXml != null && otherXml.isNotEmpty) {
+      return convertXmlToJson(otherXml);
+    }
+    return {};
   }
 
   static Future<void> fetchAndCacheImages(String url) async {
@@ -956,13 +967,73 @@ class Util {
       }
     }
 
+    // 2.5. Raw XML parameters fallback (e.g. <ignition>true</ignition>, <acc>1</acc>)
+    final xmlParams = getXmlParams(device);
+    if (xmlParams.isNotEmpty) {
+      final ignVal = xmlParams['ignition'] ?? xmlParams['acc'] ?? xmlParams['engine'] ?? xmlParams['ign'];
+      if (ignVal != null) {
+        final s = ignVal.toString().toLowerCase().trim();
+        if (['on', '1', 'true', 'ign on', 'acc on', 'engine on'].contains(s)) return true;
+        if (['off', '0', 'false', 'ign off', 'acc off', 'engine off'].contains(s)) return false;
+      }
+    }
+
     // 3. iconColor fallback
     final iconColor = device.iconColor?.toLowerCase().trim() ?? '';
-    if (iconColor == 'yellow' || iconColor == 'green') return true;
+    return iconColor == 'yellow' || iconColor == 'green';
+  }
 
-    // 4. speed fallback — if moving, engine must be on
-    final speed = double.tryParse(device.speed.toString()) ?? 0;
-    return speed > 0;
+  static bool isLocked(DeviceItem device) {
+    final devId = device.id;
+    if (devId != null) {
+      final lockOverride = DataController.getLocalLockOverride(devId);
+      if (lockOverride != null) {
+        return ['locked', '1', 'true', 'on'].contains(lockOverride.toLowerCase().trim());
+      }
+    }
+
+    final lockStatus = device.deviceData?.lockStatus?.toLowerCase().trim();
+    if (lockStatus != null && lockStatus.isNotEmpty) {
+      return lockStatus == 'locked' || lockStatus == '1' || lockStatus == 'true' || lockStatus == 'on';
+    }
+
+    if (device.sensors != null) {
+      for (var sensor in device.sensors!) {
+        try {
+          if (sensor is! Map) continue;
+          final sensorMap = Map<String, dynamic>.from(sensor);
+          final type = (sensorMap['type'] ?? '').toString().toLowerCase();
+          final name = (sensorMap['name'] ?? '').toString().toLowerCase();
+          final value = sensorMap['value'];
+
+          if (type.contains('lock') || name.contains('lock') ||
+              type.contains('relay') || name.contains('relay') ||
+              type.contains('block') || name.contains('block') ||
+              type.contains('immobiliz') || name.contains('immobiliz')) {
+            if (value == null) continue;
+            if (value is bool) return value;
+            if (value is int) return value == 1;
+            if (value is String) {
+              final v = value.toLowerCase().trim();
+              if (['on', '1', 'true', 'locked', 'blocked', 'yes'].contains(v)) return true;
+              if (['off', '0', 'false', 'unlocked', 'unblocked', 'no'].contains(v)) return false;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    final xmlParams = getXmlParams(device);
+    if (xmlParams.isNotEmpty) {
+      final lockVal = xmlParams['blocked'] ?? xmlParams['lock'] ?? xmlParams['relay'] ?? xmlParams['immobilizer'];
+      if (lockVal != null) {
+        final v = lockVal.toString().toLowerCase().trim();
+        if (['on', '1', 'true', 'locked', 'blocked', 'yes'].contains(v)) return true;
+        if (['off', '0', 'false', 'unlocked', 'unblocked', 'no'].contains(v)) return false;
+      }
+    }
+
+    return false;
   }
 
   static String getDeviceStatusColorStr(DeviceItem device) {

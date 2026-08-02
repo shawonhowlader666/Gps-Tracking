@@ -191,6 +191,17 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
       }
     }
 
+    // 2.5 Check raw XML parameters for "blocked", "lock", "relay", "immobilizer"
+    final xmlParams = Util.getXmlParams(d);
+    if (xmlParams.isNotEmpty) {
+      final lockVal = xmlParams['blocked'] ?? xmlParams['lock'] ?? xmlParams['relay'] ?? xmlParams['immobilizer'];
+      if (lockVal != null) {
+        final v = lockVal.toString().toLowerCase().trim();
+        if (['on', '1', 'true', 'locked', 'blocked', 'yes'].contains(v)) return true;
+        if (['off', '0', 'false', 'unlocked', 'unblocked', 'no'].contains(v)) return false;
+      }
+    }
+
     // Default fallback: Always assume UNLOCKED (false) if not explicitly locked!
     return false;
   }
@@ -216,57 +227,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   }
 
   bool _checkEngineStatus(DeviceItem d) {
-    final devId = d.id;
-    if (devId != null) {
-      final engineOverride = DataController.getLocalEngineOverride(devId);
-      if (engineOverride != null) {
-        return ['on', '1', 'true', 'ign on', 'engine on', 'acc on']
-            .contains(engineOverride.toLowerCase().trim());
-      }
-    }
-
-    if (d.engineStatus != null) {
-      final status = d.engineStatus;
-      if (status is bool) return status;
-      if (status is int) return status == 1;
-      if (status is String) {
-        final s = status.toLowerCase().trim();
-        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(s))
-          return true;
-        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
-            .contains(s)) return false;
-      }
-    }
-    final speed = double.tryParse(d.speed.toString()) ?? 0;
-    if (speed > 0) return true;
-    if (d.sensors != null) {
-      for (var sensor in d.sensors!) {
-        try {
-          if (sensor is! Map) continue;
-          final sensorMap = Map<String, dynamic>.from(sensor);
-          final type = (sensorMap['type'] ?? '').toString().toLowerCase();
-          final name = (sensorMap['name'] ?? '').toString().toLowerCase();
-          final value = sensorMap['value'];
-          if (type == 'acc' ||
-              type == 'ignition' ||
-              name.contains('acc') ||
-              name.contains('ignition')) {
-            if (value == null) continue;
-            if (value is bool) return value;
-            if (value is int) return value == 1;
-            if (value is String) {
-              final v = value.toLowerCase().trim();
-              if (['on', '1', 'true'].contains(v)) return true;
-              if (['off', '0', 'false'].contains(v)) return false;
-            }
-          }
-        } catch (_) {
-          continue;
-        }
-      }
-    }
-    return d.iconColor?.toLowerCase() == 'yellow' ||
-        d.iconColor?.toLowerCase() == 'green';
+    return Util.isEngineOn(d);
   }
 
   void _syncStateToDevice() {
@@ -989,41 +950,54 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
             onPressed: _goBack,
           ),
         ),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFFFAFAFA),
-                Color(0xFFF1F5F9),
+        body: Obx(() {
+          if (Get.isRegistered<DataController>()) {
+            final dc = Get.find<DataController>();
+            final d = dc.onlyDevices.firstWhere(
+              (dev) => dev.id == widget.device.id,
+              orElse: () => widget.device,
+            );
+            if (!_isLoading) {
+              _isEngineOn = Util.isEngineOn(d);
+              _isLocked = _checkLockStatus(d);
+            }
+          }
+          return Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFFAFAFA),
+                  Color(0xFFF1F5F9),
+                ],
+              ),
+            ),
+            child: Stack(
+              children: [
+                SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 110, 20, 30),
+                  child: Column(
+                    children: [
+                      _buildVehicleDashboard(),
+                      const SizedBox(height: 28),
+                      _buildCircularControlButtons(),
+                      const SizedBox(height: 32),
+                      _buildSOSSection(),
+                      const SizedBox(height: 28),
+                      _buildCustomCommandSection(),
+                      const SizedBox(height: 28),
+                      _buildSecurityCard(),
+                    ],
+                  ),
+                ),
+                if (_isLoading) _buildLoadingOverlay(),
+                if (_showSuccessAnim) _buildSuccessOverlay(),
               ],
             ),
-          ),
-          child: Stack(
-            children: [
-              SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 110, 20, 30),
-                child: Column(
-                  children: [
-                    _buildVehicleDashboard(),
-                    const SizedBox(height: 28),
-                    _buildCircularControlButtons(),
-                    const SizedBox(height: 32),
-                    _buildSOSSection(),
-                    const SizedBox(height: 28),
-                    _buildCustomCommandSection(),
-                    const SizedBox(height: 28),
-                    _buildSecurityCard(),
-                  ],
-                ),
-              ),
-              if (_isLoading) _buildLoadingOverlay(),
-              if (_showSuccessAnim) _buildSuccessOverlay(),
-            ],
-          ),
-        ),
+          );
+        }),
       ),
     );
   }
@@ -1128,8 +1102,16 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
   }
 
   Widget _buildVehicleDashboard() {
-    final isOnline = _isDeviceOnline(widget.device);
-    final String statusStr = widget.device.iconColor?.toLowerCase() ?? 'red';
+    DeviceItem d = widget.device;
+    if (Get.isRegistered<DataController>()) {
+      final dc = Get.find<DataController>();
+      d = dc.onlyDevices.firstWhere(
+        (dev) => dev.id == widget.device.id,
+        orElse: () => widget.device,
+      );
+    }
+    final isOnline = _isDeviceOnline(d);
+    final String statusStr = d.iconColor?.toLowerCase() ?? 'red';
     Color statusColor = _dangerColor;
     if (statusStr == 'green') {
       statusColor = _successColor;
@@ -1166,12 +1148,12 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                 ),
                 child: Center(
                   child: Util.getVehicleIconWidget(
-                    widget.device.icon?.path,
+                    d.icon?.path,
                     statusColor,
                     size: 22,
-                    iconType: widget.device.icon?.type ?? widget.device.iconType,
-                    deviceName: widget.device.name,
-                    deviceId: widget.device.id,
+                    iconType: d.icon?.type ?? d.iconType,
+                    deviceName: d.name,
+                    deviceId: d.id,
                   ),
                 ),
               ),
@@ -1181,7 +1163,7 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.device.name ?? 'Unknown Device',
+                      d.name ?? 'Unknown Device',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -1190,10 +1172,10 @@ class _LockUnlockScreenState extends State<LockUnlockScreen>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (widget.device.deviceData?.plateNumber != null) ...[
+                    if (d.deviceData?.plateNumber != null) ...[
                       const SizedBox(height: 2),
                       Text(
-                        widget.device.deviceData!.plateNumber!,
+                        d.deviceData!.plateNumber!,
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,

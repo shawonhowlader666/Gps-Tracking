@@ -92,58 +92,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
   }
 
   bool _isEngineOn(DeviceItem d) {
-    // Check local override first
-    final devId = d.id;
-    if (devId != null) {
-      final engineOverride = DataController.getLocalEngineOverride(devId);
-      if (engineOverride != null) {
-        return ['on', '1', 'true', 'ign on', 'engine on', 'acc on']
-            .contains(engineOverride.toLowerCase().trim());
-      }
-    }
-
-    final speed = double.tryParse(d.speed.toString()) ?? 0;
-    if (speed > 0) return true;
-    if (d.engineStatus != null) {
-      final s = d.engineStatus;
-      if (s is bool) return s;
-      if (s is int) return s == 1;
-      if (s is String) {
-        final v = s.toLowerCase().trim();
-        if (['on', '1', 'true', 'ign on', 'engine on', 'acc on'].contains(v))
-          return true;
-        if (['off', '0', 'false', 'ign off', 'engine off', 'acc off']
-            .contains(v)) return false;
-      }
-    }
-    if (d.sensors != null) {
-      for (var sensor in d.sensors!) {
-        try {
-          if (sensor is! Map) continue;
-          final sensorMap = Map<String, dynamic>.from(sensor);
-          final type = (sensorMap['type'] ?? '').toString().toLowerCase();
-          final name = (sensorMap['name'] ?? '').toString().toLowerCase();
-          final value = sensorMap['value'];
-          if (type == 'acc' ||
-              type == 'ignition' ||
-              name.contains('acc') ||
-              name.contains('ignition')) {
-            if (value == null) continue;
-            if (value is bool) return value;
-            if (value is int) return value == 1;
-            if (value is String) {
-              final v = value.toLowerCase().trim();
-              if (['on', '1', 'true'].contains(v)) return true;
-              if (['off', '0', 'false'].contains(v)) return false;
-            }
-          }
-        } catch (_) {
-          continue;
-        }
-      }
-    }
-    final iconColor = d.iconColor?.toLowerCase().trim() ?? '';
-    return iconColor == 'yellow' || iconColor == 'green';
+    return Util.isEngineOn(d);
   }
 
   String _getRawStatus(DeviceItem d) {
@@ -222,6 +171,17 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
             }
           }
         } catch (_) {}
+      }
+    }
+
+    // 3.5 Check raw XML parameters for "blocked", "lock", "relay", "immobilizer"
+    final xmlParams = Util.getXmlParams(d);
+    if (xmlParams.isNotEmpty) {
+      final lockVal = xmlParams['blocked'] ?? xmlParams['lock'] ?? xmlParams['relay'] ?? xmlParams['immobilizer'];
+      if (lockVal != null) {
+        final v = lockVal.toString().toLowerCase().trim();
+        if (['on', '1', 'true', 'locked', 'blocked', 'yes'].contains(v)) return false; // Locked = not unlocked
+        if (['off', '0', 'false', 'unlocked', 'unblocked', 'no'].contains(v)) return true; // Unlocked = unlocked
       }
     }
 
