@@ -35,9 +35,9 @@ Future<void> _showBackgroundNotification(RemoteMessage message) async {
 
       const DarwinInitializationSettings iosSettings =
           DarwinInitializationSettings(
-        requestSoundPermission: false,
-        requestBadgePermission: false,
-        requestAlertPermission: false,
+        requestSoundPermission: true,
+        requestBadgePermission: true,
+        requestAlertPermission: true,
       );
 
       await _bgPlugin!.initialize(
@@ -61,7 +61,7 @@ Future<void> _showBackgroundNotification(RemoteMessage message) async {
     }
 
     final String emoji = _getEmojiForMessage(body);
-    final String channelId = _getChannelIdForMessage(body);
+    final String channelId = '${_getChannelIdForMessage(body)}_v2';
 
     // Create the channel dynamically in the background to guarantee delivery on Android 8.0+
     if (Platform.isAndroid) {
@@ -75,6 +75,7 @@ Future<void> _showBackgroundNotification(RemoteMessage message) async {
             description: _getChannelDescription(channelId),
             importance: Importance.max,
             playSound: true,
+            sound: const RawResourceAndroidNotificationSound('notification_sound'),
             enableVibration: true,
             enableLights: true,
             ledColor: const Color(0xFFFF0000),
@@ -95,6 +96,7 @@ Future<void> _showBackgroundNotification(RemoteMessage message) async {
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,
+          sound: const RawResourceAndroidNotificationSound('notification_sound'),
           enableVibration: true,
           icon: '@mipmap/ic_launcher',
         ),
@@ -102,6 +104,7 @@ Future<void> _showBackgroundNotification(RemoteMessage message) async {
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          sound: 'notification_sound.mp3',
         ),
       ),
       payload: message.data.toString(),
@@ -347,71 +350,66 @@ class NotificationService {
 
     const AndroidNotificationChannel highImportanceChannel =
         AndroidNotificationChannel(
-      'high_importance_channel',
+      'high_importance_channel_v2',
       'High Importance Notifications',
       description: 'Used for important notifications',
       importance: Importance.max,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('notification_sound'),
       enableVibration: true,
     );
 
-    const AndroidNotificationChannel alertChannel = AndroidNotificationChannel(
-      'alert_channel',
-      'Alert Notifications',
-      description: 'Critical alerts and emergency notifications',
-      importance: Importance.max,
-      playSound: true,
-      enableVibration: true,
-    );
-
-    const AndroidNotificationChannel alertChannelV1 =
+    const AndroidNotificationChannel alertChannelV2 =
         AndroidNotificationChannel(
-      'alert_channel_v1',
+      'alert_channel_v2',
       'Alert Notifications',
       description: 'Critical alerts and SOS notifications',
       importance: Importance.max,
       enableVibration: true,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('alert_sound'),
       enableLights: true,
       ledColor: Color(0xFFFF0000),
     );
 
-    const AndroidNotificationChannel eventChannelV1 =
+    const AndroidNotificationChannel eventChannelV2 =
         AndroidNotificationChannel(
-      'event_channel_v1',
+      'event_channel_v2',
       'Event Notifications',
       description: 'GPS tracking event notifications',
       importance: Importance.high,
       enableVibration: true,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('notification_sound'),
     );
 
-    const AndroidNotificationChannel sosChannelV1 = AndroidNotificationChannel(
-      'sos_channel_v1',
+    const AndroidNotificationChannel sosChannelV2 = AndroidNotificationChannel(
+      'sos_channel_v2',
       'SOS Notifications',
       description: 'Emergency SOS alerts',
       importance: Importance.max,
       enableVibration: true,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('sos_alarm'),
       enableLights: true,
       ledColor: Color(0xFFFF0000),
     );
 
     const AndroidNotificationChannel defaultChannel =
         AndroidNotificationChannel(
-      'default_channel',
+      'default_channel_v2',
       'Default Notifications',
       description: 'Default notification channel',
       importance: Importance.high,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('notification_sound'),
     );
 
     await Future.wait([
       androidPlugin.createNotificationChannel(highImportanceChannel),
-      androidPlugin.createNotificationChannel(alertChannel),
-      androidPlugin.createNotificationChannel(alertChannelV1),
-      androidPlugin.createNotificationChannel(eventChannelV1),
-      androidPlugin.createNotificationChannel(sosChannelV1),
+      androidPlugin.createNotificationChannel(alertChannelV2),
+      androidPlugin.createNotificationChannel(eventChannelV2),
+      androidPlugin.createNotificationChannel(sosChannelV2),
       androidPlugin.createNotificationChannel(defaultChannel),
     ]);
   }
@@ -459,7 +457,22 @@ class NotificationService {
     }
 
     final String emoji = _getEmojiForMessage(body);
-    final String channelId = _getChannelIdForMessage(body);
+    final String baseChannelId = _getChannelIdForMessage(body);
+    final String channelId = '${baseChannelId}_v2';
+
+    RawResourceAndroidNotificationSound? rawSound;
+    String iosSoundName = 'notification_sound.mp3';
+
+    if (channelId.contains('sos')) {
+      rawSound = const RawResourceAndroidNotificationSound('sos_alarm');
+      iosSoundName = 'sos_alarm.mp3';
+    } else if (channelId.contains('alert')) {
+      rawSound = const RawResourceAndroidNotificationSound('alert_sound');
+      iosSoundName = 'alert_sound.mp3';
+    } else {
+      rawSound = const RawResourceAndroidNotificationSound('notification_sound');
+      iosSoundName = 'notification_sound.mp3';
+    }
 
     final androidDetails = AndroidNotificationDetails(
       channelId,
@@ -470,6 +483,7 @@ class NotificationService {
       showWhen: true,
       enableVibration: true,
       playSound: true,
+      sound: rawSound,
       icon: '@mipmap/ic_launcher',
       styleInformation: BigTextStyleInformation(
         body,
@@ -478,10 +492,11 @@ class NotificationService {
       ),
     );
 
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
+      sound: iosSoundName,
     );
 
     final NotificationDetails notificationDetails = NotificationDetails(
@@ -503,7 +518,7 @@ class NotificationService {
     required String title,
     required String body,
     String? payload,
-    String channelId = 'event_channel_v1',
+    String channelId = 'event_channel_v2',
     Priority priority = Priority.high,
     Importance importance = Importance.high,
   }) async {
@@ -511,7 +526,26 @@ class NotificationService {
     if (combined.contains('idle')) {
       return;
     }
+
+    if (!channelId.endsWith('_v2')) {
+      channelId = '${channelId}_v2';
+    }
+
     try {
+      RawResourceAndroidNotificationSound? rawSound;
+      String iosSoundName = 'notification_sound.mp3';
+
+      if (channelId.contains('sos')) {
+        rawSound = const RawResourceAndroidNotificationSound('sos_alarm');
+        iosSoundName = 'sos_alarm.mp3';
+      } else if (channelId.contains('alert')) {
+        rawSound = const RawResourceAndroidNotificationSound('alert_sound');
+        iosSoundName = 'alert_sound.mp3';
+      } else {
+        rawSound = const RawResourceAndroidNotificationSound('notification_sound');
+        iosSoundName = 'notification_sound.mp3';
+      }
+
       final androidDetails = AndroidNotificationDetails(
         channelId,
         _getChannelName(channelId),
@@ -521,6 +555,7 @@ class NotificationService {
         showWhen: true,
         enableVibration: true,
         playSound: true,
+        sound: rawSound,
         icon: '@mipmap/ic_launcher',
         styleInformation: BigTextStyleInformation(
           body,
@@ -529,10 +564,11 @@ class NotificationService {
         ),
       );
 
-      const iosDetails = DarwinNotificationDetails(
+      final iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        sound: iosSoundName,
       );
 
       final notificationDetails = NotificationDetails(
@@ -560,17 +596,20 @@ class NotificationService {
   ) async {
     try {
       const androidDetails = AndroidNotificationDetails(
-        'default_channel',
+        'default_channel_v2',
         'Default Notifications',
         channelDescription: 'Default notification channel',
         importance: Importance.high,
         priority: Priority.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('notification_sound'),
       );
 
       const iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        sound: 'notification_sound.mp3',
       );
 
       await _localNotifications.show(
