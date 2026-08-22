@@ -11,12 +11,20 @@ class PaymentService {
   static const String baseUrl = "https://billing.smartlockbd.com/api";
   static const Duration timeoutDuration = Duration(seconds: 30);
   static String? _token;
-  static bool _isLoggingIn = false;
+  static Future<bool>? _loginFuture;
+  static DateTime? _lastLoginFailure;
+  static int _consecutiveFailures = 0;
 
   static bool _isUserExpired = false;
   static DateTime? _userExpirationDate;
   static int _daysRemaining = 999;
   static bool _enableBillAlert = true;
+
+  static DateTime? _lastBillingStatusUpdate;
+  static const Duration _billingStatusTtl = Duration(minutes: 10);
+
+  static DateTime? _lastAllVehiclesFetch;
+  static const Duration _vehicleCacheTtl = Duration(minutes: 10);
 
   static bool get isUserExpired => _isUserExpired;
   static set isUserExpired(bool val) => _isUserExpired = val;
@@ -34,12 +42,9 @@ class PaymentService {
   static bool get isForcedBlocked => _isUserExpired && _enableBillAlert;
 
   // ── Per-vehicle expiration cache (from billing API) ───────────────────────
-  // Key: GPSWOX device ID (int)
-  // Value: {is_expired: bool, days_remaining: int}
   static final Map<int, Map<String, dynamic>> _vehicleExpirationCache = {};
 
   /// Returns true if billing API says this vehicle is expired.
-  /// Falls back to false if not yet fetched.
   static bool isVehicleExpired(int vehicleId) {
     if (!_enableBillAlert) return false;
     final cached = _vehicleExpirationCache[vehicleId];
@@ -66,9 +71,7 @@ class PaymentService {
           'human_readable': data['human_readable'],
         };
       }
-    } catch (_) {
-      // Keep previous cache entry on failure — do not clear
-    }
+    } catch (_) {}
   }
 
   /// Get raw vehicle expiration details from server
@@ -80,36 +83,86 @@ class PaymentService {
     }
   }
 
-  /// Fetch expiration info for ALL vehicles concurrently.
-  /// Called after device list loads — runs in background, does NOT block UI.
-  static Future<void> updateAllVehicleExpirations(List<int> vehicleIds) async {
+  /// Fetch expiration info for ALL vehicles in throttled batches of 5.
+  /// Cached for 10 minutes unless forced.
+  static Future<void> updateAllVehicleExpirations(List<int> vehicleIds, {bool force = false}) async {
     if (vehicleIds.isEmpty) return;
-    await Future.wait(
-      vehicleIds.map((id) => updateVehicleExpiration(id)),
-    );
+    if (!force && _lastAllVehiclesFetch != null) {
+      if (DateTime.now().difference(_lastAllVehiclesFetch!) < _vehicleCacheTtl) {
+        return;
+      }
+    }
+    _lastAllVehiclesFetch = DateTime.now();
+
+    // Process in batches of 5 concurrent requests to prevent server connection overload
+    const int batchSize = 5;
+    for (int i = 0; i < vehicleIds.length; i += batchSize) {
+      final end = (i + batchSize < vehicleIds.length) ? i + batchSize : vehicleIds.length;
+      final batch = vehicleIds.sublist(i, end);
+      await Future.wait(batch.map((id) => updateVehicleExpiration(id)));
+    }
   }
 
-  /// Login to payment server
-  static Future<bool> login() async {
-    if (_isLoggingIn) {
-      int retryCount = 0;
-      while (_isLoggingIn && _token == null && retryCount < 20) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        retryCount++;
-      }
-      if (_token == null) {
-        throw const HttpException(
-            "Already logging in, but no token acquired yet.");
-      }
-      return true;
+  /// Dynamic exponential backoff duration based on consecutive failures
+  static Duration get _backoffDuration {
+    switch (_consecutiveFailures) {
+      case 0:
+        return Duration.zero;
+      case 1:
+        return const Duration(seconds: 30);
+      case 2:
+        return const Duration(minutes: 1);
+      case 3:
+        return const Duration(minutes: 3);
+      default:
+        return const Duration(minutes: 10);
     }
-    _isLoggingIn = true;
+  }
+
+  /// Login to payment server with exponential backoff & mutex
+  static Future<bool> login({bool force = false}) async {
+    // 1. Check in-memory token
+    if (_token != null && !force) return true;
+
+    // 2. Check persistent token from UserRepository
+    if (_token == null && !force) {
+      final savedToken = UserRepository.getBillingToken();
+      if (savedToken != null && savedToken.isNotEmpty) {
+        _token = savedToken;
+        return true;
+      }
+    }
+
+    // 3. Exponential backoff check on failed login attempts
+    if (!force && _lastLoginFailure != null) {
+      final elapsed = DateTime.now().difference(_lastLoginFailure!);
+      if (elapsed < _backoffDuration) {
+        debugPrint("[PaymentService] Login suppressed by exponential backoff (${_backoffDuration.inSeconds - elapsed.inSeconds}s remaining).");
+        return false;
+      }
+    }
+
+    // 4. Mutex: single shared Future for concurrent login callers
+    if (_loginFuture != null) {
+      return (await _loginFuture) ?? false;
+    }
+
+    _loginFuture = _performLogin();
+    try {
+      final result = await _loginFuture!;
+      return result;
+    } finally {
+      _loginFuture = null;
+    }
+  }
+
+  static Future<bool> _performLogin() async {
     try {
       final email = UserRepository.getEmail();
       final password = UserRepository.getPassword();
       if (email == null || password == null) {
-        throw const HttpException(
-            "User email or password is not saved in preferences.");
+        _recordFailure();
+        return false;
       }
 
       final response = await http
@@ -125,23 +178,36 @@ class PaymentService {
           .timeout(timeoutDuration);
 
       if (response.statusCode == 200) {
-        _token = jsonDecode(response.body)['token'];
-        return true;
+        final body = jsonDecode(response.body);
+        if (body is Map && body.containsKey('token')) {
+          _token = body['token']?.toString();
+          UserRepository.setBillingToken(_token);
+          _consecutiveFailures = 0;
+          _lastLoginFailure = null;
+          return true;
+        }
       }
-      return false;
-    } on TimeoutException {
-      return false;
-    } on SocketException {
+      _recordFailure();
       return false;
     } catch (_) {
+      _recordFailure();
       return false;
-    } finally {
-      _isLoggingIn = false;
     }
   }
 
-  static void clearToken() => _token = null;
-  static bool get hasToken => _token != null;
+  static void _recordFailure() {
+    _consecutiveFailures++;
+    _lastLoginFailure = DateTime.now();
+    _token = null;
+    UserRepository.setBillingToken(null);
+  }
+
+  static void clearToken() {
+    _token = null;
+    UserRepository.setBillingToken(null);
+  }
+
+  static bool get hasToken => _token != null || UserRepository.getBillingToken() != null;
 
   static Map<String, String> get _headers => {
         "Content-Type": "application/json",
@@ -150,63 +216,77 @@ class PaymentService {
       };
 
   static Future<bool> _ensureLoggedIn() async {
-    if (_token == null) return await login();
-    return true;
+    if (_token != null) return true;
+    return await login();
   }
 
   /// Generic GET with auto-retry on 401
   static Future<Map<String, dynamic>?> _getJson(String path) async {
-    await _ensureLoggedIn();
+    final loggedIn = await _ensureLoggedIn();
+    if (!loggedIn) return null;
 
-    var response = await http
-        .get(
-          Uri.parse("$baseUrl$path"),
-          headers: _headers,
-        )
-        .timeout(timeoutDuration);
-
-    if (response.statusCode == 401) {
-      _token = null;
-      await login();
-      response = await http
+    try {
+      var response = await http
           .get(
             Uri.parse("$baseUrl$path"),
             headers: _headers,
           )
           .timeout(timeoutDuration);
-    }
 
-    if (response.statusCode == 200) return jsonDecode(response.body);
-    return null;
+      if (response.statusCode == 401) {
+        _token = null;
+        final relinkSuccess = await login(force: true);
+        if (!relinkSuccess) return null;
+
+        response = await http
+            .get(
+              Uri.parse("$baseUrl$path"),
+              headers: _headers,
+            )
+            .timeout(timeoutDuration);
+      }
+
+      if (response.statusCode == 200) return jsonDecode(response.body);
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Generic POST with auto-retry on 401
   static Future<Map<String, dynamic>?> _postJson(String path,
       {Map<String, dynamic>? body}) async {
-    await _ensureLoggedIn();
+    final loggedIn = await _ensureLoggedIn();
+    if (!loggedIn) return null;
 
-    var response = await http
-        .post(
-          Uri.parse("$baseUrl$path"),
-          headers: _headers,
-          body: body != null ? jsonEncode(body) : null,
-        )
-        .timeout(timeoutDuration);
-
-    if (response.statusCode == 401) {
-      _token = null;
-      await login();
-      response = await http
+    try {
+      var response = await http
           .post(
             Uri.parse("$baseUrl$path"),
             headers: _headers,
             body: body != null ? jsonEncode(body) : null,
           )
           .timeout(timeoutDuration);
-    }
 
-    if (response.statusCode == 200) return jsonDecode(response.body);
-    return null;
+      if (response.statusCode == 401) {
+        _token = null;
+        final relinkSuccess = await login(force: true);
+        if (!relinkSuccess) return null;
+
+        response = await http
+            .post(
+              Uri.parse("$baseUrl$path"),
+              headers: _headers,
+              body: body != null ? jsonEncode(body) : null,
+            )
+            .timeout(timeoutDuration);
+      }
+
+      if (response.statusCode == 200) return jsonDecode(response.body);
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Get payment statistics
@@ -324,7 +404,13 @@ class PaymentService {
   }
 
   /// Update cached billing expiration status of user
-  static Future<void> updateBillingExpirationStatus() async {
+  static Future<void> updateBillingExpirationStatus({bool force = false}) async {
+    if (!force && _lastBillingStatusUpdate != null) {
+      if (DateTime.now().difference(_lastBillingStatusUpdate!) < _billingStatusTtl) {
+        return;
+      }
+    }
+    _lastBillingStatusUpdate = DateTime.now();
     try {
       final info = await getExpirationInfo();
       if (info != null) {
@@ -335,16 +421,8 @@ class PaymentService {
           _userExpirationDate = DateTime.tryParse(rawDate);
         }
         _daysRemaining = (info['days_remaining'] as int?) ?? 999;
-      } else {
-        _isUserExpired = false;
-        _userExpirationDate = null;
-        _daysRemaining = 999;
       }
-    } catch (_) {
-      _isUserExpired = false;
-      _userExpirationDate = null;
-      _daysRemaining = 999;
-    }
+    } catch (_) {}
   }
 
   /// Get all billing packages from the server

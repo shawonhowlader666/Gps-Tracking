@@ -99,11 +99,24 @@ class UserRepository {
 
   // NEW: User ID
   static String? getUserId() {
-    return prefs!.getString(PREF_USER_ID);
+    return prefs?.getString(PREF_USER_ID);
   }
 
   static void setUserId(String userId) {
-    prefs!.setString(PREF_USER_ID, userId);
+    prefs?.setString(PREF_USER_ID, userId);
+  }
+
+  // NEW: Persistent Billing Token
+  static String? getBillingToken() {
+    return prefs?.getString(PREF_BILLING_TOKEN);
+  }
+
+  static void setBillingToken(String? token) {
+    if (token == null) {
+      prefs?.remove(PREF_BILLING_TOKEN);
+    } else {
+      prefs?.setString(PREF_BILLING_TOKEN, token);
+    }
   }
 
   // NEW: Get all user details for PDF
@@ -117,16 +130,16 @@ class UserRepository {
   }
 
   static void doLogout() {
-    prefs!.clear();
+    prefs?.clear();
     _sessionPassword = null;
     _sessionEmail = null;
   }
 
   static String? getServerUrl() {
-    return prefs!.getString(PREF_URL);
+    return prefs?.getString(PREF_URL);
   }
 
   static void setServerUrl(String url) {
-    prefs!.setString(PREF_URL, url);
+    prefs?.setString(PREF_URL, url);
   }
 }

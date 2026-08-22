@@ -255,11 +255,11 @@ class DataController extends GetxController {
     }
   }
 
-  Future<void> getDevices() async {
+  Future<void> getDevices({bool forceBillingRefresh = false}) async {
     try {
-      // Run billing update in parallel with device fetch — real-time, no added latency
+      // Fetch devices from GPSWOX API, and update billing expiration in parallel (throttled by TTL in PaymentService)
       final results = await Future.wait([
-        PaymentService.updateBillingExpirationStatus().catchError((_) {}),
+        PaymentService.updateBillingExpirationStatus(force: forceBillingRefresh).catchError((_) {}),
         APIService.getDevices(),
       ]);
       final devicesResponse = results[1] as List<Device>?;
@@ -273,31 +273,32 @@ class DataController extends GetxController {
         await _checkLocalAlerts(onlyDevices);
 
         // ── Billing API: per-vehicle is_expired status update (background) ──
-        // প্রতিটি vehicle এর is_expired billing server থেকে আনবে, UI block হবে না
         final vehicleIds = onlyDevices
             .map((d) => d.id)
             .whereType<int>()
             .toList();
-        PaymentService.updateAllVehicleExpirations(vehicleIds).then((_) async {
-          // Fetch invoices and build vehicle due map
+        PaymentService.updateAllVehicleExpirations(vehicleIds, force: forceBillingRefresh).then((_) async {
+          // Fetch invoices and build vehicle due map (only if logged in)
           try {
-            final rawInvoices = await PaymentService.getInvoicesRaw();
-            if (rawInvoices != null && rawInvoices['bills'] != null) {
-              final List bills = rawInvoices['bills'];
-              final Map<String, double> tempDueMap = {};
-              for (var b in bills) {
-                if (b['status'] == 'unpaid') {
-                  final double amt = ((b['amount'] ?? b['total_bill'] ?? 0.0) as num).toDouble();
-                  final bVehicleId = b['vehicle_id']?.toString() ?? b['device_id']?.toString();
-                  final bVehicleName = b['vehicle']?['name']?.toString().toLowerCase().trim();
-                  final bVehicleImei = b['vehicle']?['imei']?.toString().trim();
-                  
-                  if (bVehicleId != null) tempDueMap[bVehicleId] = (tempDueMap[bVehicleId] ?? 0.0) + amt;
-                  if (bVehicleName != null) tempDueMap[bVehicleName] = (tempDueMap[bVehicleName] ?? 0.0) + amt;
-                  if (bVehicleImei != null) tempDueMap[bVehicleImei] = (tempDueMap[bVehicleImei] ?? 0.0) + amt;
+            if (PaymentService.hasToken) {
+              final rawInvoices = await PaymentService.getInvoicesRaw();
+              if (rawInvoices != null && rawInvoices['bills'] != null) {
+                final List bills = rawInvoices['bills'];
+                final Map<String, double> tempDueMap = {};
+                for (var b in bills) {
+                  if (b['status'] == 'unpaid') {
+                    final double amt = ((b['amount'] ?? b['total_bill'] ?? 0.0) as num).toDouble();
+                    final bVehicleId = b['vehicle_id']?.toString() ?? b['device_id']?.toString();
+                    final bVehicleName = b['vehicle']?['name']?.toString().toLowerCase().trim();
+                    final bVehicleImei = b['vehicle']?['imei']?.toString().trim();
+                    
+                    if (bVehicleId != null) tempDueMap[bVehicleId] = (tempDueMap[bVehicleId] ?? 0.0) + amt;
+                    if (bVehicleName != null) tempDueMap[bVehicleName] = (tempDueMap[bVehicleName] ?? 0.0) + amt;
+                    if (bVehicleImei != null) tempDueMap[bVehicleImei] = (tempDueMap[bVehicleImei] ?? 0.0) + amt;
+                  }
                 }
+                vehicleDueMap.assignAll(tempDueMap);
               }
-              vehicleDueMap.assignAll(tempDueMap);
             }
           } catch (_) {}
 

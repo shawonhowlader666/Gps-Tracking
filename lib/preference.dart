@@ -15,3 +15,4 @@ const PREF_URL = "url";
 const String PREF_USER_PHONE = "user_phone";
 const String PREF_COMPANY_NAME = "company_name";
 const String PREF_USER_ID = "user_id";
+const String PREF_BILLING_TOKEN = "billing_token";
