@@ -64,12 +64,23 @@ class APIService {
 
   static Future<PositionHistory?> getHistory(String deviceID, String fromDate,
       String fromTime, String toDate, String toTime) async {
-    http.Response response = await http.get(Uri.parse(
-        "$serverURL/api/get_history?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&from_date=$fromDate&from_time=$fromTime&to_date=$toDate&to_time=$toTime&device_id=$deviceID"));
-    if (response.statusCode == 200) {
-      return PositionHistory.fromJson(
-          json.decode(response.body.replaceAll("ï»¿", "")));
-    } else {
+    try {
+      final fDate = Uri.encodeComponent(fromDate);
+      final fTime = Uri.encodeComponent(fromTime);
+      final tDate = Uri.encodeComponent(toDate);
+      final tTime = Uri.encodeComponent(toTime);
+      final url = "$serverURL/api/get_history?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&from_date=$fDate&from_time=$fTime&to_date=$tDate&to_time=$tTime&device_id=$deviceID";
+      debugPrint("[APIService] getHistory Request: $url");
+      http.Response response = await http.get(Uri.parse(url));
+      debugPrint("[APIService] getHistory Status: ${response.statusCode}");
+      if (response.statusCode == 200) {
+        return PositionHistory.fromJson(
+            json.decode(response.body.replaceAll("ï»¿", "")));
+      } else {
+        return null;
+      }
+    } catch (e) {
+      debugPrint("[APIService] getHistory Exception: $e");
       return null;
     }
   }

@@ -90,11 +90,11 @@ class Util {
   }
 
   static String formatReportDate(DateTime date) {
-    return DateFormat('dd-MM-yyyy').format(date.toLocal());
+    return DateFormat('yyyy-MM-dd').format(date.toLocal());
   }
 
   static String formatReportTime(DateTime date) {
-    return DateFormat('hh:mm:ss a').format(date.toLocal());
+    return DateFormat('HH:mm:ss').format(date.toLocal());
   }
 
   static String formatDateReport(String date) {

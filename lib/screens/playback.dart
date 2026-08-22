@@ -774,11 +774,14 @@ class _PlaybackScreenState extends State<PlaybackScreen>
   }
 
   Future<DateTime?> _pickDateTime(DateTime initial) async {
+    final now = DateTime.now();
+    final initialDate = initial.isAfter(now) ? now : initial;
+
     final date = await showDatePicker(
       context: context,
-      initialDate: initial,
+      initialDate: initialDate,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      lastDate: now,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(primary: Color(0xFFE53935))),
@@ -834,6 +837,17 @@ class _PlaybackScreenState extends State<PlaybackScreen>
 
   void _loadPlaybackData() {
     if (widget.id == null) return;
+
+    // Auto-correct invalid date range where toDate is before fromDate
+    if (_toDate.isBefore(_fromDate)) {
+      _toDate = DateTime(_fromDate.year, _fromDate.month, _fromDate.day, 23, 59, 59);
+    }
+
+    // Auto-cap range to max 7 days for server query limit safety
+    if (_toDate.difference(_fromDate).inDays > 7) {
+      _toDate = _fromDate.add(const Duration(days: 7));
+    }
+
     _clearData();
     setState(() => _isPlaybackLoading = true);
 
