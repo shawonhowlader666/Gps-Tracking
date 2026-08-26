@@ -52,12 +52,18 @@ class APIService {
   }
 
   static Future<RxList<Device>?> getDevices() async {
-    final response = await http.get(Uri.parse(
-        "$serverURL/api/get_devices?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"));
-    if (response.statusCode == 200) {
-      Iterable list = json.decode(response.body.replaceAll("ï»¿", ""));
-      return list.map((model) => Device.fromJson(model)).toList().obs;
-    } else {
+    try {
+      final response = await http.get(Uri.parse(
+          "$serverURL/api/get_devices?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        Iterable list = json.decode(response.body.replaceAll("ï»¿", ""));
+        return list.map((model) => Device.fromJson(model)).toList().obs;
+      } else {
+        return null;
+      }
+    } catch (e) {
+      debugPrint("[APIService] getDevices exception: $e");
       return null;
     }
   }
@@ -393,18 +399,26 @@ class APIService {
         final langCode = AppLang.isBn ? 'bn' : 'en';
         final url =
             "$serverURL/api/geo_address?lat=$lat&lon=$lng&lang=$langCode&user_api_hash=${UserRepository.getHash()}";
-        final response = await http.get(Uri.parse(url), headers: headers);
-        if (response.statusCode == 200) {
+        final response = await http
+            .get(Uri.parse(url), headers: headers)
+            .timeout(const Duration(seconds: 5));
+        if (response.statusCode == 200 && response.body.isNotEmpty) {
           final address = response.body;
           _addressCache[key] = address;
           return address;
+        } else {
+          final fallback = "$lat, $lng";
+          _addressCache[key] = fallback;
+          return fallback;
         }
       } catch (e) {
         debugPrint("Geocoding error: $e");
+        final fallback = "$lat, $lng";
+        _addressCache[key] = fallback;
+        return fallback;
       } finally {
         _inFlightFutures.remove(key);
       }
-      return "";
     }();
 
     _inFlightFutures[key] = future;
@@ -455,11 +469,13 @@ class APIService {
   }
 
   static Future<http.Response> activateFCM(token) async {
-    final response = await http.get(
-        Uri.parse(
-            "$serverURL/api/fcm_token?user_api_hash=${UserRepository.getHash()}&token=" +
-                token),
-        headers: headers);
+    final response = await http
+        .get(
+            Uri.parse(
+                "$serverURL/api/fcm_token?user_api_hash=${UserRepository.getHash()}&token=" +
+                    token),
+            headers: headers)
+        .timeout(const Duration(seconds: 10));
     return response;
   }
 

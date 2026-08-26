@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
@@ -14,7 +14,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_lock/util/util.dart';
 import 'package:smart_lock/services/payment_service.dart';
 
-class DataController extends GetxController {
+class DataController extends GetxController with WidgetsBindingObserver {
+  Timer? _pollingTimer;
+  int _currentPollingIntervalSeconds = 8;
   // Overrides to prevent UI bouncing after sending lock/unlock commands
   static final Map<int, String> _localEngineStatusOverrides =
       {}; // deviceId -> engineStatus
@@ -215,6 +217,7 @@ class DataController extends GetxController {
   @override
   Future<void> onInit() async {
     super.onInit();
+    WidgetsBinding.instance.addObserver(this);
     await loadOverrides();
     await _loadLocalEvents(); // ← local events load করো — app restart হলেও থাকবে
     updateDevices();
@@ -229,13 +232,42 @@ class DataController extends GetxController {
 
   @override
   Future<void> onReady() async {
-    Timer.periodic(const Duration(seconds: 8), (timer) {
+    super.onReady();
+    _startPollingTimer();
+  }
+
+  void _startPollingTimer() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(Duration(seconds: _currentPollingIntervalSeconds), (timer) {
       if (UserRepository.getHash() != null) {
         getDevices();
         getEvents();
       }
     });
-    super.onReady();
+  }
+
+  void _stopPollingTimer() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      debugPrint('[DataController] App backgrounded -> Stopping polling timer to protect server.');
+      _stopPollingTimer();
+    } else if (state == AppLifecycleState.resumed) {
+      debugPrint('[DataController] App resumed -> Restarting polling timer.');
+      updateDevices();
+      _startPollingTimer();
+    }
+  }
+
+  @override
+  void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopPollingTimer();
+    super.onClose();
   }
 
   void _reapplyCurrentFilter() {
@@ -264,6 +296,12 @@ class DataController extends GetxController {
       ]);
       final devicesResponse = results[1] as List<Device>?;
       if (devicesResponse != null) {
+        // Reset error backoff interval on successful fetch
+        if (_currentPollingIntervalSeconds != 8) {
+          _currentPollingIntervalSeconds = 8;
+          _startPollingTimer();
+        }
+
         devices.value = devicesResponse;
         await _processDeviceItems(devicesResponse);
         isLoading.value = false;
@@ -272,7 +310,7 @@ class DataController extends GetxController {
         // ← device data update হলে local alerts check করো
         await _checkLocalAlerts(onlyDevices);
 
-        // ── Billing API: per-vehicle is_expired status update (background) ──
+        // ── Billing API: per-vehicle is_expired status update (throttled & gated) ──
         final vehicleIds = onlyDevices
             .map((d) => d.id)
             .whereType<int>()
@@ -306,9 +344,19 @@ class DataController extends GetxController {
           _updateStatusCounters();
           _reapplyCurrentFilter();
         }).catchError((_) {});
+      } else {
+        // API response null/failed -> increase polling interval to 30s backoff to protect server
+        if (_currentPollingIntervalSeconds != 30) {
+          _currentPollingIntervalSeconds = 30;
+          _startPollingTimer();
+        }
       }
     } catch (e) {
       isLoading.value = false;
+      if (_currentPollingIntervalSeconds != 30) {
+        _currentPollingIntervalSeconds = 30;
+        _startPollingTimer();
+      }
     }
   }
 

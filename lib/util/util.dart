@@ -343,15 +343,22 @@ class Util {
   }
 
   static Future<ui.Image> getImageFromPathUrl(String imagePath) async {
-    final response = await http.Client().get(Uri.parse(imagePath));
-    final bytes = response.bodyBytes;
+    final client = http.Client();
+    try {
+      final response = await client
+          .get(Uri.parse(imagePath))
+          .timeout(const Duration(seconds: 10));
+      final bytes = response.bodyBytes;
 
-    final Completer<ui.Image> completer = Completer();
-    ui.decodeImageFromList(bytes, (ui.Image img) {
-      return completer.complete(img);
-    });
+      final Completer<ui.Image> completer = Completer();
+      ui.decodeImageFromList(bytes, (ui.Image img) {
+        return completer.complete(img);
+      });
 
-    return completer.future;
+      return completer.future;
+    } finally {
+      client.close();
+    }
   }
 
   static Future<BitmapDescriptor> getMarkerIconFromUrl(String imagePath,
