@@ -24,7 +24,8 @@ class PaymentService {
   static const Duration _billingStatusTtl = Duration(minutes: 10);
 
   static DateTime? _lastAllVehiclesFetch;
-  static const Duration _vehicleCacheTtl = Duration(minutes: 10);
+  static const Duration _vehicleCacheTtl = Duration(minutes: 30);
+  static Future<void>? _allVehiclesFuture;
 
   static bool get isUserExpired => _isUserExpired;
   static set isUserExpired(bool val) => _isUserExpired = val;
@@ -61,6 +62,14 @@ class PaymentService {
 
   /// Fetch expiration info for a single vehicle and cache it.
   static Future<void> updateVehicleExpiration(int vehicleId) async {
+    final cached = _vehicleExpirationCache[vehicleId];
+    if (cached != null) {
+      final fetchedAt = cached['fetched_at'] as DateTime?;
+      if (fetchedAt != null && DateTime.now().difference(fetchedAt) < _vehicleCacheTtl) {
+        return; // Valid cache hit (including negative/404 cache)
+      }
+    }
+
     try {
       final data = await _getJson('/vehicle/$vehicleId/expiration');
       if (data != null) {
@@ -69,22 +78,47 @@ class PaymentService {
           'days_remaining': (data['days_remaining'] as int?) ?? 999,
           'expiration_date': data['expiration_date'],
           'human_readable': data['human_readable'],
+          'fetched_at': DateTime.now(),
+          'is_error': false,
+        };
+      } else {
+        // Negative cache: store failure/404 response to prevent immediate retries
+        _vehicleExpirationCache[vehicleId] = {
+          'is_expired': false,
+          'days_remaining': 999,
+          'expiration_date': null,
+          'human_readable': null,
+          'fetched_at': DateTime.now(),
+          'is_error': true,
         };
       }
-    } catch (_) {}
+    } catch (_) {
+      // Negative cache on exception as well
+      _vehicleExpirationCache[vehicleId] = {
+        'is_expired': false,
+        'days_remaining': 999,
+        'fetched_at': DateTime.now(),
+        'is_error': true,
+      };
+    }
   }
 
   /// Get raw vehicle expiration details from server
   static Future<Map<String, dynamic>?> getVehicleExpiration(int vehicleId) async {
     try {
-      return await _getJson('/vehicle/$vehicleId/expiration');
+      await updateVehicleExpiration(vehicleId);
+      final cached = _vehicleExpirationCache[vehicleId];
+      if (cached != null && cached['is_error'] != true) {
+        return cached;
+      }
+      return null;
     } catch (_) {
       return null;
     }
   }
 
   /// Fetch expiration info for ALL vehicles in throttled batches of 5.
-  /// Cached for 10 minutes unless forced.
+  /// Cached for 30 minutes unless forced.
   static Future<void> updateAllVehicleExpirations(List<int> vehicleIds, {bool force = false}) async {
     if (vehicleIds.isEmpty) return;
     if (!force && _lastAllVehiclesFetch != null) {
@@ -92,6 +126,19 @@ class PaymentService {
         return;
       }
     }
+    if (_allVehiclesFuture != null) {
+      return _allVehiclesFuture!;
+    }
+
+    _allVehiclesFuture = _performUpdateAllVehicleExpirations(vehicleIds);
+    try {
+      await _allVehiclesFuture;
+    } finally {
+      _allVehiclesFuture = null;
+    }
+  }
+
+  static Future<void> _performUpdateAllVehicleExpirations(List<int> vehicleIds) async {
     _lastAllVehiclesFetch = DateTime.now();
 
     // Process in batches of 5 concurrent requests to prevent server connection overload
@@ -289,13 +336,24 @@ class PaymentService {
     }
   }
 
-  /// Get payment statistics
-  static Future<PaymentStats?> getStats() async {
+  static PaymentStats? _cachedStats;
+  static DateTime? _lastStatsFetch;
+  static const Duration _statsTtl = Duration(minutes: 5);
+
+  /// Get payment statistics with 5-minute TTL caching
+  static Future<PaymentStats?> getStats({bool force = false}) async {
+    if (!force && _cachedStats != null && _lastStatsFetch != null) {
+      if (DateTime.now().difference(_lastStatsFetch!) < _statsTtl) {
+        return _cachedStats;
+      }
+    }
     try {
       final data = await _getJson('/stats');
       if (data != null) {
         final stats = PaymentStats.fromJson(data);
         _enableBillAlert = stats.enableBillAlert;
+        _cachedStats = stats;
+        _lastStatsFetch = DateTime.now();
         return stats;
       }
     } on TimeoutException {
@@ -305,7 +363,7 @@ class PaymentService {
     } catch (e) {
       rethrow;
     }
-    return null;
+    return _cachedStats;
   }
 
   /// Get bills with pagination (resolved from invoices)
@@ -347,12 +405,26 @@ class PaymentService {
     }
   }
 
-  /// Get raw invoices data from server
-  static Future<Map<String, dynamic>?> getInvoicesRaw() async {
+  static Map<String, dynamic>? _cachedInvoicesRaw;
+  static DateTime? _lastInvoicesRawFetch;
+  static const Duration _invoicesTtl = Duration(minutes: 5);
+
+  /// Get raw invoices data from server with 5-minute TTL caching
+  static Future<Map<String, dynamic>?> getInvoicesRaw({bool force = false}) async {
+    if (!force && _cachedInvoicesRaw != null && _lastInvoicesRawFetch != null) {
+      if (DateTime.now().difference(_lastInvoicesRawFetch!) < _invoicesTtl) {
+        return _cachedInvoicesRaw;
+      }
+    }
     try {
-      return await _getJson('/invoices');
+      final res = await _getJson('/invoices');
+      if (res != null) {
+        _cachedInvoicesRaw = res;
+        _lastInvoicesRawFetch = DateTime.now();
+      }
+      return res ?? _cachedInvoicesRaw;
     } catch (_) {
-      return null;
+      return _cachedInvoicesRaw;
     }
   }
 
