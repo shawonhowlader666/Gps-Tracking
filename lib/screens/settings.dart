@@ -496,7 +496,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'Version 1.0.9+11',
+                    'Version 1.0.1',
                     style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 8),
