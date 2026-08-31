@@ -93,56 +93,88 @@ class APIService {
 
   static Future<RouteReport?> getReport(
       String deviceID, String fromDate, String toDate, int type) async {
-    final response = await http.get(Uri.parse(
-        "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0&send_to_email=${UserRepository.getEmail()!}"));
-    if (response.statusCode == 200) {
-      return RouteReport.fromJson(
-          json.decode(response.body.replaceAll("ï»¿", "")));
-    } else {
+    try {
+      final email = UserRepository.getEmail() ?? "";
+      final response = await http.get(Uri.parse(
+          "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0&send_to_email=$email"))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return RouteReport.fromJson(
+            json.decode(response.body.replaceAll("ï»¿", "")));
+      } else {
+        return null;
+      }
+    } catch (e) {
+      debugPrint("[APIService] getReport exception: $e");
       return null;
     }
   }
 
   static Future<RouteReport?> getReportStop(
       String deviceID, String fromDate, String toDate, int type) async {
-    final response = await http.get(Uri.parse(
-        "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&geofences[]=0&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0&send_to_email=${UserRepository.getEmail()!}"));
-    if (response.statusCode == 200) {
-      return RouteReport.fromJson(
-          json.decode(response.body.replaceAll("ï»¿", "")));
-    } else {
+    try {
+      final email = UserRepository.getEmail() ?? "";
+      final response = await http.get(Uri.parse(
+          "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&geofences[]=0&date_to=$toDate&format=pdf&type=$type&daily=0&weekly=0&monthly=0&send_to_email=$email"))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return RouteReport.fromJson(
+            json.decode(response.body.replaceAll("ï»¿", "")));
+      } else {
+        return null;
+      }
+    } catch (e) {
+      debugPrint("[APIService] getReportStop exception: $e");
       return null;
     }
   }
 
   static Future<RouteReport?> getReportHtml(
       String deviceID, String fromDate, String toDate, int type) async {
-    final response = await http.get(Uri.parse(
-        "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&date_to=$toDate&format=html&type=$type&daily=0&weekly=0&monthly=0"));
-    if (response.statusCode == 200) {
-      return RouteReport.fromJson(
-          json.decode(response.body.replaceAll("ï»¿", "")));
-    } else {
+    try {
+      final response = await http.get(Uri.parse(
+          "$serverURL/api/generate_report?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}&date_from=$fromDate&devices[]=$deviceID&date_to=$toDate&format=html&type=$type&daily=0&weekly=0&monthly=0"))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return RouteReport.fromJson(
+            json.decode(response.body.replaceAll("ï»¿", "")));
+      } else {
+        return null;
+      }
+    } catch (e) {
+      debugPrint("[APIService] getReportHtml exception: $e");
       return null;
     }
   }
 
   static Future<User?> getUserData() async {
-    final response = await http.get(Uri.parse(
-        "$serverURL/api/get_user_data?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"));
-    if (response.statusCode == 200) {
-      return User.fromJson(json.decode(response.body.replaceAll("ï»¿", "")));
-    } else {
+    try {
+      final response = await http.get(Uri.parse(
+          "$serverURL/api/get_user_data?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return User.fromJson(json.decode(response.body.replaceAll("ï»¿", "")));
+      } else {
+        return null;
+      }
+    } catch (e) {
+      debugPrint("[APIService] getUserData exception: $e");
       return null;
     }
   }
 
   static Future<User?> getGeofences() async {
-    final response = await http.get(Uri.parse(
-        "$serverURL/api/get_user_data?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"));
-    if (response.statusCode == 200) {
-      return User.fromJson(json.decode(response.body.replaceAll("ï»¿", "")));
-    } else {
+    try {
+      final response = await http.get(Uri.parse(
+          "$serverURL/api/get_user_data?user_api_hash=${UserRepository.getHash()}&lang=${UserRepository.getLanguage()}"))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return User.fromJson(json.decode(response.body.replaceAll("ï»¿", "")));
+      } else {
+        return null;
+      }
+    } catch (e) {
+      debugPrint("[APIService] getGeofences exception: $e");
       return null;
     }
   }
