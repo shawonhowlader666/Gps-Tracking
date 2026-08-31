@@ -1,4 +1,5 @@
   import 'dart:io';
+
   import 'package:firebase_messaging/firebase_messaging.dart';
   import 'package:flutter/material.dart';
   import 'package:flutter/services.dart';
@@ -31,6 +32,8 @@
   // ─── main ─────────────────────────────────────────────────────────────────────
   void main() async {
     WidgetsFlutterBinding.ensureInitialized();
+    // Disable HttpClient response body logging — stops raw JSON spam in logcat
+    HttpClient.enableTimelineLogging = false;
     HttpOverrides.global = MyHttpOverrides();
 
     try {

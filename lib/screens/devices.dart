@@ -338,6 +338,7 @@ class _DevicePageState extends State<DevicePage> {
 
   bool _isDeviceExpired(DeviceItem device) {
     try {
+      if (device.online == 'expired' || device.time == 'Disabled') return true;
       final expiry = device.deviceData?.expirationDate?.toString();
       if (expiry == null || expiry.isEmpty) return false;
       final date = DateTime.tryParse(expiry);
@@ -348,15 +349,16 @@ class _DevicePageState extends State<DevicePage> {
     }
   }
 
-  /// Billing API says is_expired: true → hard block
+  /// Billing API or GPSWOX says is_expired: true → hard block
   bool _isExpired(DeviceItem device) {
-    if (!PaymentService.enableBillAlert) return false;
+    final isGpswoxExpired = _isDeviceExpired(device);
+    if (isGpswoxExpired) return true; // GPSWOX expired is ALWAYS blocked
+
     final id = device.id;
     if (id == null) return false;
     final isBillingExpired = PaymentService.isVehicleExpired(id);
     final days = PaymentService.vehicleDaysRemaining(id);
-    final isGpswoxExpired = _isDeviceExpired(device);
-    return isBillingExpired || days <= 0 || isGpswoxExpired;
+    return isBillingExpired || days <= 0;
   }
 
   /// Billing API says is_expired: false BUT days_remaining <= 7 → show warning popup.

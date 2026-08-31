@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import 'package:smart_lock/services/model/login.dart';
-import 'package:smart_lock/screens/data_controller/data_controller.dart';
 import 'package:smart_lock/services/api_service.dart';
 import 'package:smart_lock/storage/user_repository.dart';
 import 'package:smart_lock/config.dart';
@@ -44,7 +43,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   // Reuse the prefs already initialized in main via UserRepository
   SharedPreferences get _prefs => UserRepository.prefs!;
 
-  final DataController _dataController = Get.put(DataController());
 
   // ─── Animation ────────────────────────────────────────────────────────────
   late AnimationController _fadeController;
@@ -370,7 +368,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     }
 
     if (loginSuccess && successfulServer != null) {
-      _dataController.getDevices();
+      // Device polling starts automatically via DataController.startPolling()
+      // which is called in home_screen.dart's initState()
       _updateFcmToken();
       await _checkMaintenanceForCurrentServer();
 

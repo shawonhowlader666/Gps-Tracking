@@ -30,21 +30,20 @@ class _NotificationMapPageState extends State<NotificationMapPage> {
   // PositionModel position;
   Event? event;
 
-  @override
-  void initState() {
-    _postsController = StreamController();
-    getPosition();
-    super.initState();
-  }
+  bool _hasInit = false;
 
-  void getPosition() {
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (args != null) {
-        _timer!.cancel();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasInit) {
+      final modalArgs = ModalRoute.of(context)?.settings.arguments as ReportEventArgument?;
+      if (modalArgs != null) {
+        args = modalArgs;
+        _hasInit = true;
         event = args!.event;
         addMarkers(args!.event);
       }
-    });
+    }
   }
 
   void addMarkers(Event e) async {

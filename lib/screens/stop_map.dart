@@ -26,16 +26,25 @@ class _StopMapPageState extends State<StopMapPage> {
   Timer? _timer;
   PlayBackRoute? pb;
 
+  bool _hasInit = false;
+
   @override
   void initState() {
     _postsController = StreamController();
-    _timer = Timer.periodic(Duration(milliseconds: 1000), (timer) {
-      if (args != null) {
-        _timer!.cancel();
+    super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasInit) {
+      final modalArgs = ModalRoute.of(context)?.settings.arguments as StopArguments?;
+      if (modalArgs != null) {
+        args = modalArgs;
+        _hasInit = true;
         addMarkers(args!.route);
       }
-    });
-    super.initState();
+    }
   }
 
   void addMarkers(PlayBackRoute pos) async {

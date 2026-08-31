@@ -219,8 +219,12 @@ class DataController extends GetxController with WidgetsBindingObserver {
     super.onInit();
     WidgetsBinding.instance.addObserver(this);
     await loadOverrides();
-    await _loadLocalEvents(); // ← local events load করো — app restart হলেও থাকবে
-    updateDevices();
+    await _loadLocalEvents();
+    // Only fetch immediately if already authenticated (returning user via splash auto-login)
+    // New logins should call startPolling() after successful authentication
+    if (UserRepository.getHash() != null) {
+      updateDevices();
+    }
   }
 
   void updateDevices() {
@@ -230,18 +234,31 @@ class DataController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// Call this after successful login — or on home screen mount — to begin data polling.
+  /// Safe to call multiple times: _startPollingTimer() always cancels the old timer first.
+  void startPolling() {
+    if (UserRepository.getHash() == null) return;
+    updateDevices();  // Immediate fetch
+    _startPollingTimer(); // Restarts the periodic timer (cancels old one first)
+  }
+
   @override
   Future<void> onReady() async {
     super.onReady();
-    _startPollingTimer();
+    // NOTE: Polling is started explicitly by home_screen.dart via startPolling().
+    // We do NOT auto-start the timer here to avoid double-polling.
   }
 
   void _startPollingTimer() {
     _pollingTimer?.cancel();
+    if (UserRepository.getHash() == null) return; // Guard: never poll without auth
     _pollingTimer = Timer.periodic(Duration(seconds: _currentPollingIntervalSeconds), (timer) {
       if (UserRepository.getHash() != null) {
         getDevices();
         getEvents();
+      } else {
+        // Hash was cleared (logout), stop polling immediately
+        _stopPollingTimer();
       }
     });
   }
@@ -362,6 +379,7 @@ class DataController extends GetxController with WidgetsBindingObserver {
 
   bool _isDeviceExpired(DeviceItem device) {
     try {
+      if (device.online == 'expired' || device.time == 'Disabled') return true;
       final expiry = device.deviceData?.expirationDate?.toString();
       if (expiry == null || expiry.isEmpty) return false;
       final date = DateTime.tryParse(expiry);
@@ -373,17 +391,17 @@ class DataController extends GetxController with WidgetsBindingObserver {
   }
 
   bool _isVehicleExpiredInBilling(DeviceItem device) {
-    if (!PaymentService.enableBillAlert) return false;
+    final isGpswoxExpired = _isDeviceExpired(device);
+    if (isGpswoxExpired) return true; // GPSWOX expired is ALWAYS blocked
+
     final id = device.id;
     if (id == null) return false;
     final isBillingExpired = PaymentService.isVehicleExpired(id);
     final days = PaymentService.vehicleDaysRemaining(id);
-    final isGpswoxExpired = _isDeviceExpired(device);
-    return isBillingExpired || days <= 0 || isGpswoxExpired;
+    return isBillingExpired || days <= 0;
   }
 
   Future<void> _processDeviceItems(List<Device> deviceGroups) async {
-    final oldDevicesMap = {for (var d in onlyDevices) d.id: d};
     onlyDevices.clear();
     for (var group in deviceGroups) {
       if (group.items != null) {
@@ -391,16 +409,12 @@ class DataController extends GetxController with WidgetsBindingObserver {
           var element = rawElement;
           final devId = element.id;
           if (devId != null && _isVehicleExpiredInBilling(element)) {
-            final oldElement = oldDevicesMap[devId];
-            if (oldElement != null) {
-              element = oldElement;
-            } else {
-              // First run and expired: clear any live data
-              element.lat = null;
-              element.lng = null;
-              element.speed = 0;
-              element.sensors = [];
-            }
+            // Expired vehicle: strip live data so no live updates occur on cards/map
+            element.lat = null;
+            element.lng = null;
+            element.speed = 0;
+            element.sensors = [];
+            element.tail = [];
           }
           if (devId != null) {
             final hasEngineOverride =

@@ -34,7 +34,6 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
   @override
   initState() {
     _postsController = StreamController();
-    getReport();
     super.initState();
   }
 
@@ -100,26 +99,33 @@ class _DeviceEventPageState extends State<DeviceEventPage> {
     }
   }
 
-  void getReport() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (args != null) {
-        _timer.cancel();
+  bool _hasFetchedReport = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasFetchedReport) {
+      final modalArgs = ModalRoute.of(context)?.settings.arguments as ReportArguments?;
+      if (modalArgs != null) {
+        args = modalArgs;
+        _hasFetchedReport = true;
         APIService.getEventByID(args!.id.toString(), args!.fromDate,
                 args!.fromTime, args!.toDate, args!.toTime)
-            .then((value) => {
-                  eventList = [],
-                  eventList!.addAll(value!),
-                  _postsController.add(1),
-                  isLoading = false,
-                  setState(() {})
-                });
+            .then((value) {
+          if (mounted) {
+            setState(() {
+              eventList = value ?? [];
+              isLoading = false;
+            });
+            _postsController.add(1);
+          }
+        });
       }
-    });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    args = ModalRoute.of(context)!.settings.arguments as ReportArguments;
     myLocale = Localizations.localeOf(context);
 
     return Scaffold(

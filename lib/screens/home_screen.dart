@@ -56,6 +56,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     dataController = Get.put(DataController(), permanent: true);
+    // Ensure polling is active — covers both auto-login (returning user) and fresh login
+    dataController.startPolling();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {

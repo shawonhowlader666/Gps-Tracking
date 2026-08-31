@@ -884,6 +884,7 @@ class Util {
 
   static bool _isDeviceExpired(DeviceItem device) {
     try {
+      if (device.online == 'expired' || device.time == 'Disabled') return true;
       final expiry = device.deviceData?.expirationDate?.toString();
       if (expiry == null || expiry.isEmpty) return false;
       final date = DateTime.tryParse(expiry);
@@ -894,9 +895,11 @@ class Util {
     }
   }
 
-  /// Billing API says is_expired: true for this vehicle → hard block
+  /// Billing API or GPSWOX says is_expired: true for this vehicle → hard block
   static bool isExpired(DeviceItem device) {
-    if (!PaymentService.enableBillAlert) return false;
+    final isGpswoxExpired = _isDeviceExpired(device);
+    if (isGpswoxExpired) return true;
+
     final id = device.id;
     if (id == null) return false;
     return PaymentService.isVehicleExpired(id);

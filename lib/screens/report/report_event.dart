@@ -33,31 +33,34 @@ class _ReportEventPageState extends State<ReportEventPage> {
   @override
   void initState() {
     _postsController = StreamController();
-    getReport();
     super.initState();
   }
 
-  void getReport() {
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (args != null) {
-        timer.cancel();
+  bool _hasFetchedReport = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasFetchedReport) {
+      final modalArgs = ModalRoute.of(context)?.settings.arguments as ReportArguments?;
+      if (modalArgs != null) {
+        args = modalArgs;
+        _hasFetchedReport = true;
         APIService.getReport(
                 args!.id.toString(), args!.fromDate, args!.toDate, args!.type)
             .then((value) {
-          String decodedUrl = Uri.decodeFull(value!.url!);
-
-          String correctedUrl = decodedUrl.replaceAll('%5B0%5D', '[]');
-          String correctedUrl2 = correctedUrl.replaceAll('[0]', '[]');
-          String correctedUrl3 =
-              correctedUrl2.replaceAll('send_to_email[]=', 'send_to_email=');
-          url = correctedUrl3;
-          print(url!);
-          _downloadFile(url!, "event");
-          // launch(value.url),
-          //
+          if (value?.url != null && mounted) {
+            String decodedUrl = Uri.decodeFull(value!.url!);
+            String correctedUrl = decodedUrl.replaceAll('%5B0%5D', '[]');
+            String correctedUrl2 = correctedUrl.replaceAll('[0]', '[]');
+            String correctedUrl3 =
+                correctedUrl2.replaceAll('send_to_email[]=', 'send_to_email=');
+            url = correctedUrl3;
+            _downloadFile(url!, "event");
+          }
         });
       }
-    });
+    }
   }
 
   Future<File?> _downloadFile(String url, String filename) async {

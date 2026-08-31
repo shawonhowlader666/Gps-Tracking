@@ -76,7 +76,7 @@ class _MapPageState extends State<MapPage> {
   List<Choice> menuChoices = [];
   List<Choice> choices = [];
 
-  DataController dataController = Get.put(DataController());
+  DataController dataController = Get.find<DataController>();
   String? _mapStyle;
   StreamSubscription? _devicesSubscription;
 

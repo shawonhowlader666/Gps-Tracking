@@ -14,6 +14,9 @@ bool _bgPluginReady = false;
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  try {
+    HttpClient.enableTimelineLogging = false;
+  } catch (_) {}
   // Only initialize Firebase if it hasn't been initialized yet
   if (Firebase.apps.isEmpty) {
     try {

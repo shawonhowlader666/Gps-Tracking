@@ -26,7 +26,7 @@ class _GeofenceAddPageState extends State<GeofenceAddPage> {
   final TextEditingController _searchController = TextEditingController();
 
   GoogleMapController? mapController;
-  DataController dataController = Get.put(DataController());
+  DataController dataController = Get.find<DataController>();
 
   // Map settings
   MapType _currentMapType = MapType.normal;

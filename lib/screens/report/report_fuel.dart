@@ -103,7 +103,6 @@ Page resource error:
 
     _controller = controller;
     setState(() {});
-    getReport();
     super.initState();
   }
 
@@ -122,20 +121,28 @@ Page resource error:
     return file;
   }
 
-  void getReport() {
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (args != null) {
-        timer.cancel();
+  bool _hasFetchedReport = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasFetchedReport) {
+      final modalArgs = ModalRoute.of(context)?.settings.arguments as ReportArguments?;
+      if (modalArgs != null) {
+        args = modalArgs;
+        _hasFetchedReport = true;
         APIService.getReportHtml(
                 args!.id.toString(), args!.fromDate, args!.toDate, args!.type)
-            .then((value) => {
-                  _downloadFile(value!.url!, "work"),
-                  setState(() {
-                    isLoading = false;
-                  })
-                });
+            .then((value) {
+          if (value?.url != null && mounted) {
+            _downloadFile(value!.url!, "work");
+            setState(() {
+              isLoading = false;
+            });
+          }
+        });
       }
-    });
+    }
   }
 
   Future<File?> writeFile() async {
@@ -172,15 +179,13 @@ Page resource error:
 
   @override
   void dispose() {
-    _timer!.cancel();
-    _timer2!.cancel();
+    _timer?.cancel();
+    _timer2?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    args = ModalRoute.of(context)!.settings.arguments as ReportArguments;
-
     return Scaffold(
         appBar: AppBar(
           backgroundColor: Colors.white,

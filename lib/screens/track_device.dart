@@ -366,6 +366,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   Timer? _dataTimer;
   Timer? _cameraTimer;
+  DateTime? _lastHistoryFetch;
 
   // Colors
   static const _primaryRed = Color(0xFFCC0000);
@@ -409,7 +410,8 @@ class _TrackDeviceState extends State<TrackDevicePage>
       _updateBatteryStatus(widget.device!);
     }
 
-    final DataController controller = Get.put(DataController());
+    final DataController controller = Get.find<DataController>();
+
     _onlyDevicesSubscription = controller.onlyDevices.listen((devices) {
       if (mounted && !_isDisposed) {
         for (var element in devices) {
@@ -798,7 +800,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
 
   void _startDataTimer() {
     _fetchAllData();
-    _dataTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _dataTimer = Timer.periodic(const Duration(seconds: 20), (_) {
       if (!_isDisposed) _fetchAllData();
     });
   }
@@ -812,20 +814,25 @@ class _TrackDeviceState extends State<TrackDevicePage>
     final deviceId = widget.device!.id!;
     try {
       final current = DateTime.now();
-      final year = current.year;
-      final month = current.month.toString().padLeft(2, '0');
-      final day = current.day.toString().padLeft(2, '0');
-      final fromDate = formatDateReport("$year-$month-$day 00:00:00");
-      final toDate = formatDateReport("$year-$month-$day 23:59:59");
 
-      try {
-        final history = await APIService.getHistory(
-            deviceId.toString(), fromDate, "00:00", toDate, "23:59");
-        if (history != null && mounted && !_isDisposed) {
-          setState(() => todaytotalDistance = history.distance_sum ?? "0");
+      // Throttle heavy full-day history API call: only fetch once every 3 minutes
+      if (_lastHistoryFetch == null || current.difference(_lastHistoryFetch!).inMinutes >= 3) {
+        _lastHistoryFetch = current;
+        final year = current.year;
+        final month = current.month.toString().padLeft(2, '0');
+        final day = current.day.toString().padLeft(2, '0');
+        final fromDate = formatDateReport("$year-$month-$day 00:00:00");
+        final toDate = formatDateReport("$year-$month-$day 23:59:59");
+
+        try {
+          final history = await APIService.getHistory(
+              deviceId.toString(), fromDate, "00:00", toDate, "23:59");
+          if (history != null && mounted && !_isDisposed) {
+            setState(() => todaytotalDistance = history.distance_sum ?? "0");
+          }
+        } catch (e) {
+          log("History error: $e");
         }
-      } catch (e) {
-        log("History error: $e");
       }
 
       try {

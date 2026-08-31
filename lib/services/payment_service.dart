@@ -24,7 +24,7 @@ class PaymentService {
   static const Duration _billingStatusTtl = Duration(minutes: 10);
 
   static DateTime? _lastAllVehiclesFetch;
-  static const Duration _vehicleCacheTtl = Duration(minutes: 30);
+  static const Duration _vehicleCacheTtl = Duration(hours: 1);
   static Future<void>? _allVehiclesFuture;
 
   static bool get isUserExpired => _isUserExpired;
@@ -47,11 +47,11 @@ class PaymentService {
 
   /// Returns true if billing API says this vehicle is expired.
   static bool isVehicleExpired(int vehicleId) {
-    if (!_enableBillAlert) return false;
     final cached = _vehicleExpirationCache[vehicleId];
     if (cached == null) return false;
+    final bool isExpiredBool = cached['is_expired'] == true || cached['is_expired'] == 'true' || cached['is_expired'] == 1;
     final int days = (cached['days_remaining'] as int?) ?? 999;
-    return days <= 0;
+    return isExpiredBool || days <= 0;
   }
 
   /// Returns days_remaining for this vehicle. 999 if not fetched.
@@ -65,8 +65,9 @@ class PaymentService {
     final cached = _vehicleExpirationCache[vehicleId];
     if (cached != null) {
       final fetchedAt = cached['fetched_at'] as DateTime?;
+      // Cache both valid hits and 404/error hits for 1 hour to prevent 404 HTTP flood on server
       if (fetchedAt != null && DateTime.now().difference(fetchedAt) < _vehicleCacheTtl) {
-        return; // Valid cache hit (including negative/404 cache)
+        return; // Valid cache hit
       }
     }
 
@@ -74,7 +75,7 @@ class PaymentService {
       final data = await _getJson('/vehicle/$vehicleId/expiration');
       if (data != null) {
         _vehicleExpirationCache[vehicleId] = {
-          'is_expired': data['is_expired'] == true || data['is_expired'] == 'true',
+          'is_expired': data['is_expired'] == true || data['is_expired'] == 'true' || data['is_expired'] == 1,
           'days_remaining': (data['days_remaining'] as int?) ?? 999,
           'expiration_date': data['expiration_date'],
           'human_readable': data['human_readable'],
@@ -82,7 +83,7 @@ class PaymentService {
           'is_error': false,
         };
       } else {
-        // Negative cache: store failure/404 response to prevent immediate retries
+        // Error cache: retry after 15 seconds instead of 30 minutes
         _vehicleExpirationCache[vehicleId] = {
           'is_expired': false,
           'days_remaining': 999,
@@ -93,7 +94,6 @@ class PaymentService {
         };
       }
     } catch (_) {
-      // Negative cache on exception as well
       _vehicleExpirationCache[vehicleId] = {
         'is_expired': false,
         'days_remaining': 999,
@@ -139,6 +139,7 @@ class PaymentService {
   }
 
   static Future<void> _performUpdateAllVehicleExpirations(List<int> vehicleIds) async {
+    await login(); // Ensure authentication token is active before running batch requests
     _lastAllVehiclesFetch = DateTime.now();
 
     // Process in batches of 5 concurrent requests to prevent server connection overload
