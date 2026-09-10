@@ -318,7 +318,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
   GoogleMapController? _mapController;
   bool _isMapCreated = false;
   MapType _currentMapType = MapType.normal;
-  double _currentZoom = 18.5;
+  double _currentZoom = 15.5;
   bool _trafficEnabled = true;
   bool _followVehicle = true;
   String? _mapStyle;
@@ -1317,7 +1317,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
       await _mapController!.animateCamera(
         CameraUpdate.newCameraPosition(CameraPosition(
           target: _carAnimator!.currentPosition,
-          zoom: 17,
+          zoom: 15.5,
           bearing: _carAnimator!.currentBearing,
           tilt: 45,
         )),
@@ -1368,7 +1368,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
         await _mapController!.animateCamera(
           CameraUpdate.newCameraPosition(CameraPosition(
             target: myLatLng,
-            zoom: 17,
+            zoom: 15.5,
           )),
         );
       }
@@ -1707,7 +1707,7 @@ class _TrackDeviceState extends State<TrackDevicePage>
                   if (_carAnimator != null) {
                     controller.animateCamera(CameraUpdate.newCameraPosition(
                       CameraPosition(
-                          target: _carAnimator!.currentPosition, zoom: 16),
+                          target: _carAnimator!.currentPosition, zoom: 15.5),
                     ));
                   }
                 },

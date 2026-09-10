@@ -133,51 +133,19 @@ Future<bool> _shouldShowNotification(String text) async {
   } catch (_) {}
   if (prefs == null) return true;
 
-  // 0. Idle notifications - completely disabled per user preference
-  if (lower.contains('idle')) {
-    return false;
-  }
-
-  // 1. Engine / Ignition
   if (lower.contains('ignition') || lower.contains('engine')) {
     return prefs.getBool('auto_alert_engine') ?? true;
   }
 
-  // 2. Over Speed / Speed
   if (lower.contains('speed') || lower.contains('overspeed')) {
-    return prefs.getBool('auto_alert_speed') ?? false;
+    return prefs.getBool('auto_alert_speed') ?? true;
   }
 
-  // 3. Offline / Online
   if (lower.contains('offline') ||
       lower.contains('online') ||
       lower.contains('অফলাইন') ||
       lower.contains('অনলাইন')) {
     return prefs.getBool('auto_alert_offline') ?? true;
-  }
-
-  // 4. Custom server alerts (overspeed, geofence, fuel, sos, etc.)
-  final activeServerAlerts = prefs.getStringList('active_server_alerts');
-  if (activeServerAlerts != null) {
-    String detectedType = '';
-    if (lower.contains('speed')) {
-      detectedType = 'overspeed';
-    } else if (lower.contains('geofence')) {
-      if (activeServerAlerts.any((t) => t.contains('geofence'))) {
-        return true;
-      }
-    } else if (lower.contains('fuel')) {
-      detectedType = 'fuel_fill_theft';
-    } else if (lower.contains('sos')) {
-      detectedType = 'sos';
-    }
-
-    if (detectedType.isNotEmpty) {
-      final hasActiveAlert = activeServerAlerts.any((t) => t.toLowerCase() == detectedType);
-      if (!hasActiveAlert) {
-        return false;
-      }
-    }
   }
 
   return true;
